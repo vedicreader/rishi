@@ -17,7 +17,7 @@ from litert_lm import (Engine, Backend, Conversation, Session, Message, Contents
                        Content, Role, ToolCall, ToolEventHandler, set_min_log_severity)
 from litert_lm._messages import (Text, ImageBytes, ImageFile, AudioBytes, AudioFile,
                                  ToolResponse, normalize_message)
-from huggingface_hub import hf_hub_download
+from huggingface_hub import hf_hub_download, list_repo_files
 from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone
 from safepyrun import RunPython
 
@@ -157,29 +157,64 @@ gemma4_e2b='litert-community/gemma-4-E2B-it-litert-lm'
 gemma4_12b='litert-community/gemma-4-12B-it-litert-lm'
 
 # %% ../nbs/00_core.ipynb #40fb869354982708
-def get_model(model_id: str, model_path:str):
-	if model_path and Path(model_path).exists(): return model_path
-	return hf_hub_download(model_id, repo_type='model')
+def get_model(model_id, model_path=None):
+    "Return a local `.litertlm` path, downloading the model file from HF on first use."
+    if model_path and Path(model_path).exists(): return model_path
+    fn = next(f for f in list_repo_files(model_id) if f.endswith('.litertlm'))
+    return hf_hub_download(model_id, fn)
+
+_dflt_cbs = [ToolReminderCallback]
 
 class Chat:
-	def __init__(self,
-        model_id:str=gemma4_e2b, # hf model id
-        model_path:str=None, # local model path
-        backend:Backend=Backend.CPU, # litert backend
-        multimodal:bool=True,
-        sp:str='',
-        messages:list=None,
-		tools:list=None,
+    "fastllm-style sync chat over a local litert_lm Gemma engine."
+    def __init__(self, model_id=gemma4_e2b, model_path=None, backend=Backend.CPU, multimodal=True,
+                 sp='', messages=None, tools=None, ctx_limit=4096, cbs=None, default_cbs=True, **kwargs):
+        assert model_id or model_path, "model_id or model_path must be provided"
+        mm = dict(vision_backend=backend, audio_backend=backend) if multimodal else {}
+        self.engine = Engine(get_model(model_id, model_path), backend=backend, **mm)
+        self.tools = L(tools)
+        self.hist = mk_msgs(messages)
+        preface = ([{'role': 'system', 'content': sp}] if sp else []) + self.hist
+        self.conv = self.engine.create_conversation(messages=preface or None, tools=list(self.tools) or None,
+            tool_event_handler=ChatToolHandler(self), automatic_tool_calling=True)
+        store_attr('ctx_limit,sp')
+        self.use, self.cbs, self.turn_msg, self.turn_res = UsageStats(), L(), None, None
+        if default_cbs: self.add_cbs(_dflt_cbs)
+        self.add_cbs(cbs)
 
+    def add_cb(self, cb):
+        "Register a callback (class or instance); binds `cb.chat`."
+        if isinstance(cb, type): cb = cb()
+        cb.chat = self; self.cbs.append(cb); return self
+    def add_cbs(self, cbs):
+        "Register multiple callbacks."
+        L(cbs).map(self.add_cb); return self
 
-        **kwargs
-	):
-		"Local Gemma engine over litert_lm; downloads the model on first use."
-		assert model_path or model_id, "model_id or model_path must be provided"
-		model_path = model_path or hf_hub_download(model_id, repo_type='model')
-		self.engine = Engine(model_path, backend=backend, multimodal=multimodal)
-		self.conv: Conversation|None = None
+    @property
+    def token_count(self): return self.conv.token_count
+    @property
+    def pct_full(self): return self.conv.token_count / self.ctx_limit
 
+    def _track(self, tc0):
+        "Fold this turn's usage into `self.use` from a `token_count` diff."
+        tc1 = self.conv.token_count
+        out = len(self.engine.tokenize(_resp_text(self.turn_res)))
+        self.use += UsageStats(prompt_tokens=max((tc1 - tc0) - out, 0), completion_tokens=out,
+                               total_tokens=tc1 - tc0, n=1)
 
+    def __call__(self, msg=None, stream=False, max_output_tokens=None):
+        "Run one chat turn; returns the litert response dict (or a stream generator)."
+        self.use, self.turn_msg = UsageStats(), mk_msg(msg)
+        if self.turn_msg is not None: self.hist.append(normalize_message(self.turn_msg))
+        for _ in run_cbs(self, 'after_msgs'): pass
+        for _ in run_cbs(self, 'before_send'): pass
+        if stream: return self._stream(max_output_tokens)
+        tc0 = self.conv.token_count
+        self.turn_res = self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens)
+        self._track(tc0); self.hist.append(self.turn_res)
+        for _ in run_cbs(self, 'after_response'): pass
+        return self.turn_res
 
-
+    def print_hist(self):
+        "Print each message on its own line."
+        for m in self.hist: print(f"{m.get('role','?')}: {_resp_text(m) or m}")
