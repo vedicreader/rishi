@@ -1,0 +1,14 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "rishi"
+  site-url: "https://vedicreader.github.io/rishi"
+  description: "fast local llm driver with tools"
+  repo-branch: main
+  repo-url: "https://github.com/vedicreader/rishi"
+
+format-links:
+  - html
+  - format: commonmark
+    text: Markdown

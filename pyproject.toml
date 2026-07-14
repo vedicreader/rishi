@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rishi"
+dynamic = ["version"]
+description = "fast local llm driver with tools"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [{name = "Karthik", email = "karthik.rajgopal@hotmail.com"}]
+keywords = ['nbdev']
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+]
+dependencies = [
+    "fossick>=0.0.10",
+    "koshas>=0.0.24",
+    "litert-lm-api>=0.14.0",
+    "safepyrun>=0.2.3",
+]
+
+[project.urls]
+Repository = "https://github.com/vedicreader/rishi"
+Documentation = "https://vedicreader.github.io/rishi/"
+
+[project.entry-points.nbdev]
+rishi = "rishi._modidx:d"
+
+[tool.nbdev]
+
+[tool.hatch.build.targets.wheel]
+packages = ["rishi"]
+
+[tool.hatch.build.targets.sdist]
+include = ["/rishi", "/README.md", "/pyproject.toml"]
+
+[tool.hatch.version]
+path = "rishi/__init__.py"
+
+[dependency-groups]
+dev = [
+    "nbdev>=3.1.0",
+    "notebook>=7.6.0",
+    "pyskills>=0.0.21",
+    "python-fastllm>=0.0.27",
+]
