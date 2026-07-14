@@ -1,4 +1,4 @@
-"""litert model initialisation and tools
+"""A fastllm-style `Chat` over litert_lm: message helpers, an ordered callback system, sync streaming, and `token_count`-based usage tracking.
 
 Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
