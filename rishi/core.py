@@ -6,7 +6,8 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['gemma4_e4b', 'gemma4_e2b', 'gemma4_12b', 'mk_content', 'mk_msg', 'mk_msgs', 'UsageStats', 'ChatCallback', 'run_cbs',
-           'mk_tr_details', 'StreamFormatter', 'display_stream', 'ToolReminderCallback', 'get_model', 'Chat']
+           'mk_tr_details', 'StreamFormatter', 'display_stream', 'ToolReminderCallback', 'ChatToolHandler', 'get_model',
+           'Chat']
 
 # %% ../nbs/00_core.ipynb #da4d26dd
 import json, re
@@ -132,6 +133,23 @@ class ToolReminderCallback(ChatCallback):
     def before_send(self):
         if self.chat.tools and self.chat.turn_msg is not None:
             self.chat.turn_msg.contents.contents.append(Text(self.tool_reminder))
+
+# %% ../nbs/00_core.ipynb #b8dfc247
+class ChatToolHandler(ToolEventHandler):
+    "Bridge litert's in-engine tool loop to Chat callbacks and history."
+    def __init__(self, chat): self.chat = chat
+    def approve_tool_call(self, tool_call):
+        self.chat.turn_tc = tool_call
+        self.chat.hist.append({'role': 'model', 'tool_calls': [tool_call]})
+        for _ in run_cbs(self.chat, 'before_tool_calls'): pass
+        return True
+    def process_tool_response(self, tool_response):
+        self.chat.turn_tool_result = tool_response
+        name = self.chat.turn_tc.get('function', {}).get('name', '')
+        self.chat.hist.append({'role': 'tool', 'content': [
+            {'type': 'tool_response', 'name': name, 'response': tool_response}]})
+        for _ in run_cbs(self.chat, 'after_tool_calls'): pass
+        return tool_response
 
 # %% ../nbs/00_core.ipynb #f717f851d413e77
 gemma4_e4b='litert-community/gemma-4-E4B-it-litert-lm'
