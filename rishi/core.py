@@ -218,3 +218,18 @@ class Chat:
     def print_hist(self):
         "Print each message on its own line."
         for m in self.hist: print(f"{m.get('role','?')}: {_resp_text(m) or m}")
+
+# %% ../nbs/00_core.ipynb #4aadf302
+def _merge_chunks(chunks):
+    "Reconstruct an assistant response dict from streamed litert chunks."
+    return {'role': 'assistant', 'content': [{'type': 'text', 'text': ''.join(_resp_text(c) for c in chunks)}]}
+
+@patch
+def _stream(self: Chat, max_output_tokens=None):
+    "Yield markdown for a streaming turn, then track usage + history."
+    tc0, fmt, chunks = self.conv.token_count, StreamFormatter(), []
+    for o in self.conv.send_message_async(self.turn_msg, max_output_tokens=max_output_tokens):
+        chunks.append(o); yield fmt.format_item(o)
+    self.turn_res = _merge_chunks(chunks)
+    self._track(tc0); self.hist.append(self.turn_res)
+    for _ in run_cbs(self, 'after_response'): pass
