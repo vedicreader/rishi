@@ -6,7 +6,7 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['gemma4_e4b', 'gemma4_e2b', 'gemma4_12b', 'mk_content', 'mk_msg', 'mk_msgs', 'UsageStats', 'ChatCallback', 'run_cbs',
-           'mk_tr_details', 'StreamFormatter', 'display_stream', 'get_model', 'Chat']
+           'mk_tr_details', 'StreamFormatter', 'display_stream', 'ToolReminderCallback', 'get_model', 'Chat']
 
 # %% ../nbs/00_core.ipynb #da4d26dd
 import json, re
@@ -120,6 +120,18 @@ def display_stream(rs, **kwargs):
         md += o
         if md: h.update(Markdown(md))
     return fmt
+
+# %% ../nbs/00_core.ipynb #172c44f0
+_tool_reminder = ("\n<system-reminder>After every tool call result, briefly summarise in prose "
+                  "what you found before continuing or calling another tool.</system-reminder>")
+
+class ToolReminderCallback(ChatCallback):
+    "Inject a tool-summary reminder into the outgoing message when tools are registered."
+    order = 30
+    def __init__(self, tool_reminder=_tool_reminder): store_attr()
+    def before_send(self):
+        if self.chat.tools and self.chat.turn_msg is not None:
+            self.chat.turn_msg.contents.contents.append(Text(self.tool_reminder))
 
 # %% ../nbs/00_core.ipynb #f717f851d413e77
 gemma4_e4b='litert-community/gemma-4-E4B-it-litert-lm'
