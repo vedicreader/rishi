@@ -6,7 +6,7 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['gemma4_e4b', 'gemma4_e2b', 'gemma4_12b', 'mk_content', 'mk_msg', 'mk_msgs', 'UsageStats', 'ChatCallback', 'run_cbs',
-           'get_model', 'Chat']
+           'mk_tr_details', 'StreamFormatter', 'display_stream', 'get_model', 'Chat']
 
 # %% ../nbs/00_core.ipynb #da4d26dd
 import json, re
@@ -77,6 +77,49 @@ def run_cbs(chat, event):
         if cb.run and hasattr(cb, event):
             r = getattr(cb, event)()
             if r is not None: yield from r
+
+# %% ../nbs/00_core.ipynb #e7d000a9
+def _resp_text(resp):
+    "Join text parts of a litert response/chunk dict."
+    c = resp.get('content', []) if isinstance(resp, dict) else ''
+    if isinstance(c, str): return c
+    return ''.join(p.get('text', '') for p in c if isinstance(p, dict) and p.get('type') == 'text')
+
+def _tc_summary(name, args, result=None):
+    "One-line `<code>` summary of a tool call."
+    params = ', '.join(f"{k}={v!r}" for k, v in (args or {}).items())
+    res = f" -> {result}" if result is not None else ''
+    return '<code>' + escape(f"{name}({params}){res}") + '</code>'
+
+def mk_tr_details(name, args, result, mx=2000):
+    "`<details>` JSON block for a completed tool call."
+    body = json.dumps({'call': {'function': name, 'arguments': args}, 'result': str(result)[:mx]}, indent=2)
+    return f"\n\n<details><summary>{_tc_summary(name, args, result)}</summary>\n\n```json\n{body}\n```\n\n</details>\n\n"
+
+class StreamFormatter:
+    "Format a litert response stream to markdown."
+    def __init__(self, mx=2000): self.outp = ''; store_attr()
+    def format_item(self, o):
+        "Format one litert chunk dict."
+        res = _resp_text(o)
+        for p in (o.get('content', []) if isinstance(o, dict) else []):
+            if isinstance(p, dict) and p.get('type') == 'tool_call':
+                res += f"\n- ⏳ {_tc_summary(p.get('name', ''), p.get('arguments', {}))}\n"
+        self.outp += res
+        return res
+    def format_stream(self, rs):
+        "Yield markdown strings for each chunk."
+        for o in rs: yield self.format_item(o)
+
+def display_stream(rs, **kwargs):
+    "Markdown-display a litert stream via IPython."
+    from IPython.display import display, Markdown
+    fmt, md = StreamFormatter(**kwargs), ''
+    h = display(Markdown(' '), display_id=True)
+    for o in fmt.format_stream(rs):
+        md += o
+        if md: h.update(Markdown(md))
+    return fmt
 
 # %% ../nbs/00_core.ipynb #f717f851d413e77
 gemma4_e4b='litert-community/gemma-4-E4B-it-litert-lm'
