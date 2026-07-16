@@ -1,4 +1,4 @@
-"""A fastllm-style `Chat` over litert_lm: message helpers, an ordered callback system, sync streaming, and `token_count`-based usage tracking.
+"""A fastllm-style `Chat` over litert_lm - message helpers, an ordered callback system, human-in-the-loop tool approval, sync streaming, and `token_count`-based usage tracking.
 
 Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
@@ -6,34 +6,34 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['gemma4_e4b', 'gemma4_e2b', 'gemma4_12b', 'mk_content', 'mk_msg', 'mk_msgs', 'UsageStats', 'ChatCallback', 'run_cbs',
-           'mk_tr_details', 'StreamFormatter', 'display_stream', 'ToolReminderCallback', 'ChatToolHandler', 'get_model',
-           'Chat']
+           'resp_text', 'thought', 'Resp', 'mk_tr_details', 'StreamFormatter', 'display_stream', 'ToolReminderCallback',
+           'HistoryCallback', 'UsageCallback', 'truncated', 'TruncationCallback', 'ChatToolHandler', 'get_model',
+           'Chat', 'hitl_policy', 'extract_code', 'extract_fence', 'mk_result_fence', 'run_coro', 'task_complete',
+           'output_matches', 'PyFenceCallback', 'bench', 'repo_root', 'mv_skill_md']
 
-# %% ../nbs/00_core.ipynb #da4d26dd
-import json, re
+# %% ../nbs/00_core.ipynb #acd92ae986b06129
+import json, re, os, asyncio, io
 from html import escape
 from mimetypes import guess_type
-from litert_lm import (Engine, Backend, Conversation, Session, Message, Contents,
-                       Content, Role, ToolCall, ToolEventHandler, set_min_log_severity)
-from litert_lm._messages import (Text, ImageBytes, ImageFile, AudioBytes, AudioFile,
-                                 ToolResponse, normalize_message)
-from huggingface_hub import hf_hub_download, list_repo_files
-from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone
+from contextlib import ExitStack, redirect_stdout
+from litert_lm import (Engine, Backend, Conversation, Session, Message, Contents, Content, Role, ToolCall,
+                       ToolEventHandler, SamplerConfig, Benchmark, set_min_log_severity)
+from litert_lm._messages import Text, ImageBytes, ImageFile, AudioBytes, AudioFile, ToolResponse, normalize_message
+from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
+from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, img_bytes, AttrDict, in_
 from safepyrun import RunPython
 
 # %% ../nbs/00_core.ipynb #6e295c9a
 def mk_content(o):
-    "Convert `o` to a litert `Content`."
+    'Convert `o` to a litert `Content`, sniffing bytes/files for image vs audio.'
     if isinstance(o, Content): return o
     if isinstance(o, str): return Text(o)
-    if isinstance(o, bytes): return ImageBytes(o)
-    if isinstance(o, Path):
-        mime = guess_type(str(o))[0] or ''
-        return AudioFile(str(o)) if mime.startswith('audio/') else ImageFile(str(o))
+    if isinstance(o, bytes): return AudioBytes(o) if (detect_mime(o) or '').startswith('audio/') else ImageBytes(o)
+    if isinstance(o, Path): return AudioFile(str(o)) if (guess_type(str(o))[0] or '').startswith('audio/') else ImageFile(str(o))
     raise TypeError(f"Unsupported content type: {type(o)}")
 
 def mk_msg(content, role='user'):
-    "Create a litert `Message` from str/bytes/list/dict/Message."
+    'Create a litert `Message` from str/bytes/list/dict/Message.'
     if content is None: return None
     if isinstance(content, Message): return content
     if isinstance(content, dict): return Message(Role(content['role']), Contents.of(content['content']))
@@ -41,26 +41,20 @@ def mk_msg(content, role='user'):
     return Message(Role(role), Contents(parts))
 
 def mk_msgs(msgs):
-    "Normalize a list of messages to litert message dicts."
+    'Normalize a list of messages to litert message dicts.'
     if not msgs: return []
-    if not isinstance(msgs, list): msgs = [msgs]
-    return [normalize_message(m if isinstance(m, (Message, dict)) else mk_msg(m)) for m in msgs]
+    return [normalize_message(m if isinstance(m, (Message, dict)) else mk_msg(m)) for m in listify(msgs)]
 
 # %% ../nbs/00_core.ipynb #142b81b8
 class UsageStats:
     "Token usage for a chat turn, fed by `conv.token_count` diffs."
     def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0): store_attr()
-
     def __add__(self, other):
         if other is None: return self
-        return UsageStats(*[getattr(self, k) + getattr(other, k)
-            for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n')])
+        return UsageStats(*[getattr(self, k) + getattr(other, k) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n')])
     def __radd__(self, other): return self if other in (None, 0) else self.__add__(other)
-
     def __repr__(self):
-        return ' | '.join([f"total={self.total_tokens:,}", f"in={self.prompt_tokens:,}",
-                           f"out={self.completion_tokens:,}", f"turns={self.n}"])
-
+	    return '|'.join([f'total={self.total_tokens:,}',f'in={self.prompt_tokens:,}',f'out={self.completion_tokens:,}',f'turns={self.n}'])
     def fmt(self):
         "Markdown `<details>` token block."
         if not self.total_tokens: return ''
@@ -80,11 +74,33 @@ def run_cbs(chat, event):
             if r is not None: yield from r
 
 # %% ../nbs/00_core.ipynb #e7d000a9
-def _resp_text(resp):
+def resp_text(resp):
     "Join text parts of a litert response/chunk dict."
     c = resp.get('content', []) if isinstance(resp, dict) else ''
     if isinstance(c, str): return c
     return ''.join(p.get('text', '') for p in c if isinstance(p, dict) and p.get('type') == 'text')
+
+def thought(resp):
+    "The model's thinking (`channels.thought`) for a litert response/chunk, or ''."
+    return resp.get('channels', {}).get('thought', '') if isinstance(resp, dict) else ''
+
+def _quote(text):
+    "Render `text` as a markdown blockquote with a Thinking header (renders in any md engine)."
+    return '> **🧠 Thinking**\n>\n' + '\n'.join('> ' + l for l in text.splitlines())
+
+class Resp(dict):
+    "A litert response dict that renders as markdown (thinking + text + tool calls/responses) in notebooks."
+    def _repr_markdown_(self):
+        md = ''
+        if th := thought(self): md += _quote(th) + '\n\n'
+        md += resp_text(self)
+        for tc in self.get('tool_calls', []):
+            fn = tc.get('function', {})
+            md += f"\n\n🔧 {fn.get('name','')}({fn.get('arguments', {})})"
+        for p in (self.get('content') or []):
+            if isinstance(p, dict) and p.get('type') == 'tool_response':
+                md += f"\n\n↩︎ **{p.get('name','')}**: {p.get('response')}"
+        return md or '*(no text)*'
 
 def _tc_summary(name, args, result=None):
     "One-line `<code>` summary of a tool call."
@@ -98,56 +114,97 @@ def mk_tr_details(name, args, result, mx=2000):
     return f"\n\n<details><summary>{_tc_summary(name, args, result)}</summary>\n\n```json\n{body}\n```\n\n</details>\n\n"
 
 class StreamFormatter:
-    "Format a litert response stream to markdown."
-    def __init__(self, mx=2000): self.outp = ''; store_attr()
+    "Format a litert response stream to markdown; thinking streams as a blockquote."
+    def __init__(self, mx=2000, showthink=True): self.outp = ''; self._inthink = False; store_attr()
     def format_item(self, o):
-        "Format one litert chunk dict."
-        res = _resp_text(o)
+        "Format one litert chunk dict (thinking, text, or a tool call)."
+        res = ''
+        if (th := thought(o)) and self.showthink:
+            if not self._inthink: res += '> **🧠 Thinking**\n>\n> '; self._inthink = True
+            res += th.replace('\n', '\n> ')
+        if txt := resp_text(o):
+            if self._inthink: res += '\n\n'; self._inthink = False
+            res += txt
         for p in (o.get('content', []) if isinstance(o, dict) else []):
             if isinstance(p, dict) and p.get('type') == 'tool_call':
                 res += f"\n- ⏳ {_tc_summary(p.get('name', ''), p.get('arguments', {}))}\n"
         self.outp += res
         return res
     def format_stream(self, rs):
-        "Yield markdown strings for each chunk."
+        "Yield markdown strings for each chunk; end any open thinking blockquote."
         for o in rs: yield self.format_item(o)
+        if self._inthink: self._inthink = False; yield '\n\n'
 
-def display_stream(rs, **kwargs):
-    "Markdown-display a litert stream via IPython."
+def display_stream(chunks):
+    "Progressively render a markdown-chunk stream (e.g. `chat(msg, stream=True)`) live in a notebook; returns the full markdown."
     from IPython.display import display, Markdown
-    fmt, md = StreamFormatter(**kwargs), ''
-    h = display(Markdown(' '), display_id=True)
-    for o in fmt.format_stream(rs):
-        md += o
-        if md: h.update(Markdown(md))
-    return fmt
+    h, md = display(Markdown(''), display_id=True), ''
+    for c in chunks:
+        md += c
+        if h is not None: h.update(Markdown(md))
+    return md
 
 # %% ../nbs/00_core.ipynb #172c44f0
-_tool_reminder = ("\n<system-reminder>After every tool call result, briefly summarise in prose "
-                  "what you found before continuing or calling another tool.</system-reminder>")
+_tool_reminder = ('\n<system-reminder>After every tool call result, briefly summarise in prose what you found before continuing or calling another tool.</system-reminder>')
 
 class ToolReminderCallback(ChatCallback):
-    "Inject a tool-summary reminder into the outgoing message when tools are registered."
+    'Inject a tool-summary reminder into the outgoing message when tools are registered.'
     order = 30
     def __init__(self, tool_reminder=_tool_reminder): store_attr()
     def before_send(self):
-        if self.chat.tools and self.chat.turn_msg is not None:
-            self.chat.turn_msg.contents.contents.append(Text(self.tool_reminder))
+        if self.chat.tools and self.chat.turn_msg is not None: self.chat.turn_msg.contents.contents.append(Text(self.tool_reminder))
+
+# %% ../nbs/00_core.ipynb #a090e557
+class HistoryCallback(ChatCallback):
+    'Record the outgoing message and the response into `chat.hist`.'
+    order = 0
+    def before_send(self):
+        if self.chat.turn_msg is not None: self.chat.hist.append(normalize_message(self.chat.turn_msg))
+    def after_response(self): self.chat.hist.append(self.chat.turn_res)
+
+class UsageCallback(ChatCallback):
+    'Fold each response\'s token usage into `chat.use` from a `token_count` diff.'
+    order = 10
+    def after_response(self):
+        c = self.chat; delta = c.conv.token_count - c._tc0
+        out = len(c.engine.tokenize(resp_text(c.turn_res)))
+        c.use += UsageStats(prompt_tokens=max(delta - out, 0), completion_tokens=out, total_tokens=delta, n=1)
+
+def truncated(resp):
+    "Whether `resp` was flagged as cut off at the token cap."
+    return bool(resp.get('truncated')) if isinstance(resp, dict) else False
+
+class TruncationCallback(ChatCallback):
+    "Flag `turn_res['truncated']` when the reply reaches `max_tokens` output tokens (best-effort)."
+    order = 20
+    def __init__(self, max_tokens): store_attr()
+    def after_response(self):
+        if self.chat.use.completion_tokens >= self.max_tokens: self.chat.turn_res['truncated'] = True
 
 # %% ../nbs/00_core.ipynb #b8dfc247
+def _tc_name(tc): return tc.get('function', {}).get('name', '')
+
+def _tool_msg(name, response):
+    "litert tool-role Message dict wrapping a single `ToolResponse`."
+    return Message.tool(Contents([ToolResponse(name, response)])).to_json()
+
 class ChatToolHandler(ToolEventHandler):
-    "Bridge litert's in-engine tool loop to Chat callbacks and history."
+    "Bridge litert's in-engine tool loop to Chat callbacks, HITL approval, and history."
     def __init__(self, chat): self.chat = chat
     def approve_tool_call(self, tool_call):
         self.chat.turn_tc = tool_call
-        self.chat.hist.append({'role': 'model', 'tool_calls': [tool_call]})
         for _ in run_cbs(self.chat, 'before_tool_calls'): pass
-        return True
+        ok = self.chat.approve(tool_call) if self.chat.approve else True
+        fn = tool_call.get('function', {})
+        self.chat.hist.append(Message.model(tool_calls=[ToolCall(fn.get('name', ''), fn.get('arguments', {}))]).to_json())
+        if not ok: self.chat.hist.append(_tool_msg(_tc_name(tool_call), 'Denied by human operator'))
+        return ok
     def process_tool_response(self, tool_response):
+        mx = getattr(self.chat, 'tool_max_len', None)
+        if mx and isinstance(tool_response, str) and len(tool_response) > mx:
+            tool_response = tool_response[:mx] + ' …[truncated]'
         self.chat.turn_tool_result = tool_response
-        name = self.chat.turn_tc.get('function', {}).get('name', '')
-        self.chat.hist.append({'role': 'tool', 'content': [
-            {'type': 'tool_response', 'name': name, 'response': tool_response}]})
+        self.chat.hist.append(_tool_msg(_tc_name(self.chat.turn_tc), tool_response))
         for _ in run_cbs(self.chat, 'after_tool_calls'): pass
         return tool_response
 
@@ -157,79 +214,294 @@ gemma4_e2b='litert-community/gemma-4-E2B-it-litert-lm'
 gemma4_12b='litert-community/gemma-4-12B-it-litert-lm'
 
 # %% ../nbs/00_core.ipynb #40fb869354982708
+def _litertlm(fs):
+    "First native `.litertlm` path in `fs` (skips `-web`/other builds)."
+    return first(fs, lambda p: p.endswith('.litertlm') and 'web' not in p)
+
+def _cached_model(model_id):
+    "Local `.litertlm` path from the HF cache without hitting the network, else None."
+    try: repo = first(scan_cache_dir().repos, lambda r: r.repo_id == model_id)
+    except Exception: return None
+    return _litertlm(str(f.file_path) for r in repo.revisions for f in r.files) if repo else None
+
 def get_model(model_id, model_path=None):
-    "Return a local `.litertlm` path, downloading the model file from HF on first use."
+    "Return a local `.litertlm` path: `model_path`, else HF cache, else download."
     if model_path and Path(model_path).exists(): return model_path
-    fn = next(f for f in list_repo_files(model_id) if f.endswith('.litertlm'))
+    if (hit := _cached_model(model_id)): return hit
+    if not (fn := _litertlm(list_repo_files(model_id))): raise FileNotFoundError(f"No .litertlm file found for {model_id}")
     return hf_hub_download(model_id, fn)
 
-_dflt_cbs = [ToolReminderCallback]
+_dflt_cbs = [HistoryCallback, UsageCallback, ToolReminderCallback]
+
+def _merge_chunks(chunks):
+    "Reconstruct an assistant response dict (text + thinking) from streamed litert chunks."
+    text, th = ''.join(resp_text(c) for c in chunks), ''.join(thought(c) for c in chunks)
+    r = {'role': 'assistant', 'content': [{'type': 'text', 'text': text}]}
+    if th: r['channels'] = {'thought': th}
+    return Resp(r)
 
 class Chat:
-    "fastllm-style sync chat over a local litert_lm Gemma engine."
-    def __init__(self, model_id=gemma4_e2b, model_path=None, backend=Backend.CPU, multimodal=True,
-                 sp='', messages=None, tools=None, ctx_limit=4096, cbs=None, default_cbs=True, **kwargs):
-        assert model_id or model_path, "model_id or model_path must be provided"
-        mm = dict(vision_backend=backend, audio_backend=backend) if multimodal else {}
-        self.engine = Engine(get_model(model_id, model_path), backend=backend, **mm)
+    "Sync chat over a local litert_lm engine. Callbacks record history/usage; `_send` drives one message."
+    @classmethod
+    def create_engine(cls, model_id=gemma4_e2b, model_path=None, be=Backend.CPU(), vbe=Backend.CPU(),
+                      abe=Backend.CPU(), multimodal=True, cache_dir=None, enable_speculative_decoding=None, **kw):
+        'Build a litert `Engine`; creates `cache_dir` if given. Override/`@patch` to customize.'
+        if cache_dir: Path(cache_dir).mkdir(parents=True, exist_ok=True)
+        mod, mm = get_model(model_id, model_path), dict(vision_backend=vbe, audio_backend=abe) if multimodal else {}
+        return Engine(mod, backend=be, cache_dir=cache_dir or '', enable_speculative_decoding=enable_speculative_decoding, **mm, **kw)
+
+    def __init__(self,
+        engine:Engine=None, # Litert engine, or None to build one
+        model_id:str=gemma4_e2b, # huggingface model id; see https://huggingface.co/litert-community
+        model_path:os.PathLike=None, # local litertlm model path
+        backend:Backend=Backend.CPU(), # backend for the engine
+        multimodal:bool=True, # multimodal model
+        cache_dir:os.PathLike=None, # cache dir for the engine
+        enable_speculative_decoding=None,
+        eng_kw=None, # extra litert Engine kwargs
+        sp='', # system prompt
+        messages=None, # message history to prefill the conversation
+        tools=None, # tools to register with the engine
+        ctx_limit=None, # context window, for pct_full
+        approve=None, # approval function for tool calls
+        tool_max_len=None, # truncate string tool results longer than this (protects context)
+        think=False, # enable the model's thinking channel (if supported)
+        filter_think=True, # keep thinking out of the KV cache (saves context)
+        temp=None, top_k=None, top_p=None, seed=None, # sampler knobs (build a SamplerConfig)
+        sampler_config=None, # or pass a full SamplerConfig (overrides the knobs)
+        max_output_tokens=None,
+        conv_kw=None, # extra create_conversation kwargs
+        cbs=None, # callbacks to register, checkout default callbacks liek HistoryCallback, UsageCallback, ToolReminderCallback
+        default_cbs=True # add default callbacks.
+    ):
+        self._stack = ExitStack()
+        if not engine: engine = self.create_engine(model_id, model_path, backend, multimodal=multimodal,
+           cache_dir=cache_dir, enable_speculative_decoding=enable_speculative_decoding, **(eng_kw or {}))
+        self.engine = self._stack.enter_context(engine)
         self.tools = L(tools)
         self.hist = mk_msgs(messages)
         preface = ([{'role': 'system', 'content': sp}] if sp else []) + self.hist
-        self.conv = self.engine.create_conversation(messages=preface or None, tools=list(self.tools) or None,
-            tool_event_handler=ChatToolHandler(self), automatic_tool_calling=True)
-        store_attr('ctx_limit,sp')
+        if sampler_config is None and any(x is not None for x in (temp, top_k, top_p, seed)):
+            sampler_config = SamplerConfig(temperature=temp, top_k=top_k, top_p=top_p, seed=seed)
+        cvk = dict(sampler_config=sampler_config, max_output_tokens=max_output_tokens, **(conv_kw or {}))
+        if think: cvk['extra_context'] = {**cvk.get('extra_context', {}), 'enable_thinking': True}
+        if filter_think: cvk['filter_channel_content_from_kv_cache'] = True
+        self.conv = self._stack.enter_context(engine.create_conversation(messages=preface or None,
+            tools=list(self.tools) or None, tool_event_handler=ChatToolHandler(self), **cvk))
+        store_attr('ctx_limit,sp,approve,tool_max_len')
         self.use, self.cbs, self.turn_msg, self.turn_res = UsageStats(), L(), None, None
         if default_cbs: self.add_cbs(_dflt_cbs)
         self.add_cbs(cbs)
 
+    def close(self):
+        "Release the conversation (and engine, if this Chat created it); idempotent."
+        if getattr(self, '_stack', None) is not None: self._stack.close(); self._stack = None
+
+    def __del__(self): self.close()
+
     def add_cb(self, cb):
-        "Register a callback (class or instance); binds `cb.chat`."
+        'Register a callback (class or instance); binds `cb.chat` and returns the instance.'
         if isinstance(cb, type): cb = cb()
-        cb.chat = self; self.cbs.append(cb); return self
+        cb.chat = self; self.cbs.append(cb); return cb
+
     def add_cbs(self, cbs):
-        "Register multiple callbacks."
-        L(cbs).map(self.add_cb); return self
+        'Register multiple callbacks; returns the `L` of registered instances.'
+        return L(cbs).map(self.add_cb)
+
+    def remove_cb(self, cb):
+        'Remove a callback by instance, or by class to drop every callback of that type.'
+        keep = (lambda c: not isinstance(c, cb)) if isinstance(cb, type) else (lambda c: c is not cb)
+        self.cbs = self.cbs.filter(keep); return self
+
+    def remove_cbs(self, cbs):
+        'Remove multiple callbacks (by instance or class).'
+        L(cbs).map(self.remove_cb); return self
 
     @property
     def token_count(self): return self.conv.token_count
     @property
     def pct_full(self): return self.conv.token_count / self.ctx_limit
 
-    def _track(self, tc0):
-        "Fold this turn's usage into `self.use` from a `token_count` diff."
-        tc1 = self.conv.token_count
-        out = len(self.engine.tokenize(_resp_text(self.turn_res)))
-        self.use += UsageStats(prompt_tokens=max((tc1 - tc0) - out, 0), completion_tokens=out,
-                               total_tokens=tc1 - tc0, n=1)
+    def cancel(self):
+        "Cancel the in-flight generation."
+        self.conv.cancel_process()
+    def count_tokens(self, text):
+        "Number of tokens in `text` per the engine tokenizer."
+        return len(self.engine.tokenize(text))
+    def render(self, msg):
+        "The exact templated string litert will send for `msg`."
+        return self.conv.render_message_to_string(mk_msg(msg))
 
-    def __call__(self, msg=None, stream=False, max_output_tokens=None):
-        "Run one chat turn; returns the litert response dict (or a stream generator)."
-        self.use, self.turn_msg = UsageStats(), mk_msg(msg)
-        if self.turn_msg is not None: self.hist.append(normalize_message(self.turn_msg))
-        for _ in run_cbs(self, 'after_msgs'): pass
+    def _send(self, msg, max_output_tokens=None):
+        'Send one message through the callback pipeline; `HistoryCallback`/`UsageCallback` record it.'
+        self.turn_msg, self._tc0 = mk_msg(msg), self.conv.token_count
         for _ in run_cbs(self, 'before_send'): pass
-        if stream: return self._stream(max_output_tokens)
-        tc0 = self.conv.token_count
-        self.turn_res = self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens)
-        self._track(tc0); self.hist.append(self.turn_res)
+        self.turn_res = Resp(self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens))
         for _ in run_cbs(self, 'after_response'): pass
         return self.turn_res
 
-    def print_hist(self):
-        "Print each message on its own line."
-        for m in self.hist: print(f"{m.get('role','?')}: {_resp_text(m) or m}")
+    def _stream(self, msg, max_output_tokens=None, cbs=None):
+        'Stream a turn as markdown chunks; per-call `cbs` live only for this turn.'
+        added = self.add_cbs(cbs)
+        try:
+            self.turn_msg, self._tc0 = mk_msg(msg), self.conv.token_count
+            for _ in run_cbs(self, 'before_send'): pass
+            fmt, chunks = StreamFormatter(), []
+            for o in self.conv.send_message_async(self.turn_msg, max_output_tokens=max_output_tokens):
+                chunks.append(o); yield fmt.format_item(o)
+            self.turn_res = _merge_chunks(chunks)
+            for _ in run_cbs(self, 'after_response'): pass
+        finally: self.remove_cbs(added)
 
-# %% ../nbs/00_core.ipynb #4aadf302
-def _merge_chunks(chunks):
-    "Reconstruct an assistant response dict from streamed litert chunks."
-    return {'role': 'assistant', 'content': [{'type': 'text', 'text': ''.join(_resp_text(c) for c in chunks)}]}
+    def __call__(self, msg:list|str|Content|bytes|os.PathLike=None, stream=False, max_output_tokens=None,
+                 cbs=None # extra callbacks for this turn only (added before, removed after)
+    ):
+        'Run one chat turn; returns the litert response dict (or a markdown-chunk generator when `stream=True`).'
+        self.use = UsageStats()
+        if stream: return self._stream(msg, max_output_tokens, cbs)
+        added = self.add_cbs(cbs)
+        try: return self._send(msg, max_output_tokens)
+        finally: self.remove_cbs(added)
+
+    def print_hist(self):
+        "Render the conversation history as markdown (plain text outside a notebook)."
+        md = '\n\n---\n\n'.join(f"**{m.get('role','?')}**\n\n{Resp(m)._repr_markdown_()}" for m in self.hist)
+        try: from IPython.display import Markdown, display; display(Markdown(md))
+        except Exception: print(md)
+
+# %% ../nbs/00_core.ipynb #eb2eebb0
+def _ask_console(tc):
+    'Console y/N approval prompt for a tool call.'
+    a = tc['function'].get('arguments', {})
+    return input(f"Authorize {tc['function']['name']}({a})? [y/N] ").strip().lower() in ('y', 'yes')
+
+def hitl_policy(modes, ask=_ask_console):
+    'Build an `approve(tool_call)` from per-tool modes: \'approved\' | \'check\' | \'dont_run\'.'
+    def approve(tc):
+        mode = modes.get(tc['function']['name'], 'check') if modes else 'check'
+        return True if mode == 'approved' else False if mode == 'dont_run' else ask(tc)
+    return approve
+
+# %% ../nbs/00_core.ipynb #e7c554d7
+_pyfence_re = re.compile(r'^```(?:python|py)[ \t]*\n(.*?)\n```', re.DOTALL | re.MULTILINE)
+
+def extract_code(text):
+    'Code of the last ```python fence in `text`, else None.'
+    return ms[-1] if (ms := _pyfence_re.findall(text or '')) else None
+
+def extract_fence(text, tag='answer'):
+    'Contents of the last ```<tag> fence in `text`, else the whole stripped text.'
+    ms = re.findall(rf'^```{tag}[ \t]*\n(.*?)\n```', text or '', re.DOTALL | re.MULTILINE)
+    return ms[-1] if ms else (text or '').strip()
+
+def _matches(actual, expected):
+    'True if `actual` contains any value in `expected` (a scalar, or a list of accepted values).'
+    return any(str(e) in (actual or '') for e in listify(expected))
+
+def mk_result_fence(out):
+    'Feed a code result back, prompting a prose answer or more code.'
+    return (f"```result\n{out}\n```\n\nIf this answers the request, reply with the final answer in prose; "
+            "only write another ```python block if you need to run more code.")
+
+def run_coro(coro):
+    'Run an awaitable to completion from sync code, even inside a running event loop.'
+    try: asyncio.get_running_loop()
+    except RuntimeError: return asyncio.run(coro)
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(1) as ex: return ex.submit(asyncio.run, coro).result()
 
 @patch
-def _stream(self: Chat, max_output_tokens=None):
-    "Yield markdown for a streaming turn, then track usage + history."
-    tc0, fmt, chunks = self.conv.token_count, StreamFormatter(), []
-    for o in self.conv.send_message_async(self.turn_msg, max_output_tokens=max_output_tokens):
-        chunks.append(o); yield fmt.format_item(o)
-    self.turn_res = _merge_chunks(chunks)
-    self._track(tc0); self.hist.append(self.turn_res)
-    for _ in run_cbs(self, 'after_response'): pass
+def run_py(self:Chat, code, ban_defs=False, g=None):
+    'Run `code` in this chat\'s sandboxed, persistent namespace; return stdout + last-expr repr.'
+    if not hasattr(self, '_pyrun'): self._pyrun = RunPython(g=g, ban_defs=ban_defs)
+    buf = io.StringIO()
+    try:
+        with redirect_stdout(buf): res = run_coro(self._pyrun(code))
+        out = buf.getvalue()
+        if res is not None: out = (out + '\n' if out else '') + repr(res)
+        return out or '(ok)'
+    except Exception as e: return f"{type(e).__name__}: {e}"
+
+def task_complete(chat):
+    "`done` policy: judge (via `classify`, isolated) whether the latest result completes the request."
+    convo = '\n'.join(f"{m.get('role','?')}: {resp_text(m)}" for m in chat.hist[-6:])
+    return chat.classify(convo, ['complete', 'needs_more_work']) == 'complete'
+
+def output_matches(expected):
+    "`done` policy: stop once the last code output contains `str(expected)` (e.g. the answer to match against)."
+    return lambda chat: _matches(getattr(chat, 'turn_code_out', ''), expected)
+
+class PyFenceCallback(ChatCallback):
+    "Run ```python fences, feed results back, loop until `done(chat)` (default: no fence). `max_rounds` is a safety cap."
+    order = 50
+    def __init__(self, max_rounds=5, done=None): store_attr(); self._depth = 0
+    def after_response(self):
+        if self._depth >= self.max_rounds: return                     # safety cap
+        code = extract_code(resp_text(self.chat.turn_res))
+        if not code: return                                            # model answered in prose -> done
+        tc = {'function': {'name': 'python', 'arguments': {'code': code}}}
+        out = 'Denied by human' if (self.chat.approve and not self.chat.approve(tc)) else self.chat.run_py(code)
+        self.chat.turn_code_out = out
+        self._depth += 1
+        try:
+            if self.done and self.done(self.chat):
+                self.chat.hist.append(normalize_message(mk_msg(out)))   # record clean output; no extra model call
+                return
+            else: self.chat._send(mk_result_fence(out))                 # feed result back for another round
+        finally: self._depth -= 1
+
+# %% ../nbs/00_core.ipynb #bea63711
+@patch
+def classify(self:Chat, text, labels, sp='Reply with only the single best label and nothing else.'):
+    "One-shot label for `text`, run in a throwaway conversation (isolated from this chat)."
+    p = f"{text}\n\nChoose exactly one label from: {', '.join(labels)}."
+    with self.engine.create_conversation(messages=[{'role': 'system', 'content': sp}] if sp else None) as conv:
+        out = resp_text(conv.send_message(p)).lower()
+    return first(labels, lambda l: l.lower() in out) or out.strip()
+
+@patch
+def structured(self:Chat, prompt, schema, sp='Call the tool to answer.'):
+    "One-shot structured output: the model calls `schema` (a function/class); returns `schema(**arguments)`."
+    pre = [{'role': 'system', 'content': sp}] if sp else None
+    with self.engine.create_conversation(messages=pre, tools=[schema], automatic_tool_calling=False) as conv:
+        r = conv.send_message(prompt)
+    if not (tcs := r.get('tool_calls')): raise ValueError(f"model did not call the tool; reply: {resp_text(r)[:200]!r}")
+    return schema(**tcs[0].get('function', {}).get('arguments', {}))
+
+def bench(model_id=gemma4_e2b, model_path=None, backend=Backend.CPU(), prefill_tokens=64, decode_tokens=64, **kw):
+    "Benchmark init time, TTFT, and prefill/decode tokens-per-sec via litert's `Benchmark`."
+    return Benchmark(get_model(model_id, model_path), backend=backend, prefill_tokens=prefill_tokens, decode_tokens=decode_tokens, **kw).run()
+
+# %% ../nbs/00_core.ipynb #gradeqacode
+_qa_sp = "Answer the question, then put your final answer inside a ```answer fence."
+
+@patch
+def grades(self:Chat, question, expected, actual):
+    "LLM-as-judge (on this chat's engine): is `actual` a correct answer to `question` given reference `expected`?"
+    q = (f"Question: {question}\nReference answer: {expected}\nCandidate answer: {actual}\n"
+         "Reply 'yes' if the candidate is correct, otherwise 'no'.")
+    return self.classify(q, ['yes', 'no'], sp="You are a strict grader. Reply with only 'yes' or 'no'.") == 'yes'
+
+@patch
+def check(self:Chat, question, expected, grade_fn=_matches, llm_judge=False, judge=None, tag='answer', sp=_qa_sp):
+    'Ask `question` in a throwaway conversation, extract the ```<tag> answer, and grade it against `expected`.'
+    m = [{'role': 'system', 'content': sp}] if sp else None
+    with self.engine.create_conversation(messages=m) as c: a = extract_fence(resp_text(c.send_message(question)), tag)
+    ok = (judge or self).grades(question, expected, a) if (llm_judge or judge) else grade_fn(a, expected)
+    return AttrDict(question=question, expected=expected, answer=a, ok=ok)
+
+# %% ../nbs/00_core.ipynb #installskillcode
+def repo_root() -> Path:
+    'Root of the current git repository, or None if not in one.'
+    return first((Path.cwd(), *Path.cwd().parents), lambda p: (p/'.git').exists())
+
+def mv_skill_md(dry_run=True, dir=None):
+    "Copy the bundled `skill.md` into `.claude` and `.agents` skill dirs so a harness can load the rishi skill."
+    base = Path(__file__).parent if '__file__' in globals() else Path.cwd()
+    if not (src := first((base/'skill.md', base.parent/'skill.md'), Path.exists)): return
+    root = Path(dir or repo_root() or '.')
+    ts = [root/'.agents/skills/rishi/SKILL.md', root/'.claude/skills/rishi/SKILL.md']
+    if dry_run: print(f'Would copy {src} to: {list(map(str, ts))}')
+    else:
+        for p in ts: p.mk_write(src.read_text(encoding='utf-8'))
+        print(f'Installed -> {list(map(str, ts))}')
