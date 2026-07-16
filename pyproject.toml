@@ -16,8 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "fossick>=0.0.10",
-    "koshas>=0.0.24",
+    "huggingface-hub>=1.23.0",
     "litert-lm-api>=0.14.0",
     "safepyrun>=0.2.3",
 ]
@@ -45,5 +44,4 @@ dev = [
     "nbdev>=3.1.0",
     "notebook>=7.6.0",
     "pyskills>=0.0.21",
-    "python-fastllm>=0.0.27",
 ]
