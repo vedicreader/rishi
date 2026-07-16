@@ -3,5 +3,4 @@
 <!-- do not remove -->
 
 ## 0.0.1
-rishi core setup
-
+initial stateful chat for litert models
