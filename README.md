@@ -12,7 +12,7 @@ Everything runs on your machine. No API keys, and no network once the model is c
 rishi is built with nbdev, so the notebooks in `nbs/` are the source. Install from source:
 
 ``` sh
-pip install git+https://github.com/vedicreader/rishi.git
+pip install rishi
 ```
 
 To work on it, clone the repo, install it editable, and use nbdev to export and test:
