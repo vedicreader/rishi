@@ -1,0 +1,1652 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="description" content="A fastllm-style Chat over litert_lm - message helpers, an ordered callback system, human-in-the-loop tool approval, sync streaming, and token_count-based usage tracking.">
+
+<title>core – rishi</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-b38bfc58f0732c5acf3d85c920ebea91.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="core – rishi">
+<meta property="og:description" content="A fastllm-style Chat over litert_lm - message helpers, an ordered callback system, human-in-the-loop tool approval, sync streaming, and token_count-based usage tracking.">
+<meta property="og:image" content="https://vedicreader.github.io/rishi/00_core_files/figure-html/cell-32-output-1.png">
+<meta property="og:site_name" content="rishi">
+<meta property="og:image:height" content="447">
+<meta property="og:image:width" content="447">
+<meta name="twitter:title" content="core – rishi">
+<meta name="twitter:description" content="A fastllm-style Chat over litert_lm - message helpers, an ordered callback system, human-in-the-loop tool approval, sync streaming, and token_count-based usage tracking.">
+<meta name="twitter:image" content="https://vedicreader.github.io/rishi/00_core_files/figure-html/cell-32-output-1.png">
+<meta name="twitter:image-height" content="447">
+<meta name="twitter:image-width" content="447">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">rishi</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./core.html">core</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">rishi</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">core</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#messages" id="toc-messages" class="nav-link active" data-scroll-target="#messages">Messages</a>
+  <ul class="collapse">
+  <li><a href="#mk_msgs" id="toc-mk_msgs" class="nav-link" data-scroll-target="#mk_msgs">mk_msgs</a></li>
+  <li><a href="#mk_msg" id="toc-mk_msg" class="nav-link" data-scroll-target="#mk_msg">mk_msg</a></li>
+  <li><a href="#mk_content" id="toc-mk_content" class="nav-link" data-scroll-target="#mk_content">mk_content</a></li>
+  </ul></li>
+  <li><a href="#usage-tracking" id="toc-usage-tracking" class="nav-link" data-scroll-target="#usage-tracking">Usage tracking</a>
+  <ul class="collapse">
+  <li><a href="#usagestats" id="toc-usagestats" class="nav-link" data-scroll-target="#usagestats">UsageStats</a></li>
+  </ul></li>
+  <li><a href="#callbacks" id="toc-callbacks" class="nav-link" data-scroll-target="#callbacks">Callbacks</a>
+  <ul class="collapse">
+  <li><a href="#run_cbs" id="toc-run_cbs" class="nav-link" data-scroll-target="#run_cbs">run_cbs</a></li>
+  <li><a href="#chatcallback" id="toc-chatcallback" class="nav-link" data-scroll-target="#chatcallback">ChatCallback</a></li>
+  </ul></li>
+  <li><a href="#streaming-display" id="toc-streaming-display" class="nav-link" data-scroll-target="#streaming-display">Streaming display</a>
+  <ul class="collapse">
+  <li><a href="#display_stream" id="toc-display_stream" class="nav-link" data-scroll-target="#display_stream">display_stream</a></li>
+  <li><a href="#streamformatter" id="toc-streamformatter" class="nav-link" data-scroll-target="#streamformatter">StreamFormatter</a></li>
+  <li><a href="#mk_tr_details" id="toc-mk_tr_details" class="nav-link" data-scroll-target="#mk_tr_details">mk_tr_details</a></li>
+  <li><a href="#resp" id="toc-resp" class="nav-link" data-scroll-target="#resp">Resp</a></li>
+  <li><a href="#thought" id="toc-thought" class="nav-link" data-scroll-target="#thought">thought</a></li>
+  <li><a href="#resp_text" id="toc-resp_text" class="nav-link" data-scroll-target="#resp_text">resp_text</a></li>
+  </ul></li>
+  <li><a href="#built-in-callbacks" id="toc-built-in-callbacks" class="nav-link" data-scroll-target="#built-in-callbacks">Built-in callbacks</a>
+  <ul class="collapse">
+  <li><a href="#toolremindercallback" id="toc-toolremindercallback" class="nav-link" data-scroll-target="#toolremindercallback">ToolReminderCallback</a></li>
+  <li><a href="#truncationcallback" id="toc-truncationcallback" class="nav-link" data-scroll-target="#truncationcallback">TruncationCallback</a></li>
+  <li><a href="#truncated" id="toc-truncated" class="nav-link" data-scroll-target="#truncated">truncated</a></li>
+  <li><a href="#usagecallback" id="toc-usagecallback" class="nav-link" data-scroll-target="#usagecallback">UsageCallback</a></li>
+  <li><a href="#historycallback" id="toc-historycallback" class="nav-link" data-scroll-target="#historycallback">HistoryCallback</a></li>
+  </ul></li>
+  <li><a href="#tool-calling-approval-and-history" id="toc-tool-calling-approval-and-history" class="nav-link" data-scroll-target="#tool-calling-approval-and-history">Tool calling, approval, and history</a>
+  <ul class="collapse">
+  <li><a href="#chattoolhandler" id="toc-chattoolhandler" class="nav-link" data-scroll-target="#chattoolhandler">ChatToolHandler</a></li>
+  </ul></li>
+  <li><a href="#loading-models-chat" id="toc-loading-models-chat" class="nav-link" data-scroll-target="#loading-models-chat">Loading models &amp; Chat</a>
+  <ul class="collapse">
+  <li><a href="#chat" id="toc-chat" class="nav-link" data-scroll-target="#chat">Chat</a></li>
+  <li><a href="#get_model" id="toc-get_model" class="nav-link" data-scroll-target="#get_model">get_model</a></li>
+  <li><a href="#managing-callbacks" id="toc-managing-callbacks" class="nav-link" data-scroll-target="#managing-callbacks">Managing callbacks</a></li>
+  </ul></li>
+  <li><a href="#human-in-the-loop-tool-approval" id="toc-human-in-the-loop-tool-approval" class="nav-link" data-scroll-target="#human-in-the-loop-tool-approval">Human-in-the-loop tool approval</a>
+  <ul class="collapse">
+  <li><a href="#hitl_policy" id="toc-hitl_policy" class="nav-link" data-scroll-target="#hitl_policy">hitl_policy</a></li>
+  </ul></li>
+  <li><a href="#using-chat" id="toc-using-chat" class="nav-link" data-scroll-target="#using-chat">Using Chat</a>
+  <ul class="collapse">
+  <li><a href="#images-and-audio" id="toc-images-and-audio" class="nav-link" data-scroll-target="#images-and-audio">Images and audio</a></li>
+  <li><a href="#example-gating-a-tool-behind-approval" id="toc-example-gating-a-tool-behind-approval" class="nav-link" data-scroll-target="#example-gating-a-tool-behind-approval">Example: gating a tool behind approval</a></li>
+  <li><a href="#policy-driven-approval" id="toc-policy-driven-approval" class="nav-link" data-scroll-target="#policy-driven-approval">Policy-driven approval</a></li>
+  </ul></li>
+  <li><a href="#streaming-turns" id="toc-streaming-turns" class="nav-link" data-scroll-target="#streaming-turns">Streaming turns</a></li>
+  <li><a href="#running-python-from-replies" id="toc-running-python-from-replies" class="nav-link" data-scroll-target="#running-python-from-replies">Running python from replies</a>
+  <ul class="collapse">
+  <li><a href="#pyfencecallback" id="toc-pyfencecallback" class="nav-link" data-scroll-target="#pyfencecallback">PyFenceCallback</a></li>
+  <li><a href="#output_matches" id="toc-output_matches" class="nav-link" data-scroll-target="#output_matches">output_matches</a></li>
+  <li><a href="#task_complete" id="toc-task_complete" class="nav-link" data-scroll-target="#task_complete">task_complete</a></li>
+  <li><a href="#chat.run_py" id="toc-chat.run_py" class="nav-link" data-scroll-target="#chat.run_py">Chat.run_py</a></li>
+  <li><a href="#run_coro" id="toc-run_coro" class="nav-link" data-scroll-target="#run_coro">run_coro</a></li>
+  <li><a href="#mk_result_fence" id="toc-mk_result_fence" class="nav-link" data-scroll-target="#mk_result_fence">mk_result_fence</a></li>
+  <li><a href="#extract_fence" id="toc-extract_fence" class="nav-link" data-scroll-target="#extract_fence">extract_fence</a></li>
+  <li><a href="#extract_code" id="toc-extract_code" class="nav-link" data-scroll-target="#extract_code">extract_code</a></li>
+  <li><a href="#stopping-the-loop-with-done" id="toc-stopping-the-loop-with-done" class="nav-link" data-scroll-target="#stopping-the-loop-with-done">Stopping the loop with <code>done</code></a></li>
+  <li><a href="#letting-the-model-decide" id="toc-letting-the-model-decide" class="nav-link" data-scroll-target="#letting-the-model-decide">Letting the model decide</a></li>
+  </ul></li>
+  <li><a href="#utilities-classify-structured-benchmark" id="toc-utilities-classify-structured-benchmark" class="nav-link" data-scroll-target="#utilities-classify-structured-benchmark">Utilities: classify, structured, benchmark</a>
+  <ul class="collapse">
+  <li><a href="#bench" id="toc-bench" class="nav-link" data-scroll-target="#bench">bench</a></li>
+  <li><a href="#chat.structured" id="toc-chat.structured" class="nav-link" data-scroll-target="#chat.structured">Chat.structured</a></li>
+  <li><a href="#chat.classify" id="toc-chat.classify" class="nav-link" data-scroll-target="#chat.classify">Chat.classify</a></li>
+  </ul></li>
+  <li><a href="#grading-answers" id="toc-grading-answers" class="nav-link" data-scroll-target="#grading-answers">Grading answers</a>
+  <ul class="collapse">
+  <li><a href="#chat.check" id="toc-chat.check" class="nav-link" data-scroll-target="#chat.check">Chat.check</a></li>
+  <li><a href="#chat.grades" id="toc-chat.grades" class="nav-link" data-scroll-target="#chat.grades">Chat.grades</a></li>
+  </ul></li>
+  <li><a href="#installing-the-skill" id="toc-installing-the-skill" class="nav-link" data-scroll-target="#installing-the-skill">Installing the skill</a>
+  <ul class="collapse">
+  <li><a href="#mv_skill_md" id="toc-mv_skill_md" class="nav-link" data-scroll-target="#mv_skill_md">mv_skill_md</a></li>
+  <li><a href="#repo_root" id="toc-repo_root" class="nav-link" data-scroll-target="#repo_root">repo_root</a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="core.html.md"><i class="bi bi-file-code"></i>Markdown</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">core</h1>
+</div>
+
+<div>
+  <div class="description">
+    A fastllm-style <code>Chat</code> over litert_lm - message helpers, an ordered callback system, human-in-the-loop tool approval, sync streaming, and <code>token_count</code>-based usage tracking.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<section id="messages" class="level2">
+<h2 class="anchored" data-anchor-id="messages">Messages</h2>
+<p>litert speaks a small message schema (<code>Message</code>, <code>Contents</code>, and <code>Content</code> subtypes). These helpers build them from ordinary Python values.</p>
+<ul>
+<li><a href="https://vedicreader.github.io/rishi/core.html#mk_content"><code>mk_content</code></a> maps one value to a litert <code>Content</code>: a <code>str</code> becomes text, <code>bytes</code> become an image or audio (sniffed with <code>detect_mime</code>), and a <code>Path</code> becomes an image or audio file reference (by MIME). An existing <code>Content</code> passes through.</li>
+<li><a href="https://vedicreader.github.io/rishi/core.html#mk_msg"><code>mk_msg</code></a> wraps content into a <code>Message</code> (default role <code>user</code>), and also accepts an existing <code>Message</code> or a <code>{'role','content'}</code> dict.</li>
+<li><a href="https://vedicreader.github.io/rishi/core.html#mk_msgs"><code>mk_msgs</code></a> normalises a mixed list into canonical litert message dicts, used to seed a conversation’s history.</li>
+</ul>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L43" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="mk_msgs" class="level3">
+<h3 class="anchored" data-anchor-id="mk_msgs">mk_msgs</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_msgs(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    msgs</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Normalize a list of messages to litert message dicts.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L35" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_msg" class="level3">
+<h3 class="anchored" data-anchor-id="mk_msg">mk_msg</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_msg(</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    content, role:<span class="bu">str</span><span class="op">=</span><span class="st">'user'</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Create a litert <code>Message</code> from str/bytes/list/dict/Message.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L27" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_content" class="level3">
+<h3 class="anchored" data-anchor-id="mk_content">mk_content</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_content(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    o</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Convert <code>o</code> to a litert <code>Content</code>, sniffing bytes/files for image vs audio.</em></p>
+<div id="6cb560d6" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.test <span class="im">import</span> test_eq</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="6442c75775209081" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>test_eq(mk_msg(<span class="st">"hello"</span>).to_json(), {<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: [{<span class="st">"type"</span>: <span class="st">"text"</span>, <span class="st">"text"</span>: <span class="st">"hello"</span>}]})</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>test_eq(mk_msg(<span class="st">"hi"</span>, role<span class="op">=</span><span class="st">"model"</span>).to_json()[<span class="st">"role"</span>], <span class="st">"model"</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>test_eq([x[<span class="st">"role"</span>] <span class="cf">for</span> x <span class="kw">in</span> mk_msgs([<span class="st">"a"</span>, mk_msg(<span class="st">"b"</span>, role<span class="op">=</span><span class="st">"model"</span>)])], [<span class="st">"user"</span>, <span class="st">"model"</span>])</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">isinstance</span>(mk_content(<span class="st">"x"</span>), Text)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="co"># bytes are sniffed: image vs audio</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">isinstance</span>(mk_content(<span class="st">b'</span><span class="ch">\x89</span><span class="st">PNG</span><span class="ch">\r\n\x1a\n</span><span class="st">'</span> <span class="op">+</span> <span class="st">b'</span><span class="ch">\x00</span><span class="st">'</span><span class="op">*</span><span class="dv">16</span>), ImageBytes)</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">isinstance</span>(mk_content(<span class="st">b'RIFF</span><span class="ch">\x00\x00\x00\x00</span><span class="st">WAVE'</span> <span class="op">+</span> <span class="st">b'</span><span class="ch">\x00</span><span class="st">'</span><span class="op">*</span><span class="dv">16</span>), AudioBytes)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="usage-tracking" class="level2">
+<h2 class="anchored" data-anchor-id="usage-tracking">Usage tracking</h2>
+<p>litert doesn’t return per-response token counts, but <code>conv.token_count</code> exposes the running KV-cache size (prefill plus decode). <a href="https://vedicreader.github.io/rishi/core.html#usagestats"><code>UsageStats</code></a> records one turn’s <code>prompt</code>, <code>completion</code>, and <code>total</code> tokens, derived from the count delta around the turn, and adds across turns. Compare <code>chat.token_count</code> (or <code>chat.pct_full</code>) against <code>ctx_limit</code> to decide when to compress the conversation.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L49" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="usagestats" class="level3">
+<h3 class="anchored" data-anchor-id="usagestats">UsageStats</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> UsageStats(</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    prompt_tokens:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span>, completion_tokens:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span>, total_tokens:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span>, n:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Token usage for a chat turn, fed by <code>conv.token_count</code> diffs.</em></p>
+<div id="4ac04c58" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>a <span class="op">=</span> UsageStats(prompt_tokens<span class="op">=</span><span class="dv">10</span>, completion_tokens<span class="op">=</span><span class="dv">5</span>, total_tokens<span class="op">=</span><span class="dv">15</span>, n<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>b <span class="op">=</span> UsageStats(prompt_tokens<span class="op">=</span><span class="dv">3</span>, completion_tokens<span class="op">=</span><span class="dv">2</span>, total_tokens<span class="op">=</span><span class="dv">20</span>, n<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> a <span class="op">+</span> b</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>test_eq((c.prompt_tokens, c.completion_tokens, c.n), (<span class="dv">13</span>, <span class="dv">7</span>, <span class="dv">2</span>))</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">"in=13"</span> <span class="kw">in</span> <span class="bu">repr</span>(c) <span class="kw">and</span> <span class="st">"out=7"</span> <span class="kw">in</span> <span class="bu">repr</span>(c)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>test_eq((a <span class="op">+</span> <span class="va">None</span>).prompt_tokens, <span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="callbacks" class="level2">
+<h2 class="anchored" data-anchor-id="callbacks">Callbacks</h2>
+<p>A small, ordered callback system inspired by fastllm. A <a href="https://vedicreader.github.io/rishi/core.html#chatcallback"><code>ChatCallback</code></a> subclass hooks named events (<code>after_msgs</code>, <code>before_send</code>, <code>after_response</code>, <code>before_tool_calls</code>, <code>after_tool_calls</code>) and reads live turn state off the chat via <code>GetAttr</code>, so <code>self.turn_msg</code> is <code>chat.turn_msg</code>. <a href="https://vedicreader.github.io/rishi/core.html#run_cbs"><code>run_cbs</code></a> dispatches one event to every enabled callback in <code>order</code>, forwarding anything a callback yields into the output stream.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L69" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="run_cbs" class="level3">
+<h3 class="anchored" data-anchor-id="run_cbs">run_cbs</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> run_cbs(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    chat, event</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Dispatch <code>event</code> to enabled callbacks in <code>order</code>; forward any yielded stream items.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L64" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="chatcallback" class="level3">
+<h3 class="anchored" data-anchor-id="chatcallback">ChatCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ChatCallback(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Base chat callback; reads chat state via <code>GetAttr</code> (<code>self.turn_msg</code> -&gt; <code>chat.turn_msg</code>).</em></p>
+<div id="18a5e895" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _Dummy: <span class="cf">pass</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _A(ChatCallback):</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    order <span class="op">=</span> <span class="dv">20</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> before_send(<span class="va">self</span>): <span class="va">self</span>.chat.log.append(<span class="st">'A'</span>)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _B(ChatCallback):</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    order <span class="op">=</span> <span class="dv">10</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> before_send(<span class="va">self</span>):</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.chat.log.append(<span class="st">'B'</span>)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">yield</span> {<span class="st">'text'</span>: <span class="st">'from-B'</span>}</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> _Dummy()<span class="op">;</span> d.log <span class="op">=</span> []</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>a, b <span class="op">=</span> _A(), _B()<span class="op">;</span> a.chat <span class="op">=</span> d<span class="op">;</span> b.chat <span class="op">=</span> d</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>d.cbs <span class="op">=</span> L(a, b)</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>out <span class="op">=</span> <span class="bu">list</span>(run_cbs(d, <span class="st">'before_send'</span>))</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>test_eq(d.log, [<span class="st">'B'</span>, <span class="st">'A'</span>])</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>test_eq(out, [{<span class="st">'text'</span>: <span class="st">'from-B'</span>}])</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">repr</span>(a), <span class="st">'_A'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="streaming-display" class="level2">
+<h2 class="anchored" data-anchor-id="streaming-display">Streaming display</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#streamformatter"><code>StreamFormatter</code></a> turns a litert response stream into markdown as it arrives: text passes through, and tool calls render as a compact <code>⏳ name(args)</code> line. <a href="https://vedicreader.github.io/rishi/core.html#display_stream"><code>display_stream</code></a> consumes a markdown-chunk stream (what <code>chat(msg, stream=True)</code> yields) and renders it live in a notebook via IPython. <a href="https://vedicreader.github.io/rishi/core.html#mk_tr_details"><code>mk_tr_details</code></a> formats a completed tool call as a collapsible JSON block.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L138" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="display_stream" class="level3">
+<h3 class="anchored" data-anchor-id="display_stream">display_stream</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> display_stream(</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    chunks</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Progressively render a markdown-chunk stream (e.g.&nbsp;<code>chat(msg, stream=True)</code>) live in a notebook; returns the full markdown.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L116" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="streamformatter" class="level3">
+<h3 class="anchored" data-anchor-id="streamformatter">StreamFormatter</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> StreamFormatter(</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    mx:<span class="bu">int</span><span class="op">=</span><span class="dv">2000</span>, showthink:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Format a litert response stream to markdown; thinking streams as a blockquote.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L111" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_tr_details" class="level3">
+<h3 class="anchored" data-anchor-id="mk_tr_details">mk_tr_details</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_tr_details(</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    name, args, result, mx:<span class="bu">int</span><span class="op">=</span><span class="dv">2000</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em><code>&lt;details&gt;</code> JSON block for a completed tool call.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L91" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="resp" class="level3">
+<h3 class="anchored" data-anchor-id="resp">Resp</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> Resp(</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>A litert response dict that renders as markdown (thinking + text + tool calls/responses) in notebooks.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L83" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="thought" class="level3">
+<h3 class="anchored" data-anchor-id="thought">thought</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> thought(</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    resp</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>The model’s thinking (<code>channels.thought</code>) for a litert response/chunk, or ’’.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L77" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="resp_text" class="level3">
+<h3 class="anchored" data-anchor-id="resp_text">resp_text</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> resp_text(</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    resp</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Join text parts of a litert response/chunk dict.</em></p>
+</section>
+</section>
+<section id="built-in-callbacks" class="level2">
+<h2 class="anchored" data-anchor-id="built-in-callbacks">Built-in callbacks</h2>
+<p>Three callbacks make up <code>_dflt_cbs</code> and run on every chat unless you pass <code>default_cbs=False</code>. <a href="https://vedicreader.github.io/rishi/core.html#historycallback"><code>HistoryCallback</code></a> records each outgoing message and reply into <code>chat.hist</code>. <a href="https://vedicreader.github.io/rishi/core.html#usagecallback"><code>UsageCallback</code></a> folds the turn’s token counts into <code>chat.use</code>, read from a <code>conv.token_count</code> delta. <a href="https://vedicreader.github.io/rishi/core.html#toolremindercallback"><code>ToolReminderCallback</code></a> appends a short reminder to outgoing messages, but only when the chat has tools, nudging the model to summarise tool results in prose before it continues.</p>
+<p>Order matters. <a href="https://vedicreader.github.io/rishi/core.html#historycallback"><code>HistoryCallback</code></a> and <a href="https://vedicreader.github.io/rishi/core.html#usagecallback"><code>UsageCallback</code></a> sit at the front (low <code>order</code>) so a turn is recorded before feature callbacks like <a href="https://vedicreader.github.io/rishi/core.html#pyfencecallback"><code>PyFenceCallback</code></a> react to it and feed messages back. A callback reads live turn state off the chat through <code>GetAttr</code>, so <code>self.turn_res</code> is <code>chat.turn_res</code>.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L150" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="toolremindercallback" class="level3">
+<h3 class="anchored" data-anchor-id="toolremindercallback">ToolReminderCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ToolReminderCallback(</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    tool_reminder:<span class="bu">str</span><span class="op">=</span><span class="st">'</span><span class="ch">\n</span><span class="st">&lt;system-reminder&gt;After every tool call result, briefly summarise in prose what you found before continuing or calling another tool.&lt;/system-reminder&gt;'</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Inject a tool-summary reminder into the outgoing message when tools are registered.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L177" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="truncationcallback" class="level3">
+<h3 class="anchored" data-anchor-id="truncationcallback">TruncationCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> TruncationCallback(</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    max_tokens</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Flag <code>turn_res['truncated']</code> when the reply reaches <code>max_tokens</code> output tokens (best-effort).</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L173" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="truncated" class="level3">
+<h3 class="anchored" data-anchor-id="truncated">truncated</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> truncated(</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    resp</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Whether <code>resp</code> was flagged as cut off at the token cap.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L165" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="usagecallback" class="level3">
+<h3 class="anchored" data-anchor-id="usagecallback">UsageCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> UsageCallback(</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Fold each response’s token usage into <code>chat.use</code> from a <code>token_count</code> diff.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L158" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="historycallback" class="level3">
+<h3 class="anchored" data-anchor-id="historycallback">HistoryCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> HistoryCallback(</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Record the outgoing message and the response into <code>chat.hist</code>.</em></p>
+</section>
+</section>
+<section id="tool-calling-approval-and-history" class="level2">
+<h2 class="anchored" data-anchor-id="tool-calling-approval-and-history">Tool calling, approval, and history</h2>
+<p>litert runs the tool-call loop inside the engine. <a href="https://vedicreader.github.io/rishi/core.html#chattoolhandler"><code>ChatToolHandler</code></a> bridges that loop back to Python: for each call it records the request and result into <code>chat.hist</code> (built with litert’s own <code>Message</code> and <code>ToolResponse</code>), fires the <code>before_tool_calls</code> and <code>after_tool_calls</code> callbacks, and consults <code>chat.approve(tool_call)</code> before executing. Returning <code>False</code> blocks the tool and feeds a “Denied by human operator” response back to the model. That is the hook for human-in-the-loop gating, shown below.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L191" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="chattoolhandler" class="level3">
+<h3 class="anchored" data-anchor-id="chattoolhandler">ChatToolHandler</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ChatToolHandler(</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    chat</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Bridge litert’s in-engine tool loop to Chat callbacks, HITL approval, and history.</em></p>
+</section>
+</section>
+<section id="loading-models-chat" class="level2">
+<h2 class="anchored" data-anchor-id="loading-models-chat">Loading models &amp; Chat</h2>
+<p>Default litert-community Gemma repos live at <a href="https://huggingface.co/litert-community">huggingface.co/litert-community</a>. <a href="https://vedicreader.github.io/rishi/core.html#get_model"><code>get_model</code></a> resolves a <code>.litertlm</code> file with a cache-first ladder: an explicit <code>model_path</code>, then the local HuggingFace cache (<code>scan_cache_dir</code>, no network), then a download. It prefers the native build over <code>-web</code> variants, which omit the CPU/GPU decode graph.</p>
+<p><a href="https://vedicreader.github.io/rishi/core.html#chat"><code>Chat</code></a> ties this together into a callable. Build it (it constructs or accepts an <code>Engine</code>), then call it like a function: one turn per call, updating history and usage. <code>create_engine</code> is a patchable classmethod that builds the engine and creates <code>cache_dir</code> if given. Pass a prebuilt <code>engine=</code> to share one model across several chats. Engine and conversation are entered on an <code>ExitStack</code>, so <code>close()</code> releases them in the right order and never closes an engine you supplied.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L243" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="chat" class="level3">
+<h3 class="anchored" data-anchor-id="chat">Chat</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> Chat(</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    engine:Engine<span class="op">=</span><span class="va">None</span>, <span class="co"># Litert engine, or None to build one</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    model_id:<span class="bu">str</span><span class="op">=</span><span class="st">'litert-community/gemma-4-E2B-it-litert-lm'</span>, <span class="co"># huggingface model id; see https://huggingface.co/litert-community</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>    model_path:PathLike<span class="op">=</span><span class="va">None</span>, <span class="co"># local litertlm model path</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>    backend:Backend<span class="op">=</span>CPU(thread_count<span class="op">=</span><span class="va">None</span>), <span class="co"># backend for the engine</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    multimodal:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># multimodal model</span></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>    cache_dir:PathLike<span class="op">=</span><span class="va">None</span>, <span class="co"># cache dir for the engine</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>    enable_speculative_decoding:NoneType<span class="op">=</span><span class="va">None</span>, eng_kw:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># extra litert Engine kwargs</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>    sp:<span class="bu">str</span><span class="op">=</span><span class="st">''</span>, <span class="co"># system prompt</span></span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>    messages:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># message history to prefill the conversation</span></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>    tools:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># tools to register with the engine</span></span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>    ctx_limit:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># context window, for pct_full</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>    approve:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># approval function for tool calls</span></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>    tool_max_len:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># truncate string tool results longer than this (protects context)</span></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>    think:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># enable the model's thinking channel (if supported)</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>    filter_think:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># keep thinking out of the KV cache (saves context)</span></span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>    temp:NoneType<span class="op">=</span><span class="va">None</span>, top_k:NoneType<span class="op">=</span><span class="va">None</span>, top_p:NoneType<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>    seed:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># sampler knobs (build a SamplerConfig)</span></span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a>    sampler_config:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># or pass a full SamplerConfig (overrides the knobs)</span></span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>    max_output_tokens:NoneType<span class="op">=</span><span class="va">None</span>, conv_kw:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># extra create_conversation kwargs</span></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>    cbs:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># callbacks to register, checkout default callbacks liek HistoryCallback, UsageCallback, ToolReminderCallback</span></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>    default_cbs:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="co"># add default callbacks.</span></span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Sync chat over a local litert_lm engine. Callbacks record history/usage; <code>_send</code> drives one message.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L227" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="get_model" class="level3">
+<h3 class="anchored" data-anchor-id="get_model">get_model</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_model(</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    model_id, model_path:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Return a local <code>.litertlm</code> path: <code>model_path</code>, else HF cache, else download.</em></p>
+</section>
+<section id="managing-callbacks" class="level3">
+<h3 class="anchored" data-anchor-id="managing-callbacks">Managing callbacks</h3>
+<p><code>add_cb</code> registers a callback and returns the instance; <code>add_cbs</code> takes a list and returns the instances. <code>remove_cb</code> drops one by instance, or by class to remove every callback of that type, and <code>remove_cbs</code> handles several at once. To run a callback for a single turn, pass <code>cbs=</code> to the call: <code>chat(msg, cbs=[PyFenceCallback(...)])</code> registers them before the turn and removes them after, so nothing leaks into later turns.</p>
+<div id="6dc8bf2e" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>set_min_log_severity(<span class="dv">3</span>)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>get_model(gemma4_12b)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<pre><code>'/Users/71293/.cache/huggingface/hub/models--litert-community--gemma-4-12B-it-litert-lm/snapshots/44cf85a326f79b814fa86a60af414c042755b43a/gemma-4-12B-it.litertlm'</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="human-in-the-loop-tool-approval" class="level2">
+<h2 class="anchored" data-anchor-id="human-in-the-loop-tool-approval">Human-in-the-loop tool approval</h2>
+<p>Any <code>approve(tool_call) -&gt; bool</code> passed to <code>Chat(approve=...)</code> is consulted by <a href="https://vedicreader.github.io/rishi/core.html#chattoolhandler"><code>ChatToolHandler</code></a> before each tool runs. <a href="https://vedicreader.github.io/rishi/core.html#hitl_policy"><code>hitl_policy</code></a> builds one from a per-tool policy: <code>'approved'</code> (auto-run), <code>'dont_run'</code> (always block), or <code>'check'</code> (ask, via <a href="https://vedicreader.github.io/rishi/core.html#_ask_console"><code>_ask_console</code></a> by default). Or supply your own function for custom logic such as logging, rate-limiting, or prompting a UI. See the worked example below.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L378" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="hitl_policy" class="level3">
+<h3 class="anchored" data-anchor-id="hitl_policy">hitl_policy</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> hitl_policy(</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    modes, ask:function<span class="op">=</span>_ask_console</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Build an <code>approve(tool_call)</code> from per-tool modes: ‘approved’ | ‘check’ | ‘dont_run’.</em></p>
+</section>
+</section>
+<section id="using-chat" class="level2">
+<h2 class="anchored" data-anchor-id="using-chat">Using Chat</h2>
+<p>A short tour of the main features. These cells build a real model, so they are set to run manually rather than in the test suite.</p>
+<div id="4372850d0eb55801" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>chat<span class="op">=</span>Chat(backend<span class="op">=</span>Backend.GPU(), cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>, think<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="co"># chat_12 = Chat(Chat.create_engine(gemma4_12b, multimodal=False, cache_dir='.cache/litertlm',be=Backend.GPU()))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784178935.259078 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+</div>
+<div id="cf019f1c" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># set_min_log_severity(2)</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">"Reply with exactly: pong"</span>)</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'pong'</span> <span class="kw">in</span> resp_text(r).lower()</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> chat.hist[<span class="op">-</span><span class="dv">1</span>] <span class="kw">is</span> r <span class="kw">and</span> chat.hist[<span class="dv">0</span>][<span class="st">'role'</span>] <span class="op">==</span> <span class="st">'user'</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> chat.use.total_tokens <span class="op">&gt;</span> <span class="dv">0</span> <span class="kw">and</span> chat.token_count <span class="op">&gt;</span> <span class="dv">0</span></span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat.use)<span class="op">;</span> chat.print_hist()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784178936.197760 66965901 sampler_factory.cc:450] WebGPU sampler not available, falling back to statically linked C API: UNAVAILABLE: ERROR: [third_party/odml/litert_lm/runtime/components/sampler_factory.cc:294]
+└ Could not load shared library libLiteRtTopKWebGpuSampler.dylib: dlopen(libLiteRtTopKWebGpuSampler.dylib, 0x0005): tried: 'libLiteRtTopKWebGpuSampler.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSlibLiteRtTopKWebGpuSampler.dylib' (no such file), '/usr/lib/libLiteRtTopKWebGpuSampler.dylib' (no such file, not in dyld cache), 'libLiteRtTopKWebGpuSampler.dylib' (no such file).
+=== Source Location Trace: === 
+./third_party/odml/litert/litert/cc/litert_macros.h:573</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>total=104|in=103|out=1|turns=1</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p><strong>user</strong></p>
+<p>Reply with exactly: pong</p>
+<hr>
+<p><strong>assistant</strong></p>
+<blockquote class="blockquote">
+<p><strong>🧠 Thinking</strong></p>
+<p>Thinking Process:</p>
+<ol type="1">
+<li><strong>Analyze the Request:</strong> The user has instructed me to reply with <em>exactly</em> the word “pong”.</li>
+<li><strong>Determine the Constraint:</strong> The constraint is strict: “Reply with exactly: pong”.</li>
+<li><strong>Formulate the Response:</strong> The response must be the string “pong”.</li>
+<li><strong>Final Output Generation:</strong> pong</li>
+</ol>
+</blockquote>
+<p>pong</p>
+</div>
+</div>
+<div id="2749091b4afc9d43" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>chat([<span class="st">'what is pong'</span>,<span class="st">'do you know?'</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<blockquote class="blockquote">
+<p><strong>🧠 Thinking</strong></p>
+<p>Thinking Process:</p>
+<ol type="1">
+<li><p><strong>Analyze the Request:</strong> The user is asking “what is pongdo you know?”</p></li>
+<li><p><strong>Analyze the Context (Implicit):</strong> The previous interaction was a very short, specific instruction: “Reply with exactly: pong”. The model responded with “pong”. The user is now asking about “pongdo”.</p></li>
+<li><p><strong>Identify Potential Interpretations of “pongdo”:</strong></p>
+<ul>
+<li><strong>Typo/Misspelling:</strong> Is it a misspelling of “Pong”?</li>
+<li><strong>Specific Term/Acronym:</strong> Is it a term in a niche field (programming, gaming, science)?</li>
+<li><strong>Combination:</strong> Is it a combination of “Pong” and another word?</li>
+<li><strong>Contextual Link:</strong> Does it relate to the previous interaction (the word “pong”)?</li>
+</ul></li>
+<li><p><strong>Determine the Most Likely Meaning:</strong> Given the previous interaction, the most direct link is the game <em>Pong</em>. “Pongdo” is not a standard, widely recognized term.</p></li>
+<li><p><strong>Formulate a Strategy:</strong> Since “pongdo” is ambiguous, the best approach is to address the most probable interpretation (Pong) and then ask for clarification if the user meant something else.</p></li>
+<li><p><strong>Draft the Response (Self-Correction/Refinement):</strong></p>
+<ul>
+<li><em>Initial thought:</em> I don’t know what pongdo is.</li>
+<li><em>Refinement:</em> Be helpful. Assume they mean Pong.</li>
+</ul></li>
+<li><p><strong>Final Output Generation.</strong> (Since the user asked “what is pongdo you know?”, I should provide the most relevant information.)</p></li>
+</ol>
+</blockquote>
+<p>I am not familiar with the term “pongdo.”</p>
+<p>Could you please provide more context? It might be:</p>
+<ol type="1">
+<li>A misspelling of <strong>Pong</strong> (the classic arcade game).</li>
+<li>A term from a specific game, programming language, or niche topic.</li>
+<li>A specific name or acronym.</li>
+</ol>
+<p>If you can give me more information, I would be happy to tell you what I know!</p>
+</div>
+</div>
+<section id="images-and-audio" class="level3">
+<h3 class="anchored" data-anchor-id="images-and-audio">Images and audio</h3>
+<p>Some Gemma builds accept image and audio content alongside text.</p>
+<div id="c20f783b370623d3" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> PIL <span class="im">import</span> Image</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="688888ada00b05dd" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>im<span class="op">=</span>Image.<span class="bu">open</span>(<span class="st">'images.jpeg'</span>)<span class="op">;</span>im</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="00_core_files/figure-html/cell-32-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<div id="8c802ab46f39d425" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>chat([<span class="st">'explain this image'</span>, img_bytes(im)])</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="co"># you can also use ImageFile and ImageBytes</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<blockquote class="blockquote">
+<p><strong>🧠 Thinking</strong></p>
+<p>Here’s a thinking process to arrive at the suggested response:</p>
+<ol type="1">
+<li><p><strong>Analyze the Request:</strong> The user has provided an image and asked me to “explain this image.”</p></li>
+<li><p><strong>Analyze the Image:</strong></p>
+<ul>
+<li><strong>Subject:</strong> The central focus is a dog.</li>
+<li><strong>Breed/Appearance:</strong> The dog has reddish-brown/tan fur, erect ears, and a strong build. It strongly resembles a German Shepherd or a similar working breed.</li>
+<li><strong>Action/Pose:</strong> The dog is looking slightly off-camera (to the right), mouth is open (tongue is visible), and appears happy or excited (panting/smiling).</li>
+<li><strong>Setting:</strong> The background is outdoors, consisting of a dirt path or trail, with blurred green foliage/trees on either side. The lighting suggests daytime.</li>
+<li><strong>Mood:</strong> Happy, alert, friendly, outdoorsy.</li>
+</ul></li>
+<li><p><strong>Determine the Explanation Strategy:</strong> A good explanation should cover the main elements (who, what, where, how) and the overall feeling.</p></li>
+<li><p><strong>Draft the Explanation (Iterative Refinement):</strong></p>
+<ul>
+<li><em>Initial thought:</em> It’s a dog on a path. It looks happy.</li>
+<li><em>Adding detail (Focusing on the dog):</em> The dog looks like a German Shepherd. It has brown fur and is panting.</li>
+<li><em>Adding detail (Focusing on the setting):</em> It’s outdoors on a dirt path with greenery.</li>
+<li><em>Synthesizing and Polishing:</em> Combine these points into a coherent, descriptive paragraph.</li>
+</ul></li>
+<li><p><strong>Final Review against the Goal:</strong> Does this explain the image accurately? Yes. (Self-Correction: Ensure the tone is descriptive and engaging.)</p></li>
+<li><p><strong>Generate the Output.</strong> (This leads to the final provided answer.)</p></li>
+</ol>
+</blockquote>
+<p>This is a photograph of a beautiful, happy-looking dog outdoors.</p>
+<p>Here is a detailed breakdown of the image:</p>
+<ul>
+<li><strong>Subject:</strong> The main focus is a medium-to-large dog, likely a German Shepherd or a similar working breed, characterized by its rich, reddish-brown fur and erect ears.</li>
+<li><strong>Action/Expression:</strong> The dog appears alert and happy. Its mouth is open, and its tongue is hanging out, suggesting it might be panting slightly from activity or excitement. It is looking off to the side, giving it an engaged and friendly expression.</li>
+<li><strong>Setting:</strong> The dog is standing on a dirt or gravel path. The background is soft and blurred (shallow depth of field), showing natural greenery, trees, and foliage, indicating an outdoor, natural environment, perhaps a park or a wooded trail.</li>
+<li><strong>Mood:</strong> The overall mood of the photo is warm, joyful, and adventurous, capturing a moment of a dog enjoying time outdoors.</li>
+</ul>
+</div>
+</div>
+</section>
+<section id="example-gating-a-tool-behind-approval" class="level3">
+<h3 class="anchored" data-anchor-id="example-gating-a-tool-behind-approval">Example: gating a tool behind approval</h3>
+<p>A custom <code>approve</code> gate that auto-allows a safe tool and blocks a destructive one. <a href="https://vedicreader.github.io/rishi/core.html#chattoolhandler"><code>ChatToolHandler</code></a> routes every tool call through it; a denied call is recorded in history as <code>Denied by human operator</code> and reported back to the model, which continues without it.</p>
+<div id="1705d78693b4cc97" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> add(a: <span class="bu">int</span>, b: <span class="bu">int</span>) <span class="op">-&gt;</span> <span class="bu">int</span>:</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">'Add two integers.</span><span class="ch">\n\n</span><span class="co">Args:</span><span class="ch">\n</span><span class="co">    a: first addend</span><span class="ch">\n</span><span class="co">    b: second addend'</span></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> a <span class="op">+</span> b</span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> delete_files(path: <span class="bu">str</span>) <span class="op">-&gt;</span> <span class="bu">str</span>:</span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">'Delete everything under a path.</span><span class="ch">\n\n</span><span class="co">Args:</span><span class="ch">\n</span><span class="co">    path: directory to wipe'</span></span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"wiped </span><span class="sc">{</span>path<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> approve_gate(tc):</span>
+<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>    <span class="co">"chat.approve: allow any tool except destructive ones; log every decision."</span></span>
+<span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> tc[<span class="st">'function'</span>][<span class="st">'name'</span>]</span>
+<span id="cb37-12"><a href="#cb37-12" aria-hidden="true" tabindex="-1"></a>    ok <span class="op">=</span> name <span class="op">!=</span> <span class="st">'delete_files'</span></span>
+<span id="cb37-13"><a href="#cb37-13" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"[approval] </span><span class="sc">{</span>_tc_summary(name, tc[<span class="st">'function'</span>].get(<span class="st">'arguments'</span>, {}))<span class="sc">}</span><span class="ss"> -&gt; </span><span class="sc">{</span><span class="st">'ALLOW'</span> <span class="cf">if</span> ok <span class="cf">else</span> <span class="st">'DENY'</span><span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb37-14"><a href="#cb37-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> ok</span>
+<span id="cb37-15"><a href="#cb37-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-16"><a href="#cb37-16" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(tools<span class="op">=</span>[add, delete_files], approve<span class="op">=</span>approve_gate, sp<span class="op">=</span><span class="st">"Use the tools to satisfy the request."</span>)</span>
+<span id="cb37-17"><a href="#cb37-17" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">"Add 2 and 3, then delete everything under /tmp/data."</span>)</span>
+<span id="cb37-18"><a href="#cb37-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">'</span><span class="ch">\n</span><span class="st">'</span>, resp_text(r))</span>
+<span id="cb37-19"><a href="#cb37-19" aria-hidden="true" tabindex="-1"></a>chat.print_hist()   <span class="co"># the blocked call is logged as a 'Denied by human operator' tool response</span></span>
+<span id="cb37-20"><a href="#cb37-20" aria-hidden="true" tabindex="-1"></a>chat.close()</span>
+<span id="cb37-21"><a href="#cb37-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-22"><a href="#cb37-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Declarative equivalent (interactive 'check' prompts on the console via _ask_console):</span></span>
+<span id="cb37-23"><a href="#cb37-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Chat(tools=[add, delete_files], approve=hitl_policy({'add': 'approved', 'delete_files': 'dont_run'}))</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784178958.305192 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[approval] &lt;code&gt;add(a=2.0, b=3.0)&lt;/code&gt; -&gt; ALLOW
+[approval] &lt;code&gt;delete_files(path=&amp;#x27;/tmp/data&amp;#x27;)&lt;/code&gt; -&gt; DENY
+
+ I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete everything under `/tmp/data`.
+</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p><strong>user</strong></p>
+<p>Add 2 and 3, then delete everything under /tmp/data.</p>
+<hr>
+<p><strong>model</strong></p>
+<p>🔧 add({‘a’: 2.0, ‘b’: 3.0})</p>
+<hr>
+<p><strong>tool</strong></p>
+<p>↩︎ <strong>add</strong>: 5.0</p>
+<hr>
+<p><strong>model</strong></p>
+<p>🔧 delete_files({‘path’: ‘/tmp/data’})</p>
+<hr>
+<p><strong>tool</strong></p>
+<p>↩︎ <strong>delete_files</strong>: Denied by human operator</p>
+<hr>
+<p><strong>assistant</strong></p>
+<p>I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete everything under <code>/tmp/data</code>.</p>
+<p>🔧 delete_files({‘path’: ‘/tmp/data’})</p>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: Cache file is stale. Setting stale flag.</code></pre>
+</div>
+</div>
+</section>
+<section id="policy-driven-approval" class="level3">
+<h3 class="anchored" data-anchor-id="policy-driven-approval">Policy-driven approval</h3>
+<p>You can also drive approvals declaratively with <a href="https://vedicreader.github.io/rishi/core.html#hitl_policy"><code>hitl_policy</code></a> instead of writing your own function.</p>
+<div id="9065b6d2c8a15cb5" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>chat<span class="op">=</span>Chat(tools<span class="op">=</span>[add, delete_files], approve<span class="op">=</span>hitl_policy({<span class="st">'add'</span>: <span class="st">'approved'</span>}))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784178965.189187 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+</div>
+<div id="ff568ae7e99d953e" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">"Add 2 and 3, then delete everything under /tmp/data."</span>)</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">'</span><span class="ch">\n</span><span class="st">'</span>, resp_text(r))</span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>chat.print_hist()   <span class="co"># the blocked call is logged as a 'Denied by human operator' tool response</span></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>chat.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+ I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete everything under `/tmp/data`.
+
+</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p><strong>user</strong></p>
+<p>Add 2 and 3, then delete everything under /tmp/data.</p>
+<hr>
+<p><strong>model</strong></p>
+<p>🔧 add({‘a’: 2.0, ‘b’: 3.0})</p>
+<hr>
+<p><strong>tool</strong></p>
+<p>↩︎ <strong>add</strong>: 5.0</p>
+<hr>
+<p><strong>model</strong></p>
+<p>🔧 delete_files({‘path’: ‘/tmp/data’})</p>
+<hr>
+<p><strong>tool</strong></p>
+<p>↩︎ <strong>delete_files</strong>: Denied by human operator</p>
+<hr>
+<p><strong>assistant</strong></p>
+<p>I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete everything under <code>/tmp/data</code>.</p>
+<p>🔧 delete_files({‘path’: ‘/tmp/data’})</p>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: Cache file is stale. Setting stale flag.</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="streaming-turns" class="level2">
+<h2 class="anchored" data-anchor-id="streaming-turns">Streaming turns</h2>
+<p>Pass <code>stream=True</code> and iterate the result: <a href="https://vedicreader.github.io/rishi/core.html#chat"><code>Chat</code></a> returns a generator of markdown chunks (formatted by <a href="https://vedicreader.github.io/rishi/core.html#streamformatter"><code>StreamFormatter</code></a>) instead of a response dict. History and usage are finalised once the stream is exhausted.</p>
+<div id="450f92bd4a6e1c4f" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>ch <span class="op">=</span> Chat(backend<span class="op">=</span>Backend.GPU())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784178987.905959 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+</div>
+<div id="d9d5355751b053a8" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb48"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="co"># stream chunks to a terminal:</span></span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> c <span class="kw">in</span> ch(<span class="st">"Count: one two three"</span>, stream<span class="op">=</span><span class="va">True</span>): <span class="bu">print</span>(c, end<span class="op">=</span><span class="st">''</span>, flush<span class="op">=</span><span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>That's a simple count!
+
+If you'd like me to do</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784178989.277368 66968557 sampler_factory.cc:450] WebGPU sampler not available, falling back to statically linked C API: UNAVAILABLE: ERROR: [third_party/odml/litert_lm/runtime/components/sampler_factory.cc:294]
+└ Could not load shared library libLiteRtTopKWebGpuSampler.dylib: dlopen(libLiteRtTopKWebGpuSampler.dylib, 0x0005): tried: 'libLiteRtTopKWebGpuSampler.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSlibLiteRtTopKWebGpuSampler.dylib' (no such file), '/usr/lib/libLiteRtTopKWebGpuSampler.dylib' (no such file, not in dyld cache), 'libLiteRtTopKWebGpuSampler.dylib' (no such file).
+=== Source Location Trace: === 
+./third_party/odml/litert/litert/cc/litert_macros.h:573</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code> something with that count, please let me know. For example, would you like me to:
+
+* **Continue counting?** (e.g., "four, five, six...")
+* **Count something else?**
+* **Do a math problem?**
+* **Something else entirely?**</code></pre>
+</div>
+</div>
+<div id="643f5be94c73b998" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb52"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="co"># or render live in a notebook:</span></span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>display_stream(ch(<span class="st">"count fibonacci for 10 places"</span>, stream<span class="op">=</span><span class="va">True</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p>Here are the first 10 numbers in the Fibonacci sequence:</p>
+<p>The Fibonacci sequence starts with 0 and 1, and each subsequent number is the sum of the two preceding ones.</p>
+<ol type="1">
+<li><strong>0</strong></li>
+<li><strong>1</strong></li>
+<li><strong>1</strong> (0 + 1)</li>
+<li><strong>2</strong> (1 + 1)</li>
+<li><strong>3</strong> (1 + 2)</li>
+<li><strong>5</strong> (2 + 3)</li>
+<li><strong>8</strong> (3 + 5)</li>
+<li><strong>13</strong> (5 + 8)</li>
+<li><strong>21</strong> (8 + 13)</li>
+<li><strong>34</strong> (13 + 21)</li>
+</ol>
+<p><strong>The first 10 Fibonacci numbers are: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34</strong></p>
+</div>
+<div class="cell-output cell-output-display">
+<pre><code>'Here are the first 10 numbers in the Fibonacci sequence:\n\nThe Fibonacci sequence starts with 0 and 1, and each subsequent number is the sum of the two preceding ones.\n\n1. **0**\n2. **1**\n3. **1** (0 + 1)\n4. **2** (1 + 1)\n5. **3** (1 + 2)\n6. **5** (2 + 3)\n7. **8** (3 + 5)\n8. **13** (5 + 8)\n9. **21** (8 + 13)\n10. **34** (13 + 21)\n\n**The first 10 Fibonacci numbers are: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34**'</code></pre>
+</div>
+</div>
+<div id="8cf4498f1503c550" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb54"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> chat.hist[<span class="op">-</span><span class="dv">1</span>] <span class="op">==</span> chat.turn_res <span class="kw">and</span> chat.use.completion_tokens <span class="op">&gt;</span> <span class="dv">0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="05652aff" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>fired <span class="op">=</span> []</span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Log(ChatCallback):</span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> before_tool_calls(<span class="va">self</span>): fired.append(<span class="st">'before'</span>)</span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> after_tool_calls(<span class="va">self</span>):  fired.append(<span class="st">'after'</span>)</span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(tools<span class="op">=</span>[add], sp<span class="op">=</span><span class="st">"Use the add tool for arithmetic."</span>)</span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a>chat.add_cb(Log)</span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">"What is 21 + 21? Use the tool."</span>)</span>
+<span id="cb55-9"><a href="#cb55-9" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(fired)</span>
+<span id="cb55-10"><a href="#cb55-10" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'before'</span> <span class="kw">in</span> fired <span class="kw">and</span> <span class="st">'after'</span> <span class="kw">in</span> fired</span>
+<span id="cb55-11"><a href="#cb55-11" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">any</span>(m.get(<span class="st">'role'</span>) <span class="op">==</span> <span class="st">'tool'</span> <span class="cf">for</span> m <span class="kw">in</span> chat.hist)</span>
+<span id="cb55-12"><a href="#cb55-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r))<span class="op">;</span> chat.print_hist()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784179010.555272 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>['before', 'after']
+The result of adding 21 and 21 is 42.</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p><strong>user</strong></p>
+<p>What is 21 + 21? Use the tool.</p>
+<hr>
+<p><strong>model</strong></p>
+<p>🔧 add({‘a’: 21.0, ‘b’: 21.0})</p>
+<hr>
+<p><strong>tool</strong></p>
+<p>↩︎ <strong>add</strong>: 42.0</p>
+<hr>
+<p><strong>assistant</strong></p>
+<p>The result of adding 21 and 21 is 42.</p>
+</div>
+</div>
+</section>
+<section id="running-python-from-replies" class="level2">
+<h2 class="anchored" data-anchor-id="running-python-from-replies">Running python from replies</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#pyfencecallback"><code>PyFenceCallback</code></a> turns the chat into a code interpreter. After a reply it finds the last <code>```python</code> fence, runs it through <code>safepyrun</code> (sandboxed, so imports like <code>socket</code> and <code>importlib</code> are blocked) in a namespace that persists across the conversation, feeds the output back as a <code>```result</code> block, and re-queries, up to <code>max_rounds</code> times. Enable it with <code>Chat(cbs=[PyFenceCallback])</code>. Execution goes through the same <code>approve</code> hook as a synthetic <code>python</code> tool, so <code>hitl_policy({'python': 'check'})</code> prompts before running. <code>chat.run_py(code)</code> runs a snippet directly (<code>ban_defs=False</code> allows <code>def</code> and <code>class</code>).</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L434" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="pyfencecallback" class="level3">
+<h3 class="anchored" data-anchor-id="pyfencecallback">PyFenceCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb58"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> PyFenceCallback(</span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>    max_rounds:<span class="bu">int</span><span class="op">=</span><span class="dv">5</span>, done:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Run ``<code>python fences, feed results back, loop until</code>done(chat)<code>(default: no fence).</code>max_rounds` is a safety cap.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L430" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="output_matches" class="level3">
+<h3 class="anchored" data-anchor-id="output_matches">output_matches</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb59"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> output_matches(</span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>    expected</span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em><code>done</code> policy: stop once the last code output contains <code>str(expected)</code> (e.g.&nbsp;the answer to match against).</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L425" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="task_complete" class="level3">
+<h3 class="anchored" data-anchor-id="task_complete">task_complete</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb60"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> task_complete(</span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>    chat</span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em><code>done</code> policy: judge (via <code>classify</code>, isolated) whether the latest result completes the request.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L414" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="chat.run_py" class="level3">
+<h3 class="anchored" data-anchor-id="chat.run_py">Chat.run_py</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb61"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> run_py(</span>
+<span id="cb61-2"><a href="#cb61-2" aria-hidden="true" tabindex="-1"></a>    code, ban_defs:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, g:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb61-3"><a href="#cb61-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Run <code>code</code> in this chat’s sandboxed, persistent namespace; return stdout + last-expr repr.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L406" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="run_coro" class="level3">
+<h3 class="anchored" data-anchor-id="run_coro">run_coro</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb62"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> run_coro(</span>
+<span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a>    coro</span>
+<span id="cb62-3"><a href="#cb62-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Run an awaitable to completion from sync code, even inside a running event loop.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L401" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_result_fence" class="level3">
+<h3 class="anchored" data-anchor-id="mk_result_fence">mk_result_fence</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb63"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_result_fence(</span>
+<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a>    out</span>
+<span id="cb63-3"><a href="#cb63-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Feed a code result back, prompting a prose answer or more code.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L392" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="extract_fence" class="level3">
+<h3 class="anchored" data-anchor-id="extract_fence">extract_fence</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb64"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> extract_fence(</span>
+<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a>    text, tag:<span class="bu">str</span><span class="op">=</span><span class="st">'answer'</span></span>
+<span id="cb64-3"><a href="#cb64-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Contents of the last ``<code>&lt;tag&gt; fence in</code>text`, else the whole stripped text.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L388" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="extract_code" class="level3">
+<h3 class="anchored" data-anchor-id="extract_code">extract_code</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb65"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> extract_code(</span>
+<span id="cb65-2"><a href="#cb65-2" aria-hidden="true" tabindex="-1"></a>    text</span>
+<span id="cb65-3"><a href="#cb65-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Code of the last ``<code>python fence in</code>text`, else None.</em></p>
+</section>
+<section id="stopping-the-loop-with-done" class="level3">
+<h3 class="anchored" data-anchor-id="stopping-the-loop-with-done">Stopping the loop with <code>done</code></h3>
+<p>Pass a <code>done</code> function to <a href="https://vedicreader.github.io/rishi/core.html#pyfencecallback"><code>PyFenceCallback</code></a> to end the loop early. <a href="https://vedicreader.github.io/rishi/core.html#output_matches"><code>output_matches</code></a> stops once the code output contains an expected string.</p>
+<div id="85e4c477" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb66"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(sp<span class="op">=</span><span class="st">"When asked to compute something, reply with a ```python fence that prints or evaluates the answer."</span>)</span>
+<span id="cb66-2"><a href="#cb66-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">"Use python to compute 2**5."</span>, cbs<span class="op">=</span>[PyFenceCallback(done<span class="op">=</span>output_matches(<span class="dv">32</span>))])</span>
+<span id="cb66-3"><a href="#cb66-3" aria-hidden="true" tabindex="-1"></a>chat.print_hist()   <span class="co"># you'll see the ```python turn, a ```result turn, then the final answer</span></span>
+<span id="cb66-4"><a href="#cb66-4" aria-hidden="true" tabindex="-1"></a>chat.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784179491.903529 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p><strong>user</strong></p>
+<p>Use python to compute 2**5.</p>
+<hr>
+<p><strong>assistant</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb68"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="dv">2</span><span class="op">**</span><span class="dv">5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<hr>
+<p><strong>user</strong></p>
+<p>32</p>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: Cache file is stale. Setting stale flag.</code></pre>
+</div>
+</div>
+</section>
+<section id="letting-the-model-decide" class="level3">
+<h3 class="anchored" data-anchor-id="letting-the-model-decide">Letting the model decide</h3>
+<p>Or leave termination to the model: with no <code>done</code>, the loop stops as soon as a reply has no code fence.</p>
+<div id="ac18e67aa7c0789a" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb70"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(cbs<span class="op">=</span>[PyFenceCallback], sp<span class="op">=</span><span class="st">"When asked to compute something, reply with a ```python fence that prints or evaluates the answer."</span>)</span>
+<span id="cb70-2"><a href="#cb70-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">"Use python to compute 2**5."</span>)</span>
+<span id="cb70-3"><a href="#cb70-3" aria-hidden="true" tabindex="-1"></a>chat.print_hist()</span>
+<span id="cb70-4"><a href="#cb70-4" aria-hidden="true" tabindex="-1"></a>chat.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784179784.097886 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p><strong>user</strong></p>
+<p>Use python to compute 2**5.</p>
+<hr>
+<p><strong>assistant</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb72"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb72-1"><a href="#cb72-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="dv">2</span><span class="op">**</span><span class="dv">5</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<hr>
+<p><strong>user</strong></p>
+<pre class="result"><code>32
+</code></pre>
+<p>If this answers the request, reply with the final answer in prose; only write another ```python block if you need to run more code.</p>
+<hr>
+<p><strong>assistant</strong></p>
+<p>32</p>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: Cache file is stale. Setting stale flag.</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="utilities-classify-structured-benchmark" class="level2">
+<h2 class="anchored" data-anchor-id="utilities-classify-structured-benchmark">Utilities: classify, structured, benchmark</h2>
+<p><code>classify</code> and <code>structured</code> each run one-shot in a throwaway conversation on the shared engine, isolated from the live chat, so they leave its history and KV cache untouched. <code>classify</code> generates a label and matches it against your options. <code>structured</code> forces a tool call and returns <code>schema(**arguments)</code>. <a href="https://vedicreader.github.io/rishi/core.html#bench"><code>bench</code></a> reports init time, time to first token, and prefill and decode tokens per second.</p>
+<p>litert’s <code>run_text_scoring</code> log-likelihood scoring is not available on this runtime, so <code>classify</code> generates and label-matches rather than scoring.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L471" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="bench" class="level3">
+<h3 class="anchored" data-anchor-id="bench">bench</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb75"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> bench(</span>
+<span id="cb75-2"><a href="#cb75-2" aria-hidden="true" tabindex="-1"></a>    model_id:<span class="bu">str</span><span class="op">=</span><span class="st">'litert-community/gemma-4-E2B-it-litert-lm'</span>, model_path:NoneType<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb75-3"><a href="#cb75-3" aria-hidden="true" tabindex="-1"></a>    backend:CPU<span class="op">=</span>CPU(thread_count<span class="op">=</span><span class="va">None</span>), prefill_tokens:<span class="bu">int</span><span class="op">=</span><span class="dv">64</span>, decode_tokens:<span class="bu">int</span><span class="op">=</span><span class="dv">64</span>, <span class="op">**</span>kw</span>
+<span id="cb75-4"><a href="#cb75-4" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Benchmark init time, TTFT, and prefill/decode tokens-per-sec via litert’s <code>Benchmark</code>.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L463" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="chat.structured" class="level3">
+<h3 class="anchored" data-anchor-id="chat.structured">Chat.structured</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb76"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb76-1"><a href="#cb76-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> structured(</span>
+<span id="cb76-2"><a href="#cb76-2" aria-hidden="true" tabindex="-1"></a>    prompt, schema, sp:<span class="bu">str</span><span class="op">=</span><span class="st">'Call the tool to answer.'</span></span>
+<span id="cb76-3"><a href="#cb76-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>One-shot structured output: the model calls <code>schema</code> (a function/class); returns <code>schema(**arguments)</code>.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L455" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="chat.classify" class="level3">
+<h3 class="anchored" data-anchor-id="chat.classify">Chat.classify</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb77"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb77-1"><a href="#cb77-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> classify(</span>
+<span id="cb77-2"><a href="#cb77-2" aria-hidden="true" tabindex="-1"></a>    text, labels, sp:<span class="bu">str</span><span class="op">=</span><span class="st">'Reply with only the single best label and nothing else.'</span></span>
+<span id="cb77-3"><a href="#cb77-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>One-shot label for <code>text</code>, run in a throwaway conversation (isolated from this chat).</em></p>
+<div id="utillivetest" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb78"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb78-1"><a href="#cb78-1" aria-hidden="true" tabindex="-1"></a><span class="co"># classify + structured on a real model</span></span>
+<span id="cb78-2"><a href="#cb78-2" aria-hidden="true" tabindex="-1"></a>sm <span class="op">=</span> Chat(cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)</span>
+<span id="cb78-3"><a href="#cb78-3" aria-hidden="true" tabindex="-1"></a>test_eq(sm.classify(<span class="st">"I absolutely loved this film!"</span>, [<span class="st">'positive'</span>, <span class="st">'negative'</span>]), <span class="st">'positive'</span>)</span>
+<span id="cb78-4"><a href="#cb78-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb78-5"><a href="#cb78-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dataclasses <span class="im">import</span> dataclass</span>
+<span id="cb78-6"><a href="#cb78-6" aria-hidden="true" tabindex="-1"></a><span class="at">@dataclass</span></span>
+<span id="cb78-7"><a href="#cb78-7" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Person: name:<span class="bu">str</span><span class="op">;</span> age:<span class="bu">int</span></span>
+<span id="cb78-8"><a href="#cb78-8" aria-hidden="true" tabindex="-1"></a>p <span class="op">=</span> sm.structured(<span class="st">"Extract the person: John Smith is 30 years old."</span>, Person)</span>
+<span id="cb78-9"><a href="#cb78-9" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(p)<span class="op">;</span> <span class="cf">assert</span> <span class="bu">isinstance</span>(p, Person) <span class="kw">and</span> <span class="st">'John'</span> <span class="kw">in</span> p.name</span>
+<span id="cb78-10"><a href="#cb78-10" aria-hidden="true" tabindex="-1"></a>sm.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784180085.450553 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784180085.451727 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784180085.965230 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Person(name='John Smith', age=30.0)</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="grading-answers" class="level2">
+<h2 class="anchored" data-anchor-id="grading-answers">Grading answers</h2>
+<p><code>chat.check</code> turns the model into a graded question-answerer. It asks <code>question</code> in an isolated conversation (like <code>classify</code>/<code>structured</code>, so nothing touches <code>chat.hist</code>), pulls the model’s answer out of a ``<code>answer fence with [</code>extract_fence<code>](https://vedicreader.github.io/rishi/core.html#extract_fence) (falling back to the whole reply if the model skips the fence), and grades it against</code>expected<code>. Grading is</code>grade_fn(answer, expected) -&gt; bool<code>, defaulting to [</code>_matches<code>](https://vedicreader.github.io/rishi/core.html#_matches) (the answer must contain</code>expected<code>, or any value in an</code>expected<code>list). Pass your own</code>grade_fn<code>for custom logic, or set</code>llm_judge=True<code>to grade with the model instead (</code>chat.grades<code>, built on</code>classify<code>); pass</code>judge=<code>a second [</code>Chat`](https://vedicreader.github.io/rishi/core.html#chat) to have a stronger model do the grading.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L486" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="chat.check" class="level3">
+<h3 class="anchored" data-anchor-id="chat.check">Chat.check</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb81"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb81-1"><a href="#cb81-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> check(</span>
+<span id="cb81-2"><a href="#cb81-2" aria-hidden="true" tabindex="-1"></a>    question, expected, grade_fn:function<span class="op">=</span>_matches, llm_judge:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, judge:NoneType<span class="op">=</span><span class="va">None</span>, tag:<span class="bu">str</span><span class="op">=</span><span class="st">'answer'</span>,</span>
+<span id="cb81-3"><a href="#cb81-3" aria-hidden="true" tabindex="-1"></a>    sp:<span class="bu">str</span><span class="op">=</span><span class="st">'Answer the question, then put your final answer inside a ```answer fence.'</span></span>
+<span id="cb81-4"><a href="#cb81-4" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Ask <code>question</code> in a throwaway conversation, extract the ``<code>&lt;tag&gt; answer, and grade it against</code>expected`.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L479" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="chat.grades" class="level3">
+<h3 class="anchored" data-anchor-id="chat.grades">Chat.grades</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb82"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb82-1"><a href="#cb82-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> grades(</span>
+<span id="cb82-2"><a href="#cb82-2" aria-hidden="true" tabindex="-1"></a>    question, expected, actual</span>
+<span id="cb82-3"><a href="#cb82-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>LLM-as-judge (on this chat’s engine): is <code>actual</code> a correct answer to <code>question</code> given reference <code>expected</code>?</em></p>
+<div id="gradeqaex" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb83"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb83-1"><a href="#cb83-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Default grade is a deterministic match (no judge needed):</span></span>
+<span id="cb83-2"><a href="#cb83-2" aria-hidden="true" tabindex="-1"></a>qa <span class="op">=</span> Chat(cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)</span>
+<span id="cb83-3"><a href="#cb83-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(qa.check(<span class="st">"What is the capital of France?"</span>, <span class="st">"Paris"</span>).ok)</span>
+<span id="cb83-4"><a href="#cb83-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Custom grader: any `answer, expected -&gt; bool`:</span></span>
+<span id="cb83-5"><a href="#cb83-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(qa.check(<span class="st">"What is 2 + 2?"</span>, <span class="st">"4"</span>, grade_fn<span class="op">=</span><span class="kw">lambda</span> a, e: e <span class="kw">in</span> a).ok)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784180090.782984 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784180090.783925 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>True</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784180091.531015 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>True</code></pre>
+</div>
+</div>
+<div id="6ade77f58a56feb3" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb88"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb88-1"><a href="#cb88-1" aria-hidden="true" tabindex="-1"></a><span class="co"># LLM-as-judge, optionally with a bigger model doing the grading:</span></span>
+<span id="cb88-2"><a href="#cb88-2" aria-hidden="true" tabindex="-1"></a>judge <span class="op">=</span> Chat(model_id<span class="op">=</span>gemma4_12b, backend<span class="op">=</span>Backend.GPU(),multimodal<span class="op">=</span><span class="va">False</span>, cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784180096.290555 66921307 litert_lm_loader.h:158] TFLite model type: TF_LITE_VISION_ENCODER not found for backend constraints. Skipping.
+W0000 00:00:1784180096.290570 66921307 litert_lm_loader.h:174] TFLite model type: TF_LITE_VISION_ENCODER not found for prefer activation type. Use system's default backend activation type. System's default activation type for Text decoder is fp16. Vision encoder and audio encoder default is fp32.
+WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784180109.242849 66921307 litert_lm_loader.cc:289] Section not found: 
+W0000 00:00:1784180109.242932 66921307 litert_lm_loader.h:129] TFLite model for type: TF_LITE_END_OF_VISION not found. Skipping.
+W0000 00:00:1784180109.271313 66921307 litert_lm_loader.cc:289] Section not found: 
+W0000 00:00:1784180109.271323 66921307 litert_lm_loader.h:129] TFLite model for type: TF_LITE_PER_LAYER_EMBEDDER not found. Skipping.
+W0000 00:00:1784180109.271470 66921307 litert_lm_loader.h:158] TFLite model type: TF_LITE_VISION_ENCODER not found for backend constraints. Skipping.
+W0000 00:00:1784180109.271475 66921307 litert_lm_loader.h:174] TFLite model type: TF_LITE_VISION_ENCODER not found for prefer activation type. Use system's default backend activation type. System's default activation type for Text decoder is fp16. Vision encoder and audio encoder default is fp32.
+W0000 00:00:1784180109.279493 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+</div>
+<div id="b974235482c91616" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb90"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb90-1"><a href="#cb90-1" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> qa.check(<span class="st">"Name a primary colour."</span>, <span class="st">"red, blue, or yellow"</span>, judge<span class="op">=</span>judge)   <span class="co"># judge -&gt; llm_judge</span></span>
+<span id="cb90-2"><a href="#cb90-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(r.answer, <span class="st">'-&gt;'</span>, r.ok)</span>
+<span id="cb90-3"><a href="#cb90-3" aria-hidden="true" tabindex="-1"></a>judge.close()<span class="op">;</span> qa.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784180112.863596 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784180113.297144 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784180113.351198 66992751 sampler_factory.cc:450] WebGPU sampler not available, falling back to statically linked C API: UNAVAILABLE: ERROR: [third_party/odml/litert_lm/runtime/components/sampler_factory.cc:294]
+└ Could not load shared library libLiteRtTopKWebGpuSampler.dylib: dlopen(libLiteRtTopKWebGpuSampler.dylib, 0x0005): tried: 'libLiteRtTopKWebGpuSampler.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSlibLiteRtTopKWebGpuSampler.dylib' (no such file), '/usr/lib/libLiteRtTopKWebGpuSampler.dylib' (no such file, not in dyld cache), 'libLiteRtTopKWebGpuSampler.dylib' (no such file).
+=== Source Location Trace: === 
+./third_party/odml/litert/litert/cc/litert_macros.h:573</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Red -&gt; True</code></pre>
+</div>
+</div>
+<div id="qalivetest" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb93"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb93-1"><a href="#cb93-1" aria-hidden="true" tabindex="-1"></a><span class="co"># grades (LLM judge) + check on a real model</span></span>
+<span id="cb93-2"><a href="#cb93-2" aria-hidden="true" tabindex="-1"></a>sm <span class="op">=</span> Chat(cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)</span>
+<span id="cb93-3"><a href="#cb93-3" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> sm.grades(<span class="st">"What is the capital of France?"</span>, <span class="st">"Paris"</span>, <span class="st">"Paris"</span>) <span class="kw">is</span> <span class="va">True</span></span>
+<span id="cb93-4"><a href="#cb93-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> sm.grades(<span class="st">"What is the capital of France?"</span>, <span class="st">"Paris"</span>, <span class="st">"London"</span>) <span class="kw">is</span> <span class="va">False</span></span>
+<span id="cb93-5"><a href="#cb93-5" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> sm.check(<span class="st">"What is the capital of France?"</span>, <span class="st">"Paris"</span>)            <span class="co"># deterministic default</span></span>
+<span id="cb93-6"><a href="#cb93-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(r.answer, <span class="st">'-&gt;'</span>, r.ok)<span class="op">;</span> <span class="cf">assert</span> r.ok</span>
+<span id="cb93-7"><a href="#cb93-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> sm.check(<span class="st">"What is 2 + 2?"</span>, <span class="st">"4"</span>, llm_judge<span class="op">=</span><span class="va">True</span>).ok <span class="kw">is</span> <span class="va">True</span>  <span class="co"># self as judge</span></span>
+<span id="cb93-8"><a href="#cb93-8" aria-hidden="true" tabindex="-1"></a>sm.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784180138.089785 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784180138.090966 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784180139.074466 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784180139.374913 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Paris -&gt; True</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784180140.049391 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784180140.676127 66921307 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="installing-the-skill" class="level2">
+<h2 class="anchored" data-anchor-id="installing-the-skill">Installing the skill</h2>
+<p><code>skill.md</code> ships with the package. A harness can drop it into the standard skill directories with <a href="https://vedicreader.github.io/rishi/core.html#mv_skill_md"><code>mv_skill_md</code></a>, which writes <code>SKILL.md</code> under <code>.claude/skills/rishi/</code> and <code>.agents/skills/rishi/</code> at the git root. It is a dry run by default and only prints the targets; pass <code>dry_run=False</code> to write, or <code>dir=</code> to install somewhere else.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L498" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="mv_skill_md" class="level3">
+<h3 class="anchored" data-anchor-id="mv_skill_md">mv_skill_md</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb97"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb97-1"><a href="#cb97-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mv_skill_md(</span>
+<span id="cb97-2"><a href="#cb97-2" aria-hidden="true" tabindex="-1"></a>    dry_run:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="bu">dir</span>:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb97-3"><a href="#cb97-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Copy the bundled <code>skill.md</code> into <code>.claude</code> and <code>.agents</code> skill dirs so a harness can load the rishi skill.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L494" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="repo_root" class="level3">
+<h3 class="anchored" data-anchor-id="repo_root">repo_root</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb98"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb98-1"><a href="#cb98-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> repo_root()<span class="op">-&gt;</span>Path:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Root of the current git repository, or None if not in one.</em></p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vedicreader\.github\.io\/rishi");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>

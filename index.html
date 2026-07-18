@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="description" content="Run Gemma locally: tools, streaming, thinking, a python sandbox, structured output, and graded answers.">
+
+<title>rishi</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-b38bfc58f0732c5acf3d85c920ebea91.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="rishi">
+<meta property="og:description" content="Run Gemma locally: tools, streaming, thinking, a python sandbox, structured output, and graded answers.">
+<meta property="og:image" content="https://vedicreader.github.io/rishi/index_files/figure-html/cell-5-output-1.png">
+<meta property="og:site_name" content="rishi">
+<meta property="og:image:height" content="447">
+<meta property="og:image:width" content="447">
+<meta name="twitter:title" content="rishi">
+<meta name="twitter:description" content="Run Gemma locally: tools, streaming, thinking, a python sandbox, structured output, and graded answers.">
+<meta name="twitter:image" content="https://vedicreader.github.io/rishi/index_files/figure-html/cell-5-output-1.png">
+<meta name="twitter:image-height" content="447">
+<meta name="twitter:image-width" content="447">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">rishi</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./index.html">rishi</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">rishi</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">core</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#install" id="toc-install" class="nav-link active" data-scroll-target="#install">Install</a></li>
+  <li><a href="#quickstart" id="toc-quickstart" class="nav-link" data-scroll-target="#quickstart">Quickstart</a></li>
+  <li><a href="#streaming" id="toc-streaming" class="nav-link" data-scroll-target="#streaming">Streaming</a></li>
+  <li><a href="#thinking" id="toc-thinking" class="nav-link" data-scroll-target="#thinking">Thinking</a></li>
+  <li><a href="#images-and-audio" id="toc-images-and-audio" class="nav-link" data-scroll-target="#images-and-audio">Images and audio</a></li>
+  <li><a href="#tools-and-approval" id="toc-tools-and-approval" class="nav-link" data-scroll-target="#tools-and-approval">Tools and approval</a></li>
+  <li><a href="#running-python-from-replies" id="toc-running-python-from-replies" class="nav-link" data-scroll-target="#running-python-from-replies">Running python from replies</a></li>
+  <li><a href="#structured-output-and-classification" id="toc-structured-output-and-classification" class="nav-link" data-scroll-target="#structured-output-and-classification">Structured output and classification</a></li>
+  <li><a href="#grading-answers" id="toc-grading-answers" class="nav-link" data-scroll-target="#grading-answers">Grading answers</a></li>
+  <li><a href="#knowing-when-to-compress" id="toc-knowing-when-to-compress" class="nav-link" data-scroll-target="#knowing-when-to-compress">Knowing when to compress</a></li>
+  <li><a href="#custom-callbacks" id="toc-custom-callbacks" class="nav-link" data-scroll-target="#custom-callbacks">Custom callbacks</a></li>
+  <li><a href="#installing-the-skill" id="toc-installing-the-skill" class="nav-link" data-scroll-target="#installing-the-skill">Installing the skill</a></li>
+  <li><a href="#sharing-a-model-backends-and-benchmarks" id="toc-sharing-a-model-backends-and-benchmarks" class="nav-link" data-scroll-target="#sharing-a-model-backends-and-benchmarks">Sharing a model, backends, and benchmarks</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="index.html.md"><i class="bi bi-file-code"></i>Markdown</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">rishi</h1>
+</div>
+
+<div>
+  <div class="description">
+    Run Gemma locally: tools, streaming, thinking, a python sandbox, structured output, and graded answers.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<p>rishi is a thin chat layer over Google’s on-device <a href="https://github.com/google-ai-edge/litert-lm">litert_lm</a> engine. You give it a Gemma model id, it downloads the weights once, and then you talk to the model with a plain function call. It keeps the conversation history where you can read it, streams tokens into a notebook, shows the model’s thinking, takes images and audio as input, tracks how full the context is getting, runs tools behind an approval gate, executes python from replies, and turns answers into structured objects or graded results.</p>
+<p>Everything runs on your machine. No API keys, and no network once the model is cached.</p>
+<section id="install" class="level2">
+<h2 class="anchored" data-anchor-id="install">Install</h2>
+<p>rishi is built with nbdev, so the notebooks in <code>nbs/</code> are the source. Install from source:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install rishi</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>To work on it, clone the repo, install it editable, and use nbdev to export and test:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-e</span> <span class="st">'.[dev]'</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">nbdev-prepare</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="quickstart" class="level2">
+<h2 class="anchored" data-anchor-id="quickstart">Quickstart</h2>
+<p>Build a <a href="https://vedicreader.github.io/rishi/core.html#chat"><code>Chat</code></a> and call it. The first call downloads <code>gemma-4-E2B</code> (a couple of gigabytes); every call after that loads from the local cache.</p>
+<div id="quickstart-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">"Give me one fact about lobsters."</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r))     <span class="co"># in a notebook, `r` also renders as markdown on its own</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> chat.hist[<span class="op">-</span><span class="dv">1</span>] <span class="kw">is</span> r <span class="kw">and</span> chat.use.total_tokens <span class="op">&gt;</span> <span class="dv">0</span> <span class="kw">and</span> chat.token_count <span class="op">&gt;</span> <span class="dv">0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784366781.830492 69350651 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Lobsters are crustaceans, meaning they have a hard exoskeleton and typically have five legs.</code></pre>
+</div>
+</div>
+<p>Calling <code>chat</code> runs one turn and returns litert’s response dict wrapped in <a href="https://vedicreader.github.io/rishi/core.html#resp"><code>Resp</code></a>. <code>resp_text(r)</code> pulls the text out; in a notebook <code>r</code> renders itself as markdown, including any thinking and tool calls. The turn is appended to <code>chat.hist</code>, which you can show with <code>chat.print_hist()</code>. Call <code>chat</code> again and it continues the same conversation.</p>
+</section>
+<section id="streaming" class="level2">
+<h2 class="anchored" data-anchor-id="streaming">Streaming</h2>
+<p>Pass <code>stream=True</code> and iterate. You get markdown chunks as the model decodes them. <a href="https://vedicreader.github.io/rishi/core.html#display_stream"><code>display_stream</code></a> renders those chunks live in a notebook.</p>
+<div id="streaming-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># print chunks as they decode:</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> chunk <span class="kw">in</span> chat(<span class="st">"Write a haiku about the sea."</span>, stream<span class="op">=</span><span class="va">True</span>): <span class="bu">print</span>(chunk, end<span class="op">=</span><span class="st">''</span>, flush<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="co"># or render it live in a notebook cell:</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>display_stream(chat(<span class="st">"Say hello in three languages."</span>, stream<span class="op">=</span><span class="va">True</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Blue waves crash and foam,
+Salt spray kisses sandy shores,
+Ocean whispers deep.</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p>Here are “hello” in three languages:</p>
+<ol type="1">
+<li><strong>Spanish:</strong> ¡Hola!</li>
+<li><strong>French:</strong> Bonjour!</li>
+<li><strong>Italian:</strong> Ciao!</li>
+</ol>
+</div>
+<div class="cell-output cell-output-display">
+<pre><code>'Here are "hello" in three languages:\n\n1. **Spanish:** ¡Hola!\n2. **French:** Bonjour!\n3. **Italian:** Ciao!'</code></pre>
+</div>
+</div>
+</section>
+<section id="thinking" class="level2">
+<h2 class="anchored" data-anchor-id="thinking">Thinking</h2>
+<p>Set <code>think=True</code> to turn on the model’s thinking channel. <a href="https://vedicreader.github.io/rishi/core.html#resp_text"><code>resp_text</code></a> returns just the answer, <code>thought(r)</code> returns the reasoning, and in a notebook <code>r</code> shows the thinking as a quoted block above the reply. <code>filter_think=True</code> (the default) keeps the thinking out of the KV cache so it doesn’t eat your context.</p>
+<div id="thinking-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>ch <span class="op">=</span> Chat(think<span class="op">=</span><span class="va">True</span>, cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> ch(<span class="st">"A bat and ball cost $1.10, and the bat is $1 more than the ball. How much is the ball?"</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r))     <span class="co"># the answer; thought(r) has the reasoning</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784366801.946323 69350651 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>This is a classic algebra problem. Here is how to solve it:
+
+**1. Define the variables:**
+* Let $B$ be the cost of the bat.
+* Let $L$ be the cost of the ball.
+
+**2. Set up the equations based on the information given:**
+* **Equation 1 (Total Cost):** $B + L = 1.10$
+* **Equation 2 (Relationship):** The bat is $1 more than the ball, so $B = L + 1.00$
+
+**3. Solve the system of equations using substitution:**
+Substitute the expression for $B$ from Equation 2 into Equation 1:
+$$(L + 1.00) + L = 1.10$$
+
+**4. Simplify and solve for L (the cost of the ball):**
+$$2L + 1.00 = 1.10$$
+$$2L = 1.10 - 1.00$$
+$$2L = 0.10$$
+$$L = \frac{0.10}{2}$$
+$$L = 0.05$$
+
+**Answer:**
+The ball costs **$0.05** (or 5 cents).
+
+***
+*(Check: If the ball is $0.05, the bat is $0.05 + $1.00 = $1.05. $1.05 + $0.05 = $1.10. The math checks out.)*</code></pre>
+</div>
+</div>
+</section>
+<section id="images-and-audio" class="level2">
+<h2 class="anchored" data-anchor-id="images-and-audio">Images and audio</h2>
+<p>The default Gemma build is multimodal, so you can pass images and audio alongside text in the same call. Mix them into the message list: a <code>PIL.Image</code> wrapped with <code>img_bytes</code>, raw <code>bytes</code>, or a <code>Path</code> to a file. rishi sniffs each item and tags it as image or audio; <code>ImageFile</code>, <code>ImageBytes</code>, <code>AudioFile</code>, and <code>AudioBytes</code> work too if you’d rather be explicit.</p>
+<div id="multimodal-image" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> PIL <span class="im">import</span> Image</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.<span class="bu">all</span> <span class="im">import</span> img_bytes, Path</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>im <span class="op">=</span> Image.<span class="bu">open</span>(<span class="st">'images.jpeg'</span>)<span class="op">;</span> im</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="index_files/figure-html/cell-5-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<div id="8c014da1fcf07a41" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat([<span class="st">'Explain this image.'</span>, img_bytes(im)])   <span class="co"># ImageFile('images.jpeg') also works</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>This image is a photograph of a **German Shepherd dog**.
+
+Here's a breakdown of what can be observed:
+
+* **Subject:** The main focus is a medium-to-large-sized dog with the characteristic features of a German Shepherd, including its pointed ears, dark mask around the muzzle, and rich, reddish-brown fur.
+* **Expression:** The dog appears happy, alert, and engaged, with its mouth slightly open, showing its tongue, suggesting it might be panting slightly or excited.
+* **Setting:** The dog is outdoors, standing on a dirt or gravel path. The background is soft and blurred (shallow depth of field), indicating a natural, possibly wooded or grassy area, suggesting a park, trail, or countryside setting.
+* **Mood:** The overall mood of the photo is warm, friendly, and energetic.</code></pre>
+</div>
+</div>
+<div id="multimodal-audio" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> <span class="bu">open</span>(Path(<span class="st">'speech.wav'</span>), <span class="st">'rb'</span>) <span class="im">as</span> f:</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> chat([<span class="st">'Transcribe this clip.'</span>, mk_content(f.read())])</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>The text you provided is a poem or song lyric, not a spoken clip. Here is the transcription of the text:
+
+"Dancing in the masquerade,
+Idle truth in plain sight jaded,
+Pop, roll, click,
+Who will I be today or not?
+But such a tide as moving seems a sleep,
+Too full for sound and foam,
+When that drew from out the boundless deep,
+Turns again home,
+Twilight and evening bell,
+And after that"</code></pre>
+</div>
+</div>
+</section>
+<section id="tools-and-approval" class="level2">
+<h2 class="anchored" data-anchor-id="tools-and-approval">Tools and approval</h2>
+<p>Pass plain Python functions as tools. litert reads their signatures and docstrings to build the schema and calls them during a turn. rishi records every call in the history, and if you give it an <code>approve</code> function it checks before running each one.</p>
+<p><a href="https://vedicreader.github.io/rishi/core.html#hitl_policy"><code>hitl_policy</code></a> builds an <code>approve</code> function from a per-tool rule: <code>approved</code> runs the tool, <code>dont_run</code> always blocks it, and <code>check</code> asks you on the console.</p>
+<div id="tools-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> add(a: <span class="bu">int</span>, b: <span class="bu">int</span>) <span class="op">-&gt;</span> <span class="bu">int</span>:</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">"Add two integers."</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> a <span class="op">+</span> b</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> delete_files(path: <span class="bu">str</span>) <span class="op">-&gt;</span> <span class="bu">str</span>:</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">"Delete everything under a path."</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f"wiped </span><span class="sc">{</span>path<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>approve <span class="op">=</span> hitl_policy({<span class="st">'add'</span>: <span class="st">'approved'</span>, <span class="st">'delete_files'</span>: <span class="st">'dont_run'</span>})</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(tools<span class="op">=</span>[add, delete_files], backend<span class="op">=</span>Backend.GPU(), approve<span class="op">=</span>approve, cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)</span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">"Add 2 and 3, then delete /tmp/data."</span>)</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r))</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>chat.print_hist()   <span class="co"># the blocked call is logged as a 'Denied by human operator' tool response</span></span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>chat.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784367648.946376 69350651 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784367649.035355 69376717 sampler_factory.cc:450] WebGPU sampler not available, falling back to statically linked C API: UNAVAILABLE: ERROR: [third_party/odml/litert_lm/runtime/components/sampler_factory.cc:294]
+└ Could not load shared library libLiteRtTopKWebGpuSampler.dylib: dlopen(libLiteRtTopKWebGpuSampler.dylib, 0x0005): tried: 'libLiteRtTopKWebGpuSampler.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSlibLiteRtTopKWebGpuSampler.dylib' (no such file), '/usr/lib/libLiteRtTopKWebGpuSampler.dylib' (no such file, not in dyld cache), 'libLiteRtTopKWebGpuSampler.dylib' (no such file).
+=== Source Location Trace: === 
+./third_party/odml/litert/litert/cc/litert_macros.h:573</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>The result of adding 2 and 3 is 5.0. Now I will proceed to delete the specified file path.
+</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p><strong>user</strong></p>
+<p>Add 2 and 3, then delete /tmp/data.</p>
+<hr>
+<p><strong>model</strong></p>
+<p>🔧 add({‘a’: 2.0, ‘b’: 3.0})</p>
+<hr>
+<p><strong>tool</strong></p>
+<p>↩︎ <strong>add</strong>: 5.0</p>
+<hr>
+<p><strong>model</strong></p>
+<p>🔧 delete_files({‘path’: ‘/tmp/data.<system-reminder>’})</system-reminder></p>
+<hr>
+<p><strong>tool</strong></p>
+<p>↩︎ <strong>delete_files</strong>: Denied by human operator</p>
+<hr>
+<p><strong>assistant</strong></p>
+<p>The result of adding 2 and 3 is 5.0. Now I will proceed to delete the specified file path.</p>
+<p>🔧 delete_files({‘path’: ‘/tmp/data.<system-reminder>’})</system-reminder></p>
+</div>
+</div>
+<p>The blocked call never runs. It is recorded as “Denied by human operator” and handed back to the model, which finishes the turn without it. For anything fancier than a fixed policy, pass your own <code>approve(tool_call) -&gt; bool</code> to log the request, rate-limit it, or pop up a prompt.</p>
+</section>
+<section id="running-python-from-replies" class="level2">
+<h2 class="anchored" data-anchor-id="running-python-from-replies">Running python from replies</h2>
+<p>Add <a href="https://vedicreader.github.io/rishi/core.html#pyfencecallback"><code>PyFenceCallback</code></a> and the chat becomes a code interpreter. It runs the last ``<code>python fence in a reply through a sandbox, feeds the output back, and loops until the model answers in prose or a</code>done<code>function says the task is complete. [</code>output_matches<code>](https://vedicreader.github.io/rishi/core.html#output_matches) is a ready-made</code>done<code>that stops once the output contains an expected value. Code runs through the same</code>approve` gate as a tool.</p>
+<div id="codeinterp-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(cbs<span class="op">=</span>[PyFenceCallback], sp<span class="op">=</span><span class="st">"Use a ```python fence to compute the answer, then reply in prose."</span>, cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat(<span class="st">"What is 2**100?"</span>))</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="co"># stop as soon as the code output matches an expected value:</span></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat(<span class="st">"Sort [3, 1, 2] ascending and print it."</span>, cbs<span class="op">=</span>[PyFenceCallback(done<span class="op">=</span>output_matches(<span class="st">'[1, 2, 3]'</span>))]))</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a><span class="co"># or run a snippet yourself in the chat's persistent sandbox:</span></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat.run_py(<span class="st">"sum(range(10))"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784349255.016350 69263787 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>{'role': 'assistant', 'content': [{'type': 'text', 'text': 'The value of $2^{100}$ is $1,267,650,600,228,845,975,360,000,000$.'}]}
+{'role': 'assistant', 'content': [{'type': 'text', 'text': 'The sorted list is [1, 2, 3].'}]}
+45</code></pre>
+</div>
+</div>
+</section>
+<section id="structured-output-and-classification" class="level2">
+<h2 class="anchored" data-anchor-id="structured-output-and-classification">Structured output and classification</h2>
+<p><code>chat.structured</code> forces the model to call a function or dataclass and returns the built object. <code>chat.classify</code> picks one label from a list. Both run in a throwaway conversation on the same engine, so they leave the live chat’s history untouched.</p>
+<div id="structured-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dataclasses <span class="im">import</span> dataclass</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="at">@dataclass</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Person: name: <span class="bu">str</span><span class="op">;</span> age: <span class="bu">int</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat.structured(<span class="st">"Extract the person: John Smith is 30 years old."</span>, Person))</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="co"># -&gt; Person(name='John Smith', age=30)</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>chat.classify(<span class="st">"I loved this film!"</span>, [<span class="st">'positive'</span>, <span class="st">'negative'</span>])</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a><span class="co"># -&gt; 'positive'</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784349264.685436 69263787 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Person(name='John Smith', age=30.0)</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784349265.476229 69263787 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<pre><code>'positive'</code></pre>
+</div>
+</div>
+</section>
+<section id="grading-answers" class="level2">
+<h2 class="anchored" data-anchor-id="grading-answers">Grading answers</h2>
+<p><code>chat.check</code> asks a question, pulls the answer out of a ``<code>answer fence, and grades it against what you expected. The default grade is a deterministic match. Pass</code>llm_judge=True<code>, or a</code>judge=<code>chat, to grade with a model instead, so you can answer with a small model and grade with a bigger one. Pass your own</code>grade_fn(answer, expected) -&gt; bool` for custom logic.</p>
+<div id="grading-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># deterministic: the answer must contain the expected value</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>chat.check(<span class="st">"What is the capital of France?"</span>, <span class="st">"Paris"</span>)      <span class="co"># -&gt; True)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784349274.849246 69263787 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>{ <span class="st">'answer'</span>: <span class="st">'Paris'</span>,</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="st">'expected'</span>: <span class="st">'Paris'</span>,</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">'ok'</span>: <span class="va">True</span>,</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">'question'</span>: <span class="st">'What is the capital of France?'</span>}</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</div>
+<div id="ca393b73212ac896" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># grade with a bigger model as the judge, gemma412b needs a gpu backend:</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>judge <span class="op">=</span> Chat(model_id<span class="op">=</span>gemma4_12b, backend<span class="op">=</span>Backend.GPU(), multimodal<span class="op">=</span><span class="va">False</span>, cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784349281.959009 69263787 litert_lm_loader.h:158] TFLite model type: TF_LITE_VISION_ENCODER not found for backend constraints. Skipping.
+W0000 00:00:1784349281.959018 69263787 litert_lm_loader.h:174] TFLite model type: TF_LITE_VISION_ENCODER not found for prefer activation type. Use system's default backend activation type. System's default activation type for Text decoder is fp16. Vision encoder and audio encoder default is fp32.
+WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784349295.202623 69263787 litert_lm_loader.cc:289] Section not found: 
+W0000 00:00:1784349295.202633 69263787 litert_lm_loader.h:129] TFLite model for type: TF_LITE_END_OF_VISION not found. Skipping.
+W0000 00:00:1784349295.209811 69263787 litert_lm_loader.cc:289] Section not found: 
+W0000 00:00:1784349295.209821 69263787 litert_lm_loader.h:129] TFLite model for type: TF_LITE_PER_LAYER_EMBEDDER not found. Skipping.
+W0000 00:00:1784349295.209839 69263787 litert_lm_loader.h:158] TFLite model type: TF_LITE_VISION_ENCODER not found for backend constraints. Skipping.
+W0000 00:00:1784349295.209840 69263787 litert_lm_loader.h:174] TFLite model type: TF_LITE_VISION_ENCODER not found for prefer activation type. Use system's default backend activation type. System's default activation type for Text decoder is fp16. Vision encoder and audio encoder default is fp32.
+W0000 00:00:1784349295.210733 69263787 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+</div>
+<div id="2cea58867c1edc8c" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat.check(<span class="st">"Name a primary colour."</span>, <span class="st">"red, blue, or yellow"</span>, judge<span class="op">=</span>judge))<span class="op">;</span> judge.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>W0000 00:00:1784349304.182422 69263787 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784349304.602219 69263787 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784349304.763371 69267897 sampler_factory.cc:450] WebGPU sampler not available, falling back to statically linked C API: UNAVAILABLE: ERROR: [third_party/odml/litert_lm/runtime/components/sampler_factory.cc:294]
+└ Could not load shared library libLiteRtTopKWebGpuSampler.dylib: dlopen(libLiteRtTopKWebGpuSampler.dylib, 0x0005): tried: 'libLiteRtTopKWebGpuSampler.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSlibLiteRtTopKWebGpuSampler.dylib' (no such file), '/usr/lib/libLiteRtTopKWebGpuSampler.dylib' (no such file, not in dyld cache), 'libLiteRtTopKWebGpuSampler.dylib' (no such file).
+=== Source Location Trace: ===
+./third_party/odml/litert/litert/cc/litert_macros.h:573</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>{'question': 'Name a primary colour.', 'expected': 'red, blue, or yellow', 'answer': 'Red', 'ok': True}</code></pre>
+</div>
+</div>
+</section>
+<section id="knowing-when-to-compress" class="level2">
+<h2 class="anchored" data-anchor-id="knowing-when-to-compress">Knowing when to compress</h2>
+<p>litert doesn’t report token counts per reply, so rishi reads the KV-cache size straight from the engine. After each turn <code>chat.use</code> holds that turn’s input and output tokens, <code>chat.token_count</code> is the live context size, and <code>chat.pct_full</code> is that size over <code>ctx_limit</code>.</p>
+<div id="usage-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(ctx_limit<span class="op">=</span><span class="dv">10000</span>, cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>, backend<span class="op">=</span>Backend.GPU())</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(chat(<span class="st">'Count the fibonacci numbers up to 20'</span>)))</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">'tokens:'</span>, chat.use)</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">'percent:'</span>, chat.pct_full)</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a><span class="co"># if chat.pct_full &gt; 0.8:</span></span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a><span class="co">#   pass  # summarise the history and start a fresh Chat</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784367777.291354 69350651 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784367777.298455 69379455 sampler_factory.cc:450] WebGPU sampler not available, falling back to statically linked C API: UNAVAILABLE: ERROR: [third_party/odml/litert_lm/runtime/components/sampler_factory.cc:294]
+└ Could not load shared library libLiteRtTopKWebGpuSampler.dylib: dlopen(libLiteRtTopKWebGpuSampler.dylib, 0x0005): tried: 'libLiteRtTopKWebGpuSampler.dylib' (no such file), '/System/Volumes/Preboot/Cryptexes/OSlibLiteRtTopKWebGpuSampler.dylib' (no such file), '/usr/lib/libLiteRtTopKWebGpuSampler.dylib' (no such file, not in dyld cache), 'libLiteRtTopKWebGpuSampler.dylib' (no such file).
+=== Source Location Trace: === 
+./third_party/odml/litert/litert/cc/litert_macros.h:573</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Here are the Fibonacci numbers up to 20, and the count:
+
+**Fibonacci Sequence:**
+
+The Fibonacci sequence starts with 0 and 1, and each subsequent number is the sum of the two preceding ones.
+
+1. **0**
+2. **1**
+3. $0 + 1 = \mathbf{1}$
+4. $1 + 1 = \mathbf{2}$
+5. $1 + 2 = \mathbf{3}$
+6. $2 + 3 = \mathbf{5}$
+7. $3 + 5 = \mathbf{8}$
+8. $5 + 8 = \mathbf{13}$
+9. $8 + 13 = \mathbf{21}$ (This is greater than 20, so we stop here)
+
+**The Fibonacci numbers that are less than or equal to 20 are:**
+
+0, 1, 1, 2, 3, 5, 8, 13
+
+**Counting the unique numbers (or counting the terms in the sequence up to the limit):**
+
+If you are counting the terms generated by the sequence that are $\le 20$:
+
+The numbers are: **0, 1, 1, 2, 3, 5, 8, 13**
+
+There are **8** Fibonacci numbers up to 20 (including the initial 0 and the repeated 1).
+
+***
+
+**If you are counting the *unique* positive Fibonacci numbers up to 20:**
+
+The unique positive numbers are: 1, 2, 3, 5, 8, 13.
+There are **6** unique positive Fibonacci numbers up to 20.
+tokens: total=391|in=20|out=371|turns=1
+percent: 0.0391</code></pre>
+</div>
+</div>
+</section>
+<section id="custom-callbacks" class="level2">
+<h2 class="anchored" data-anchor-id="custom-callbacks">Custom callbacks</h2>
+<p>Everything above is built from callbacks. Subclass <a href="https://vedicreader.github.io/rishi/core.html#chatcallback"><code>ChatCallback</code></a>, hook an event (<code>before_send</code>, <code>after_response</code>, <code>before_tool_calls</code>, <code>after_tool_calls</code>), and read live turn state off the chat (<code>self.turn_res</code> is <code>chat.turn_res</code>). <code>order</code> sets when it runs. Register with <code>chat.add_cb</code> for every turn, pass <code>cbs=</code> to a single call to run it for that turn only, and drop one with <code>chat.remove_cb</code> (by instance or by class).</p>
+<div id="callbacks-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Logger(ChatCallback):</span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>    order <span class="op">=</span> <span class="dv">40</span></span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> after_response(<span class="va">self</span>): <span class="bu">print</span>(<span class="st">'reply tokens:'</span>, <span class="va">self</span>.chat.use.completion_tokens)</span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>chat.add_cb(Logger)                 <span class="co"># every turn</span></span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a>chat(<span class="st">"hello"</span>, cbs<span class="op">=</span>[Logger()])       <span class="co"># just this turn, removed afterwards</span></span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a>chat.remove_cb(Logger)              <span class="co"># by class or instance</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>reply tokens: 10
+reply tokens: 10</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<pre><code>&lt;rishi.core.Chat&gt;</code></pre>
+</div>
+</div>
+</section>
+<section id="installing-the-skill" class="level2">
+<h2 class="anchored" data-anchor-id="installing-the-skill">Installing the skill</h2>
+<p>rishi bundles <code>skill.md</code>, an agent skill describing the API. A harness can install it into the standard skill directories:</p>
+<div id="installskill-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rishi.core <span class="im">import</span> mv_skill_md</span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>mv_skill_md(dry_run<span class="op">=</span><span class="va">False</span>)   <span class="co"># writes SKILL.md under .claude/skills/rishi/ and .agents/skills/rishi/</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Call it with no arguments for a dry run that just prints where it would write.</p>
+</section>
+<section id="sharing-a-model-backends-and-benchmarks" class="level2">
+<h2 class="anchored" data-anchor-id="sharing-a-model-backends-and-benchmarks">Sharing a model, backends, and benchmarks</h2>
+<p>Loading a model costs a few seconds and a couple of gigabytes of RAM. To run several conversations off one load, build the engine once and hand it to each chat:</p>
+<div id="notes-code" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>eng <span class="op">=</span> Chat.create_engine(cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>a, b <span class="op">=</span> Chat(engine<span class="op">=</span>eng), Chat(engine<span class="op">=</span>eng)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.
+W0000 00:00:1784349448.475119 69263787 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000
+W0000 00:00:1784349448.476264 69263787 mel_filterbank.cc:137] Missing 10 bands  starting at 0 in mel-frequency design. Perhaps too many channels or not enough frequency resolution in spectrum. (fft_length: 257 sample_rate: 16000 mel_channel_count: 128 lower_frequency_limit: 0 upper_frequency_limit: 8000</code></pre>
+</div>
+</div>
+<p>A <a href="https://vedicreader.github.io/rishi/core.html#chat"><code>Chat</code></a> you build owns its engine and frees it on <code>close()</code>. A <a href="https://vedicreader.github.io/rishi/core.html#chat"><code>Chat</code></a> you hand an engine to leaves it alone, so the other chats keep working. The default backend is CPU; for GPU pass <code>backend=Backend.GPU()</code> and a <code>cache_dir</code> (rishi creates the directory the GPU weight cache needs). To measure raw speed, <a href="https://vedicreader.github.io/rishi/core.html#bench"><code>bench()</code></a> reports init time, time to first token, and prefill and decode tokens per second. Browse models at <a href="https://huggingface.co/litert-community">huggingface.co/litert-community</a>.</p>
+<div id="notes-bench" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>bench(cache_dir<span class="op">=</span><span class="st">'.cache/litertlm'</span>)   <span class="co"># init time, time to first token, prefill and decode tok/s</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>WARNING: [npu_registry.cc:34] NPU accelerator could not be loaded and registered: kLiteRtStatusErrorInvalidArgument.</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<pre><code>BenchmarkInfo(init_time_in_second=0.39091999999999993, time_to_first_token_in_second=0.51297009375, last_prefill_token_count=64, last_prefill_tokens_per_second=133.17463356167235, last_decode_token_count=64, last_decode_tokens_per_second=30.866013528959552)</code></pre>
+</div>
+</div>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vedicreader\.github\.io\/rishi");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
