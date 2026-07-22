@@ -15,11 +15,46 @@ rishi is built with nbdev, so the notebooks in `nbs/` are the source. Install fr
 pip install rishi
 ```
 
+For the llama.cpp backend add the `llama` extra:
+
+``` sh
+pip install 'rishi[llama]'
+```
+
 To work on it, clone the repo, install it editable, and use nbdev to export and test:
 
 ``` sh
 pip install -e '.[dev]'
 nbdev-prepare
+```
+
+## Backends: litert and llama.cpp
+
+rishi has two interchangeable backends behind the same
+[`Chat`](https://vedicreader.github.io/rishi/core.html#chat) API:
+
+- `rishi.core` (alias `rishi.litert`) - Google’s on-device
+  [litert_lm](https://github.com/google-ai-edge/litert-lm) engine and
+  the `.litertlm` Gemma builds, as shown throughout this page.
+- `rishi.llama` - any GGUF model via
+  [llama-cpp-python](https://github.com/abetlen/llama-cpp-python), with
+  both `Chat` and `AsyncChat`. Tool schemas are built with
+  [toolslm](https://github.com/AnswerDotAI/toolslm), the tool loop runs
+  in Python through the same `approve` gate (`hitl_policy` works
+  unchanged), Qwen-style `<think>` output lands in `channels.thought`
+  and is kept out of later context, and streaming, usage tracking, and
+  callbacks all work the same way.
+
+``` python
+from rishi import llama
+
+chat = llama.Chat(model_id=llama.qwen3_4b, think=False)   # any GGUF repo on the Hub works
+r = chat('Give me one fact about lobsters.')
+print(resp_text(r))
+
+achat = llama.AsyncChat(chat)                             # async twin over the same conversation
+r = await achat('Another one, please.')
+async for c in await achat('And a haiku.', stream=True): print(c, end='')
 ```
 
 ## Quickstart

@@ -21,6 +21,12 @@ dependencies = [
     "safepyrun>=0.2.3",
 ]
 
+[project.optional-dependencies]
+llama = [
+    "llama-cpp-python>=0.3.0",
+    "toolslm>=0.3.0",
+]
+
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"
 Documentation = "https://vedicreader.github.io/rishi/"
@@ -44,4 +50,6 @@ dev = [
     "nbdev>=3.1.0",
     "notebook>=7.6.0",
     "pyskills>=0.0.21",
+    "llama-cpp-python>=0.3.0",
+    "toolslm>=0.3.0",
 ]

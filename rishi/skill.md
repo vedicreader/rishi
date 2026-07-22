@@ -1,11 +1,11 @@
 ---
 name: rishi
-description: Run Gemma models on-device through rishi's Chat API over litert_lm - local chat with tool calling and human approval, streaming, thinking, a python sandbox, structured output, classification, and graded answers. Use when writing or debugging offline LLM chat, local tool-use agents, or anything mentioning rishi, litert_lm, or gemma .litertlm models.
+description: Run local models through rishi's Chat API - Gemma .litertlm builds over litert_lm (rishi.core/rishi.litert) or any GGUF model over llama-cpp-python (rishi.llama, with AsyncChat) - local chat with tool calling and human approval, streaming, thinking, a python sandbox, structured output, classification, and graded answers. Use when writing or debugging offline LLM chat, local tool-use agents, or anything mentioning rishi, litert_lm, gemma .litertlm models, or local GGUF/llama.cpp chat.
 ---
 
 # rishi
 
-rishi wraps Google's on-device litert_lm engine in a callable `Chat`. Models run locally (CPU or GPU), so there are no API keys and no network once weights are cached. Import everything from `rishi.core`.
+rishi wraps Google's on-device litert_lm engine in a callable `Chat`. Models run locally (CPU or GPU), so there are no API keys and no network once weights are cached. Import everything from `rishi.core`. A second backend, `rishi.llama` (see the last section), runs any GGUF model through llama-cpp-python with the same `Chat` API plus an `AsyncChat`.
 
 ## The one thing to remember
 
@@ -113,18 +113,31 @@ A Chat that built its own engine frees it on `close()`; a Chat handed an engine 
 - Tool and structured-output arguments arrive as floats (`21.0`) from the model's JSON. Cast inside the tool if you need strict ints.
 - `run_text_scoring` is not available on this runtime, so `classify` and `check` grade by generation, not log-likelihood scoring.
 
-## Installing the skill
+## llama.cpp backend (rishi.llama)
 
-`skill.md` ships inside the package. A harness can copy it into the standard skill directories with `mv_skill_md`:
+`pip install 'rishi[llama]'` (adds llama-cpp-python and toolslm). Same `Chat` API over any GGUF repo on the HuggingFace Hub, plus an `AsyncChat`:
 
 ```python
-from rishi.core import mv_skill_md
-mv_skill_md()                 # dry run: prints where it would write
-mv_skill_md(dry_run=False)    # writes SKILL.md under .claude/skills/rishi/ and .agents/skills/rishi/
+from rishi.llama import Chat, AsyncChat, resp_text, qwen3_4b
+
+chat = Chat(model_id=qwen3_4b, think=False)      # or model_path='path/to/model.gguf'
+r = chat("Say hello.")
+print(resp_text(r))
+
+achat = AsyncChat(chat)                          # or AsyncChat(model_id=...) to build its own
+r = await achat("Again?")
+async for c in await achat("Stream it.", stream=True): print(c, end='')
 ```
 
-It installs at the git root by default; pass `dir=` to choose another location.
+Differences from the litert backend:
+
+- `Chat(engine=None, model_id=qwen3_17b, model_path=None, quant='Q4_K_M', n_ctx=8192, n_gpu_layers=0, sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None, max_steps=10, think=None, temp=None, top_k=None, top_p=None, seed=None, max_output_tokens=None, comp_kw=None, cbs=None, default_cbs=True)`. Model ids: `qwen3_06b`, `qwen3_17b`, `qwen3_4b`, `gemma3_1b`, `gemma3_4b`; `quant` picks the `.gguf` file from the repo. `n_gpu_layers=-1` offloads everything to GPU.
+- The tool loop runs in Python (litert runs it in-engine): structured `tool_calls` and Hermes/Qwen `<tool_call>` text tags are both parsed, each call goes through `approve` (`hitl_policy` works unchanged), results are fed back as `role='tool'` messages, up to `max_steps` rounds per turn. Tools are python callables (schemas via toolslm) or OpenAI tool-spec dicts.
+- llama.cpp is stateless per call, so `chat.hist` IS the conversation state (no `HistoryCallback`); messages are OpenAI-style dicts. Thinking is split from `<think>` tags into `channels.thought` and never re-sent.
+- `think=True/False` appends `/think` / `/no_think` to the system prompt (Qwen-style soft switch); `None` keeps the model default.
+- `structured` forces the tool call with a JSON-schema grammar, so arguments always parse. No `render()`, `cancel()`, or `bench()`.
+- `AsyncChat` wraps a `Chat` (pass one, or its kwargs); calls run in a worker thread. `await achat(msg)`; `async for c in await achat(msg, stream=True)`.
 
 ## Working on rishi itself
 
-It's an nbdev project. Edit `nbs/00_core.ipynb`, not `rishi/core.py` (generated). Tests are non-exported `#| hide` cells; model-dependent cells are `#| eval: false` to keep the test run offline. Run `nbdev-prepare` (with a hyphen) after changes.
+It's an nbdev project. Edit `nbs/00_core.ipynb`, `nbs/01_llama.ipynb`, or `nbs/02_litert.ipynb`, not the generated files in `rishi/`. Tests are non-exported `#| hide` cells; model-dependent cells are `#| eval: false` to keep the test run offline. Run `nbdev-prepare` (with a hyphen) after changes.
