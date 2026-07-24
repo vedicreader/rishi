@@ -394,6 +394,71 @@ chat.remove_cb(Logger)              # by class or instance
 
     <rishi.core.Chat>
 
+## Real work, with buzz
+
+Everything above keeps the model in a notebook. [buzz](https://github.com/block/buzz) is Block's workspace for humans and agents, and two small crates in it are exactly what a local model is missing: `buzz-dev-mcp`, an MCP server that hands out a shell and a file editor, and `buzz-agent`, an ACP agent that runs a tool loop against any OpenAI-compatible endpoint.
+
+rishi connects to both, in opposite directions. Build the binaries from a buzz checkout first:
+
+``` sh
+cargo build -p buzz-dev-mcp -p buzz-agent
+```
+
+### Give the model hands
+
+`rishi.mcp` runs an MCP server as a subprocess and turns its catalogue into tools a `Chat` can use. `buzz_chat` wires up buzz's server and puts every call behind rishi's approval gate:
+
+``` python
+from rishi.mcp import buzz_chat, BUZZ_MODES
+
+chat, cli = buzz_chat('/path/to/repo', cache_dir='.cache/litertlm')
+print(resp_text(chat("Which source file is the largest, and what's in it?")))
+chat.close(); cli.close()
+```
+
+The model now reads files and runs commands for itself. `BUZZ_MODES` is the default policy — reads run unattended, `shell` and `str_replace` ask first. That gate matters: buzz's shell tool deliberately has no allowlist, because `buzz-agent` trusts whoever launched it, so rishi's `approve` is the only thing standing between the model and the machine. Pass `modes={...}` to change it, or `ask=` to replace the console prompt with your own UI.
+
+Any MCP server works, not just buzz's:
+
+``` python
+from rishi.mcp import MCPClient, mcp_tools
+
+with MCPClient('my-mcp-server', ['--stdio']) as m:
+    chat = Chat(tools=list(mcp_tools(m)), approve=hitl_policy({'search': 'approved'}))
+```
+
+### Let buzz drive the model
+
+The other direction: `rishi.serve` puts a local gemma behind an OpenAI-compatible endpoint, and `buzz-agent` owns the loop.
+
+``` sh
+rishi-serve --port 8017 --cache-dir .cache/litertlm
+
+BUZZ_AGENT_PROVIDER=openai \
+OPENAI_COMPAT_API=chat \
+OPENAI_COMPAT_API_KEY=local \
+OPENAI_COMPAT_MODEL=gemma4-e2b \
+OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8017/v1 \
+  buzz-agent
+```
+
+buzz-agent then speaks ACP on stdin, so Zed, `buzz-acp`, or your own JSON-RPC client can open a session, name the MCP servers to spawn, and prompt — with the answers coming from a model on your own machine. Set `OPENAI_COMPAT_API=chat` explicitly: left on `auto`, buzz picks the Responses dialect for openai.com hosts.
+
+Under the hood the endpoint is a translation, not a second agent loop. Tool definitions arrive in the shape litert already wants, tool calls are handed back to the harness rather than run (`automatic_tool_calling=False`), each request rebuilds the conversation from the history buzz sends, and the thinking channel is reported as `reasoning_content`.
+
+`serve` also takes any object with an engine's interface, which is how the wiring gets tested without spending gigabytes on weights:
+
+``` python
+from rishi.serve import serve, ScriptedEngine, mk_reply
+
+eng = ScriptedEngine([mk_reply(tool_calls=[('dev__shell', {'command': 'ls'})]), mk_reply('done')])
+srv = serve(engine=eng, port=8231, background=True)
+```
+
+`examples/buzz_agent_e2e.py` does exactly that against the real binaries: a scripted model, a real `buzz-agent`, a real `buzz-dev-mcp`, and a file that really changes on disk. Run it with `--real` to put a gemma behind it instead.
+
+A model this size will not hold up as a general coding agent — short context, and it loses tool-calling syntax under pressure. It is good at the narrow, repetitive work you would rather not send to a datacentre: renaming things across a repo, summarising a diff, triaging a log. Keep the tool set small, set `BUZZ_AGENT_MAX_ROUNDS`, and it stays useful.
+
 ## Installing the skill
 
 rishi bundles `skill.md`, an agent skill describing the API. A harness can install it into the standard skill directories:

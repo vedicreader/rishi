@@ -105,13 +105,44 @@ a, b = Chat(engine=eng), Chat(engine=eng)
 
 A Chat that built its own engine frees it on `close()`; a Chat handed an engine leaves it alone, so siblings keep working.
 
+## Real work: buzz
+
+Two modules connect rishi to [buzz](https://github.com/block/buzz), Block's agent workspace. They point in opposite directions; either is useful alone.
+
+**`rishi.mcp` — give the model hands.** Runs any MCP server as a subprocess and hands its tools to a `Chat`. `buzz-dev-mcp` is the useful one: `shell`, `read_file`, `str_replace`, `view_image`, `todo`.
+
+```python
+from rishi.mcp import buzz_chat, BUZZ_MODES
+chat, cli = buzz_chat('/path/to/repo')      # tools behind rishi's approval gate
+print(resp_text(chat("Which source file is largest, and what's in it?")))
+chat.close(); cli.close()
+```
+
+`buzz_chat(workdir, path='buzz-dev-mcp', modes=None, ask=None, sp=None, tools=None, **chat_kw)` returns `(chat, client)` — two lifetimes, close both. `modes` defaults to `BUZZ_MODES`: reads run unattended, `shell` and `str_replace` ask first. buzz's shell has no allowlist of its own, so this gate is the only thing between the model and the machine.
+
+Lower level: `MCPClient(cmd, args=(), env=None, cwd=None, timeout=180, protocol='2025-06-18', log=False)` with `.start()`, `.list_tools()`, `.call_tool(name, args)`, `.close()`, and a context manager; `.instructions` is the server's own workspace blurb, worth folding into `sp`. `mcp_tools(client, include, exclude, prefix, mx)` builds litert tools from the catalogue, skipping `_`-prefixed lifecycle hooks. `SchemaTool(name, description, parameters, fn)` is a litert tool defined by a JSON schema instead of a signature. `mcp_text(res)` flattens a result.
+
+**`rishi.serve` — let a harness drive the model.** Serves an OpenAI-compatible endpoint, so `buzz-agent` runs its own ACP/MCP tool loop against a local gemma.
+
+```sh
+rishi-serve --port 8017 --cache-dir .cache/litertlm
+BUZZ_AGENT_PROVIDER=openai OPENAI_COMPAT_API=chat OPENAI_COMPAT_API_KEY=local \
+OPENAI_COMPAT_MODEL=gemma4-e2b OPENAI_COMPAT_BASE_URL=http://127.0.0.1:8017/v1 buzz-agent
+```
+
+`serve(engine=None, model_id=gemma4_e2b, host, port, background=False, think=False, ...)` returns the server. `Completer(engine, model, think, ...)` is the translation alone (request dict in, completion dict out), built from `oai_msgs`, `oai_tools`, and `mk_completion`. `ScriptedEngine([...])` plus `mk_reply(text, tool_calls, thinking)` stands in for an engine, so harness wiring can be tested without loading weights — see `examples/buzz_agent_e2e.py`.
+
+Set `OPENAI_COMPAT_API=chat` explicitly; on `auto` buzz picks the Responses dialect for openai.com hosts. Tool calls are returned to the harness rather than run (`automatic_tool_calling=False`), each request rebuilds the conversation from the history the harness sends, and the thinking channel is reported as `reasoning_content`.
+
 ## Gotchas
 
 - Model files: a repo can ship both a native `.litertlm` and a `-web` build. The web build has no CPU/GPU decode graph and fails with `TF_LITE_PREFILL_DECODE not found`. `get_model` already prefers the native one.
 - GPU needs a writable `cache_dir`. Without it you get `Could not open ... mldrift_weight_cache.bin: No such file or directory`. `create_engine` makes the directory for you when you pass `cache_dir`.
 - The log line `WebGPU sampler not available, falling back to statically linked C API` is harmless. Quiet the noise with `set_min_log_severity(3)`.
-- Tool and structured-output arguments arrive as floats (`21.0`) from the model's JSON. Cast inside the tool if you need strict ints.
+- Tool and structured-output arguments arrive as floats (`21.0`) from the model's JSON. Cast inside the tool if you need strict ints. A Python tool can shrug this off; an MCP server deserialises against its schema and rejects the call, so `mcp_tools` coerces arguments first. Note that schemas generated from Rust write an optional integer as `{"type": ["integer", "null"]}`, not `{"type": "integer"}`.
+- litert's `Tool` base class sets `__slots__ = ()`, so a bare `store_attr()` in a subclass silently stores nothing. Name the attributes: `store_attr('name,description,fn')`.
 - `run_text_scoring` is not available on this runtime, so `classify` and `check` grade by generation, not log-likelihood scoring.
+
 
 ## Working on rishi itself
 
