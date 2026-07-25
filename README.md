@@ -43,7 +43,9 @@ rishi has two interchangeable backends behind the same
   in Python through the same `approve` gate (`hitl_policy` works
   unchanged), Qwen-style `<think>` output lands in `channels.thought`
   and is kept out of later context, and streaming, usage tracking, and
-  callbacks all work the same way.
+  callbacks all work the same way. Images work by pairing the model with
+  its `mmproj` projector (`mmproj=True`); audio is litert-only, because
+  llama-cpp-python’s chat-completion API has no audio content part.
 
 ``` python
 from rishi import llama
@@ -55,6 +57,11 @@ print(resp_text(r))
 achat = llama.AsyncChat(chat)                             # async twin over the same conversation
 r = await achat('Another one, please.')
 async for c in await achat('And a haiku.', stream=True): print(c, end='')
+
+# images: pair the model with its mmproj projector
+from fastcore.all import Path
+vchat = llama.Chat(model_id=llama.gemma3_4b, mmproj=True, n_ctx=4096)
+print(resp_text(vchat(['Describe this image.', Path('images.jpeg')])))
 ```
 
 ## Quickstart

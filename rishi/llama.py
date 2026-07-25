@@ -7,8 +7,9 @@ Docs: https://vedicreader.github.io/rishi/llama.html.md"""
 # %% auto #0
 __all__ = ['qwen3_06b', 'qwen3_17b', 'qwen3_4b', 'gemma3_1b', 'gemma3_4b', 'mk_content', 'mk_msg', 'mk_msgs', 'mk_toolspec',
            'split_think', 'parse_tool_tags', 'norm_resp', 'StreamSplit', 'UsageCallback', 'ToolReminderCallback',
-           'get_model', 'Chat', 'AsyncChat', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp',
-           'StreamFormatter', 'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence']
+           'get_model', 'get_mmproj', 'Chat', 'AsyncChat', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text',
+           'thought', 'Resp', 'StreamFormatter', 'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy',
+           'extract_fence']
 
 # %% ../nbs/01_llama.ipynb #10a30d78
 import json, re, os, uuid, asyncio
@@ -27,6 +28,12 @@ _all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp'
          'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence']
 
 # %% ../nbs/01_llama.ipynb #08664b43
+def _bad_mime(mime):
+    "Error text for a non-image attachment; audio points at the backend that does support it."
+    extra = ("; llama.cpp's mtmd layer handles audio, but llama-cpp-python's chat-completion API exposes no audio "
+             "content part, so use the litert backend (`rishi.core`/`rishi.litert`) for audio") if mime.startswith('audio/') else ''
+    return f"llama.cpp chat supports only image attachments, got {mime}{extra}"
+
 def mk_content(o):
     'Convert `o` to an OpenAI-style content part (text, or a base64 `image_url` for image bytes/files).'
     if isinstance(o, dict): return o
@@ -34,7 +41,7 @@ def mk_content(o):
     if isinstance(o, os.PathLike): o = Path(o).read_bytes()
     if isinstance(o, bytes):
         mime = detect_mime(o) or 'application/octet-stream'
-        if not mime.startswith('image/'): raise TypeError(f"llama.cpp chat supports only image attachments, got {mime}")
+        if not mime.startswith('image/'): raise TypeError(_bad_mime(mime))
         return {'type': 'image_url', 'image_url': {'url': f"data:{mime};base64,{b64encode(o).decode()}"}}
     raise TypeError(f"Unsupported content type: {type(o)}")
 
@@ -240,6 +247,23 @@ def get_model(model_id, model_path=None, quant='Q4_K_M'):
     if not (fn := _gguf(list_repo_files(model_id), quant)): raise FileNotFoundError(f"No .gguf file found for {model_id}")
     return hf_hub_download(model_id, fn)
 
+def _mmproj(fs):
+    "First `mmproj` projector `.gguf` path in `fs` (the image encoder that sits beside the model)."
+    return first(L(fs).filter(lambda p: p.lower().endswith('.gguf') and 'mmproj' in Path(p).name.lower()))
+
+def _cached_mmproj(model_id):
+    "Local `mmproj` path from the HF cache without hitting the network, else None."
+    try: repo = first(scan_cache_dir().repos, lambda r: r.repo_id == model_id)
+    except Exception: return None
+    return _mmproj([str(f.file_path) for r in repo.revisions for f in r.files]) if repo else None
+
+def get_mmproj(model_id, mmproj_path=None):
+    "Return a local `mmproj` projector path: `mmproj_path`, else HF cache, else download."
+    if mmproj_path and Path(mmproj_path).exists(): return str(mmproj_path)
+    if (hit := _cached_mmproj(model_id)): return hit
+    if not (fn := _mmproj(list_repo_files(model_id))): raise FileNotFoundError(f"No mmproj .gguf found for {model_id}")
+    return hf_hub_download(model_id, fn)
+
 # %% ../nbs/01_llama.ipynb #62bf39bf
 _dflt_cbs = [UsageCallback, ToolReminderCallback]
 
@@ -247,9 +271,14 @@ class Chat:
     "Sync chat over a local llama.cpp model - the `rishi.core.Chat` API with a Python-side tool loop."
     @classmethod
     def create_engine(cls, model_id=qwen3_17b, model_path=None, quant='Q4_K_M', n_ctx=8192,
-                      n_gpu_layers=0, verbose=False, **kw):
-        'Build a `llama_cpp.Llama`. Override/`@patch` to customize.'
-        return Llama(get_model(model_id, model_path, quant), n_ctx=n_ctx, n_gpu_layers=n_gpu_layers, verbose=verbose, **kw)
+                      n_gpu_layers=0, mmproj=None, verbose=False, **kw):
+        'Build a `llama_cpp.Llama`; `mmproj` adds the projector needed for image input. Override/`@patch` to customize.'
+        ch = None
+        if mmproj:
+            from llama_cpp.llama_chat_format import MTMDChatHandler
+            ch = MTMDChatHandler(get_mmproj(model_id, None if mmproj is True else mmproj), verbose=verbose)
+        return Llama(get_model(model_id, model_path, quant), n_ctx=n_ctx, n_gpu_layers=n_gpu_layers,
+                     chat_handler=ch, verbose=verbose, **kw)
 
     def __init__(self,
         engine:Llama=None, # llama_cpp.Llama, or None to build one
@@ -258,6 +287,7 @@ class Chat:
         quant:str='Q4_K_M', # preferred quant when picking a .gguf from the repo
         n_ctx:int=8192, # context window for the engine
         n_gpu_layers:int=0, # layers to offload to GPU (-1 = all)
+        mmproj:os.PathLike|bool=None, # image input: True resolves the projector from `model_id`, or pass a path
         eng_kw=None, # extra llama_cpp.Llama kwargs
         sp='', # system prompt
         messages=None, # message history to prefill the conversation
@@ -275,7 +305,8 @@ class Chat:
     ):
         self._own_engine = engine is None
         if engine is None:
-            engine = self.create_engine(model_id, model_path, quant, n_ctx=n_ctx, n_gpu_layers=n_gpu_layers, **(eng_kw or {}))
+            engine = self.create_engine(model_id, model_path, quant, n_ctx=n_ctx, n_gpu_layers=n_gpu_layers,
+                                       mmproj=mmproj, **(eng_kw or {}))
         self.engine = engine
         self.tools = L(tools)
         self.toolspecs = [mk_toolspec(t) for t in self.tools]
