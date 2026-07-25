@@ -49,6 +49,21 @@ rishi has two interchangeable backends behind the same
   images only, so WAV now reaches the `mtmd_bitmap_init_from_audio` API
   the wheel already links against.
 
+If you’d rather not pick, `rishi.auto.Chat` works it out from the model
+name — a `.litertlm` build or a `litert-community` id goes to litert, a
+`.gguf` or `GGUF` id goes to llama.cpp — and returns that backend’s own
+`Chat`, so nothing is wrapped or hidden. Pass `backend='litert'|'llama'`
+(or prefix the name) when a name can’t say for itself.
+
+``` python
+from rishi.auto import Chat, AsyncChat
+
+chat = Chat('Qwen/Qwen3-4B-GGUF')                          # llama.cpp
+chat = Chat('litert-community/gemma-4-E2B-it-litert-lm')   # litert
+chat = Chat('/models/mine.gguf', n_gpu_layers=-1)          # local file; backend kwargs pass through
+print(resp_text(chat('Say hello in French.')))
+```
+
 ``` python
 from rishi import llama
 

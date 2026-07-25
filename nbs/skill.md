@@ -113,6 +113,26 @@ A Chat that built its own engine frees it on `close()`; a Chat handed an engine 
 - Tool and structured-output arguments arrive as floats (`21.0`) from the model's JSON. Cast inside the tool if you need strict ints.
 - `run_text_scoring` is not available on this runtime, so `classify` and `check` grade by generation, not log-likelihood scoring.
 
+## One interface for both backends (rishi.auto)
+
+`rishi.auto.Chat` picks the backend from the model name, fastllm-style, and returns that backend's own `Chat` (a factory, not a wrapper - so callbacks, tools, `hist`, `use` and streaming are exactly as documented per backend). `**kw` passes straight through, so backend-specific arguments still work.
+
+```python
+from rishi.auto import Chat, AsyncChat
+
+Chat('litert-community/gemma-4-E2B-it-litert-lm')   # -> litert
+Chat('Qwen/Qwen3-4B-GGUF')                          # -> llama.cpp
+Chat('/models/mine.gguf')                           # local file -> model_path=
+Chat('my-org/private', backend='llama')             # explicit wins
+Chat('llama/my-org/private')                        # or prefix the name
+Chat()                                              # nothing to go on -> litert, as before
+achat = AsyncChat('Qwen/Qwen3-4B-GGUF')             # async on either backend
+```
+
+Resolution order: explicit `backend=`, then a `backend/` prefix (only if it names a known backend, so `litert-community/...` is left alone), then the shape of the id/path (`.litertlm`/`litert-community`/`litert-lm` vs `.gguf`/`GGUF`), then the default (`litert`). A bare name it can't place raises with instructions rather than guessing - there is no alias table, so pass a full hub repo id or path. `resolve_backend`, `split_backend`, `infer_backend` and `get_backend` are exported if you want the decision without building anything.
+
+`rishi.Chat` is still the litert class; the dispatcher lives at `rishi.auto.Chat`.
+
 ## llama.cpp backend (rishi.llama)
 
 `pip install 'rishi[llama]'` (adds llama-cpp-python and toolslm). Same `Chat` API over any GGUF repo on the HuggingFace Hub, plus an `AsyncChat`:
