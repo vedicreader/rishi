@@ -7,12 +7,13 @@ Docs: https://vedicreader.github.io/rishi/llama.html.md"""
 # %% auto #0
 __all__ = ['qwen3_06b', 'qwen3_17b', 'qwen3_4b', 'gemma3_1b', 'gemma3_4b', 'mk_content', 'mk_msg', 'mk_msgs', 'mk_toolspec',
            'split_think', 'parse_tool_tags', 'norm_resp', 'StreamSplit', 'UsageCallback', 'ToolReminderCallback',
-           'get_model', 'get_mmproj', 'Chat', 'AsyncChat', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text',
-           'thought', 'Resp', 'StreamFormatter', 'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy',
-           'extract_fence']
+           'get_model', 'get_mmproj', 'read_audio', 'Chat', 'AsyncChat', 'UsageStats', 'ChatCallback', 'run_cbs',
+           'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'mk_tr_details', 'truncated',
+           'hitl_policy', 'extract_fence']
 
 # %% ../nbs/01_llama.ipynb #10a30d78
-import json, re, os, uuid, asyncio
+import json, re, os, io, uuid, wave, ctypes, asyncio
+import numpy as np
 from base64 import b64encode
 from llama_cpp import Llama
 from toolslm.funccall import get_schema, mk_ns, call_func
@@ -28,23 +29,25 @@ _all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp'
          'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence']
 
 # %% ../nbs/01_llama.ipynb #08664b43
-def _bad_mime(mime):
-    "Error text for a non-image attachment; audio points at the backend that does support it."
-    extra = ("; llama.cpp's mtmd layer handles audio, but llama-cpp-python's chat-completion API exposes no audio "
-             "content part, so use the litert backend (`rishi.core`/`rishi.litert`) for audio") if mime.startswith('audio/') else ''
-    return f"llama.cpp chat supports only image attachments, got {mime}{extra}"
+_audio_fmts = {'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3'}
+
+def _audio_fmt(mime):
+    "OpenAI `input_audio` format name for a MIME type."
+    return _audio_fmts.get(mime, mime.split('/')[-1])
 
 def mk_content(o):
-    'Convert `o` to an OpenAI-style content part (text, or a base64 `image_url` for image bytes/files).'
+    'Convert `o` to an OpenAI-style content part (text, a base64 `image_url`, or an `input_audio`).'
     if isinstance(o, dict): return o
     if isinstance(o, str): return {'type': 'text', 'text': o}
     if isinstance(o, os.PathLike): o = Path(o).read_bytes()
     if isinstance(o, bytes):
         mime = detect_mime(o) or 'application/octet-stream'
-        if not mime.startswith('image/'): raise TypeError(_bad_mime(mime))
-        return {'type': 'image_url', 'image_url': {'url': f"data:{mime};base64,{b64encode(o).decode()}"}}
+        if mime.startswith('image/'):
+            return {'type': 'image_url', 'image_url': {'url': f"data:{mime};base64,{b64encode(o).decode()}"}}
+        if mime.startswith('audio/'):
+            return {'type': 'input_audio', 'input_audio': {'data': b64encode(o).decode(), 'format': _audio_fmt(mime)}}
+        raise TypeError(f"llama.cpp chat supports text, image, and audio content, got {mime}")
     raise TypeError(f"Unsupported content type: {type(o)}")
-
 def mk_msg(content, role='user'):
     'Create an OpenAI-style message dict from str/bytes/list/dict.'
     if content is None or isinstance(content, dict): return content
@@ -264,6 +267,87 @@ def get_mmproj(model_id, mmproj_path=None):
     if not (fn := _mmproj(list_repo_files(model_id))): raise FileNotFoundError(f"No mmproj .gguf found for {model_id}")
     return hf_hub_download(model_id, fn)
 
+# %% ../nbs/01_llama.ipynb #572c1617
+from llama_cpp.llama_chat_format import MTMDChatHandler
+
+def _pcm_f32(b):
+    "Mono float32 samples in [-1, 1], and the source rate, from WAV `bytes`."
+    with wave.open(io.BytesIO(b)) as w:
+        nch, sw, rate, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
+        raw = w.readframes(n)
+    if (dt := {1: np.uint8, 2: np.int16, 4: np.int32}.get(sw)) is None:
+        raise ValueError(f"unsupported WAV sample width: {sw * 8}-bit")
+    a = np.frombuffer(raw, dtype=dt).astype(np.float32)
+    a = (a - 128.) / 128. if sw == 1 else a / float(1 << (8 * sw - 1))   # centre 8-bit, scale the rest
+    return (a.reshape(-1, nch).mean(axis=1) if nch > 1 else a), rate
+
+def _resample(a, src, dst):
+    "Linear-interpolation resample of mono float32 `a` from `src` Hz to `dst` Hz."
+    if src == dst or not len(a): return a
+    return np.interp(np.linspace(0, len(a) - 1, round(len(a) * dst / src)), np.arange(len(a)), a).astype(np.float32)
+
+def read_audio(o, sr=16000):
+    "Decode WAV `bytes`/`Path` to contiguous mono float32 samples at `sr` Hz, ready for mtmd."
+    if isinstance(o, os.PathLike): o = Path(o).read_bytes()
+    try: a, src = _pcm_f32(o)
+    except wave.Error as e: raise ValueError(f"rishi decodes WAV audio only (got {detect_mime(o)}): {e}") from None
+    return np.ascontiguousarray(_resample(a, src, sr), dtype=np.float32)
+
+# %% ../nbs/01_llama.ipynb #8da9504d
+# capture the originals once, so re-importing this module can never chain a patch onto itself
+if not hasattr(MTMDChatHandler, '_rishi_orig'):
+    MTMDChatHandler._rishi_orig = {'init': MTMDChatHandler._init_mtmd_context,
+                                   'bitmap': MTMDChatHandler._create_bitmap_from_bytes}
+_orig_init, _orig_bitmap = MTMDChatHandler._rishi_orig['init'], MTMDChatHandler._rishi_orig['bitmap']
+
+def _is_media(p):
+    "Is `p` an image or audio content part?"
+    return isinstance(p, dict) and p.get('type') in ('image_url', 'input_audio')
+
+@patch
+def _init_mtmd_context(self:MTMDChatHandler, llama_model):
+    "As upstream, but accept an audio-only projector instead of hard-failing on the missing vision encoder."
+    try: return _orig_init(self, llama_model)
+    except ValueError as e:
+        if 'Vision is not supported' not in str(e) or self.mtmd_ctx is None: raise
+        if not self._mtmd_cpp.mtmd_support_audio(self.mtmd_ctx): raise
+        def _free():   # upstream registers this only on the success path
+            if self.mtmd_ctx is not None: self._mtmd_cpp.mtmd_free(self.mtmd_ctx); self.mtmd_ctx = None
+        self._exit_stack.callback(_free)
+
+@patch
+def get_image_urls(self:MTMDChatHandler, messages):
+    "Media data-URIs in document order - audio as well as images (upstream collects images only)."
+    urls = []
+    for m in messages:
+        for p in (m.get('content') if isinstance(m.get('content'), list) else []):
+            if not isinstance(p, dict): continue
+            if p.get('type') == 'image_url':
+                u = p['image_url']; urls.append(u['url'] if isinstance(u, dict) else u)
+            elif p.get('type') == 'input_audio':
+                a = p.get('input_audio') or {}
+                urls.append(f"data:audio/{a.get('format', 'wav')};base64,{a.get('data', '')}")
+    return urls
+
+@patch
+def _get_template_messages(self:MTMDChatHandler, messages, media_marker):
+    "Swap every media part - audio as well as images - for the media marker before templating."
+    def _conv(m):
+        c = m.get('content')
+        if not isinstance(c, list): return dict(m)
+        return {**m, 'content': [{'type': 'text', 'text': media_marker} if _is_media(p) else p for p in c]}
+    return [_conv(m) for m in messages]
+
+@patch
+def _create_bitmap_from_bytes(self:MTMDChatHandler, image_bytes):
+    "Audio bytes become an mtmd audio bitmap; anything else takes the original image path untouched."
+    if not (detect_mime(image_bytes) or '').startswith('audio/'): return _orig_bitmap(self, image_bytes)
+    sr = self._mtmd_cpp.mtmd_get_audio_sample_rate(self.mtmd_ctx)
+    a = read_audio(image_bytes, sr if sr and sr > 0 else 16000)
+    bm = self._mtmd_cpp.mtmd_bitmap_init_from_audio(len(a), a.ctypes.data_as(ctypes.POINTER(ctypes.c_float)))
+    if bm is None: raise ValueError('Failed to create bitmap from audio samples')
+    return bm
+
 # %% ../nbs/01_llama.ipynb #62bf39bf
 _dflt_cbs = [UsageCallback, ToolReminderCallback]
 
@@ -272,7 +356,7 @@ class Chat:
     @classmethod
     def create_engine(cls, model_id=qwen3_17b, model_path=None, quant='Q4_K_M', n_ctx=8192,
                       n_gpu_layers=0, mmproj=None, verbose=False, **kw):
-        'Build a `llama_cpp.Llama`; `mmproj` adds the projector needed for image input. Override/`@patch` to customize.'
+        'Build a `llama_cpp.Llama`; `mmproj` adds the projector needed for image/audio input. Override/`@patch` to customize.'
         ch = None
         if mmproj:
             from llama_cpp.llama_chat_format import MTMDChatHandler
@@ -287,7 +371,7 @@ class Chat:
         quant:str='Q4_K_M', # preferred quant when picking a .gguf from the repo
         n_ctx:int=8192, # context window for the engine
         n_gpu_layers:int=0, # layers to offload to GPU (-1 = all)
-        mmproj:os.PathLike|bool=None, # image input: True resolves the projector from `model_id`, or pass a path
+        mmproj:os.PathLike|bool=None, # image/audio input: True resolves the projector from `model_id`, or pass a path
         eng_kw=None, # extra llama_cpp.Llama kwargs
         sp='', # system prompt
         messages=None, # message history to prefill the conversation
