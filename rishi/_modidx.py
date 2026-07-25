@@ -142,7 +142,7 @@ d = { 'settings': { 'branch': 'main',
                              'rishi.llama.mk_content': ('llama.html#mk_content', 'rishi/llama.py'),
                              'rishi.llama.mk_msg': ('llama.html#mk_msg', 'rishi/llama.py'),
                              'rishi.llama.mk_msgs': ('llama.html#mk_msgs', 'rishi/llama.py'),
-                             'rishi.llama.mk_tool': ('llama.html#mk_tool', 'rishi/llama.py'),
+                             'rishi.llama.mk_toolspec': ('llama.html#mk_toolspec', 'rishi/llama.py'),
                              'rishi.llama.norm_resp': ('llama.html#norm_resp', 'rishi/llama.py'),
                              'rishi.llama.parse_tool_tags': ('llama.html#parse_tool_tags', 'rishi/llama.py'),
                              'rishi.llama.split_think': ('llama.html#split_think', 'rishi/llama.py')}}}
