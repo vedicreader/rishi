@@ -8,20 +8,22 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 __all__ = ['gemma4_e4b', 'gemma4_e2b', 'gemma4_12b', 'mk_content', 'mk_msg', 'mk_msgs', 'UsageStats', 'ChatCallback', 'run_cbs',
            'resp_text', 'thought', 'Resp', 'mk_tr_details', 'StreamFormatter', 'display_stream', 'ToolReminderCallback',
            'HistoryCallback', 'UsageCallback', 'truncated', 'TruncationCallback', 'ChatToolHandler', 'get_model',
-           'Chat', 'hitl_policy', 'extract_code', 'extract_fence', 'mk_result_fence', 'run_coro', 'task_complete',
-           'output_matches', 'PyFenceCallback', 'bench', 'repo_root', 'mv_skill_md']
+           'ContextWindowExceededError', 'Chat', 'hitl_policy', 'extract_code', 'extract_fence', 'mk_result_fence',
+           'run_coro', 'task_complete', 'output_matches', 'PyFenceCallback', 'bench', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #acd92ae986b06129
 import json, re, os, asyncio, io
 from html import escape
 from mimetypes import guess_type
 from contextlib import ExitStack, redirect_stdout
+from concurrent.futures import ThreadPoolExecutor
 from litert_lm import (Engine, Backend, Conversation, Session, Message, Contents, Content, Role, ToolCall,
-                       ToolEventHandler, SamplerConfig, Benchmark, set_min_log_severity)
+                       ToolEventHandler, Tool, SamplerConfig, Benchmark, set_min_log_severity)
 from litert_lm._messages import Text, ImageBytes, ImageFile, AudioBytes, AudioFile, ToolResponse, normalize_message
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
 from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, img_bytes, AttrDict, in_
 from safepyrun import RunPython
+
 
 # %% ../nbs/00_core.ipynb #6e295c9a
 def mk_content(o):
@@ -47,18 +49,23 @@ def mk_msgs(msgs):
 
 # %% ../nbs/00_core.ipynb #142b81b8
 class UsageStats:
-    "Token usage for a chat turn, fed by `conv.token_count` diffs."
-    def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0): store_attr()
+    "Token usage for a chat turn, fed by `conv.token_count` diffs. `cost`/`model` are always present (cost is 0 for local inference) so a harness merging usage across local and hosted backends can use one `UsageStats` type instead of two."
+    def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0, cost=0.0, model=None): store_attr()
     def __add__(self, other):
         if other is None: return self
-        return UsageStats(*[getattr(self, k) + getattr(other, k) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n')])
+        return UsageStats(*[getattr(self, k) + getattr(other, k) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n', 'cost')],
+                           model=self.model or other.model)
     def __radd__(self, other): return self if other in (None, 0) else self.__add__(other)
     def __repr__(self):
-	    return '|'.join([f'total={self.total_tokens:,}',f'in={self.prompt_tokens:,}',f'out={self.completion_tokens:,}',f'turns={self.n}'])
+        parts = [f'total={self.total_tokens:,}',f'in={self.prompt_tokens:,}',f'out={self.completion_tokens:,}',f'turns={self.n}']
+        if self.cost: parts.append(f'cost=${self.cost:,.4f}')
+        if self.model: parts.append(f'model={self.model}')
+        return '|'.join(parts)
     def fmt(self):
         "Markdown `<details>` token block."
         if not self.total_tokens: return ''
         return f"\n\n<details><summary>{self.total_tokens:,} tokens</summary>\n\n`{self!r}`\n\n</details>\n"
+
 
 # %% ../nbs/00_core.ipynb #99646223
 class ChatCallback(GetAttr):
@@ -168,7 +175,7 @@ class UsageCallback(ChatCallback):
     def after_response(self):
         c = self.chat; delta = c.conv.token_count - c._tc0
         out = len(c.engine.tokenize(resp_text(c.turn_res)))
-        c.use += UsageStats(prompt_tokens=max(delta - out, 0), completion_tokens=out, total_tokens=delta, n=1)
+        c.use += UsageStats(prompt_tokens=max(delta - out, 0), completion_tokens=out, total_tokens=delta, n=1, model=getattr(c, 'model_id', None))
 
 def truncated(resp):
     "Whether `resp` was flagged as cut off at the token cap."
@@ -181,6 +188,7 @@ class TruncationCallback(ChatCallback):
     def after_response(self):
         if self.chat.use.completion_tokens >= self.max_tokens: self.chat.turn_res['truncated'] = True
 
+
 # %% ../nbs/00_core.ipynb #b8dfc247
 def _tc_name(tc): return tc.get('function', {}).get('name', '')
 
@@ -188,25 +196,63 @@ def _tool_msg(name, response):
     "litert tool-role Message dict wrapping a single `ToolResponse`."
     return Message.tool(Contents([ToolResponse(name, response)])).to_json()
 
+_budget_msg = 'Tool-call budget exceeded; no more tools will run this turn.'
+
 class ChatToolHandler(ToolEventHandler):
-    "Bridge litert's in-engine tool loop to Chat callbacks, HITL approval, and history."
+    """Bridge litert's in-engine tool loop to Chat callbacks, HITL approval, budget, and history.
+
+    `approve_tool_call`/`process_tool_response` satisfy litert's `ToolEventHandler` and run automatically
+    inside `conv.send_message`/`send_message_async` when `Chat(parallel_tools=False)` (the default).
+    `execute`/`run` are only used when `parallel_tools=True`: `Chat` then drives its own loop and calls
+    `run` with a batch of tool calls from one model turn -- it approves each (sequential, HITL-gated, so
+    `max_steps` still counts correctly), executes the approved ones concurrently, then records results.
+    """
     def __init__(self, chat): self.chat = chat
+
     def approve_tool_call(self, tool_call):
-        self.chat.turn_tc = tool_call
-        for _ in run_cbs(self.chat, 'before_tool_calls'): pass
-        ok = self.chat.approve(tool_call) if self.chat.approve else True
+        c = self.chat
+        c.turn_tc = tool_call
+        for _ in run_cbs(c, 'before_tool_calls'): pass
+        over_budget = c._budget_exceeded or (c.max_steps is not None and c._steps >= c.max_steps)
+        ok = False if over_budget else (c.approve(tool_call) if c.approve else True)
+        if ok: c._steps += 1
+        else: c._budget_exceeded = c._budget_exceeded or over_budget
         fn = tool_call.get('function', {})
-        self.chat.hist.append(Message.model(tool_calls=[ToolCall(fn.get('name', ''), fn.get('arguments', {}))]).to_json())
-        if not ok: self.chat.hist.append(_tool_msg(_tc_name(tool_call), 'Denied by human operator'))
+        c.hist.append(Message.model(tool_calls=[ToolCall(fn.get('name', ''), fn.get('arguments', {}))]).to_json())
+        if not ok: c.hist.append(_tool_msg(_tc_name(tool_call), _budget_msg if over_budget else 'Denied by human operator'))
         return ok
+
     def process_tool_response(self, tool_response):
-        mx = getattr(self.chat, 'tool_max_len', None)
+        c = self.chat
+        mx = getattr(c, 'tool_max_len', None)
         if mx and isinstance(tool_response, str) and len(tool_response) > mx:
-            tool_response = tool_response[:mx] + ' …[truncated]'
-        self.chat.turn_tool_result = tool_response
-        self.chat.hist.append(_tool_msg(_tc_name(self.chat.turn_tc), tool_response))
-        for _ in run_cbs(self.chat, 'after_tool_calls'): pass
+            tool_response = tool_response[:mx] + ' \u2026[truncated]'
+        c.turn_tool_result = tool_response
+        c.hist.append(_tool_msg(_tc_name(c.turn_tc), tool_response))
+        for _ in run_cbs(c, 'after_tool_calls'): pass
         return tool_response
+
+    def execute(self, tool_call):
+        "Run one approved call's underlying function/`Tool`; exceptions become an `Error: ...` string result."
+        fn = tool_call.get('function', {})
+        tool = self.chat._tools_map.get(fn.get('name', ''))
+        if not tool: return f"Error: Tool {fn.get('name', '')} not found"
+        try: return tool.execute(fn.get('arguments') or {}) if isinstance(tool, Tool) else tool(**(fn.get('arguments') or {}))
+        except Exception as e: return f"Error: {e}"
+
+    def run(self, tool_calls):
+        "Approve each call, run approved ones in parallel, record results. Returns tool-response messages to send back, or `None` if every call was denied."
+        approved = [tc for tc in tool_calls if self.approve_tool_call(tc)]
+        if not approved: return None
+        if len(approved) == 1: results = [self.execute(approved[0])]
+        else:
+            with ThreadPoolExecutor(max_workers=len(approved)) as ex: results = list(ex.map(self.execute, approved))
+        msgs = []
+        for tc, r in zip(approved, results):
+            self.chat.turn_tc = tc
+            msgs.append(_tool_msg(_tc_name(tc), self.process_tool_response(r)))
+        return msgs
+
 
 # %% ../nbs/00_core.ipynb #f717f851d413e77
 gemma4_e4b='litert-community/gemma-4-E4B-it-litert-lm'
@@ -234,11 +280,29 @@ def get_model(model_id, model_path=None):
 _dflt_cbs = [HistoryCallback, UsageCallback, ToolReminderCallback]
 
 def _merge_chunks(chunks):
-    "Reconstruct an assistant response dict (text + thinking) from streamed litert chunks."
+    "Reconstruct an assistant response dict (text + thinking + any `tool_calls`) from streamed litert chunks."
     text, th = ''.join(resp_text(c) for c in chunks), ''.join(thought(c) for c in chunks)
     r = {'role': 'assistant', 'content': [{'type': 'text', 'text': text}]}
     if th: r['channels'] = {'thought': th}
+    tc_chunk = first(chunks, lambda c: isinstance(c, dict) and c.get('tool_calls'))
+    if tc_chunk: r['tool_calls'] = tc_chunk['tool_calls']
     return Resp(r)
+
+class ContextWindowExceededError(RuntimeError):
+    "Raised when a turn can't complete because the context window filled up, and truncate-and-retry recovery also failed."
+
+_ctx_err_markers = ('max number of tokens', 'context window', 'out of bounds')
+
+def _is_ctx_error(chat, e):
+    "Best-effort: does `e` raised from `conv.send_message` look like a context-window overflow?"
+    msg = str(e).lower()
+    return any(m in msg for m in _ctx_err_markers) or bool(chat.ctx_limit and chat.pct_full >= 1)
+
+_dflt_final_prompt = "You've reached the tool-call budget for this turn. Stop calling tools and answer with what you already have."
+
+def _fn_name(t):
+    "Name litert would advertise for `t` (a plain function or a `Tool` instance), used to key `Chat._tools_map`."
+    return t.get_tool_description()['function']['name'] if isinstance(t, Tool) else t.__name__
 
 class Chat:
     "Sync chat over a local litert_lm engine. Callbacks record history/usage; `_send` drives one message."
@@ -265,6 +329,9 @@ class Chat:
         ctx_limit=None, # context window, for pct_full
         approve=None, # approval function for tool calls
         tool_max_len=None, # truncate string tool results longer than this (protects context)
+        max_steps=None, # cap on tool calls per turn; None means unlimited (risky with a small local model!)
+        final_prompt=_dflt_final_prompt, # sent automatically once `max_steps` is hit, asking for a prose summary
+        parallel_tools=False, # if True, Chat drives its own tool loop and runs independent calls concurrently
         think=False, # enable the model's thinking channel (if supported)
         filter_think=True, # keep thinking out of the KV cache (saves context)
         temp=None, top_k=None, top_p=None, seed=None, # sampler knobs (build a SamplerConfig)
@@ -279,17 +346,23 @@ class Chat:
            cache_dir=cache_dir, enable_speculative_decoding=enable_speculative_decoding, **(eng_kw or {}))
         self.engine = self._stack.enter_context(engine)
         self.tools = L(tools)
+        self._tools_map = {_fn_name(t): t for t in self.tools}
         self.hist = mk_msgs(messages)
-        preface = ([{'role': 'system', 'content': sp}] if sp else []) + self.hist
+        self._preface = [{'role': 'system', 'content': sp}] if sp else []
+        preface = self._preface + self.hist
         if sampler_config is None and any(x is not None for x in (temp, top_k, top_p, seed)):
             sampler_config = SamplerConfig(temperature=temp, top_k=top_k, top_p=top_p, seed=seed)
-        cvk = dict(sampler_config=sampler_config, max_output_tokens=max_output_tokens, **(conv_kw or {}))
-        if think: cvk['extra_context'] = {**cvk.get('extra_context', {}), 'enable_thinking': True}
-        if filter_think: cvk['filter_channel_content_from_kv_cache'] = True
-        self.conv = self._stack.enter_context(engine.create_conversation(messages=preface or None,
-            tools=list(self.tools) or None, tool_event_handler=ChatToolHandler(self), **cvk))
-        store_attr('ctx_limit,sp,approve,tool_max_len')
+        self._conv_kw = dict(sampler_config=sampler_config, max_output_tokens=max_output_tokens,
+                              automatic_tool_calling=not parallel_tools, **(conv_kw or {}))
+        if think: self._conv_kw['extra_context'] = {**self._conv_kw.get('extra_context', {}), 'enable_thinking': True}
+        if filter_think: self._conv_kw['filter_channel_content_from_kv_cache'] = True
+        model_id = str(model_path) if model_path else model_id
+        self.tool_handler = ChatToolHandler(self)
+        self.conv = self._stack.enter_context(self.engine.create_conversation(messages=preface or None,
+            tools=list(self.tools) or None, tool_event_handler=self.tool_handler, **self._conv_kw))
+        store_attr('ctx_limit,sp,approve,tool_max_len,max_steps,final_prompt,parallel_tools,model_id')
         self.use, self.cbs, self.turn_msg, self.turn_res = UsageStats(), L(), None, None
+        self._steps, self._budget_exceeded = 0, False
         if default_cbs: self.add_cbs(_dflt_cbs)
         self.add_cbs(cbs)
 
@@ -332,35 +405,88 @@ class Chat:
         "The exact templated string litert will send for `msg`."
         return self.conv.render_message_to_string(mk_msg(msg))
 
+    def _recreate_conv(self):
+        "Rebuild `self.conv` from the (possibly truncated) `self.hist`, keeping the same engine/tools/settings. Used to recover from a full context window."
+        self.conv = self._stack.enter_context(self.engine.create_conversation(messages=(self._preface + self.hist) or None,
+            tools=list(self.tools) or None, tool_event_handler=self.tool_handler, **self._conv_kw))
+
+    def _recover_context(self, err, keep_last=4, mx=500):
+        "On a context-window overflow: shrink old tool results in `hist`, rebuild the conversation, stop further tool calls this turn, and ask for a summary instead of raising."
+        tool_idxs = [i for i, m in enumerate(self.hist) if m.get('role') == 'tool']
+        for i in (tool_idxs[:-keep_last] if keep_last else tool_idxs):
+            for p in self.hist[i].get('content') or []:
+                if isinstance(p, dict) and p.get('type') == 'tool_response' and isinstance(p.get('response'), str) and len(p['response']) > mx:
+                    p['response'] = p['response'][:mx] + ' \u2026[truncated to recover context]'
+        self._recreate_conv()
+        try: return self.conv.send_message(mk_msg(self.final_prompt))
+        except RuntimeError:
+            raise ContextWindowExceededError(f"could not recover after truncating tool results: {err}") from err
+
     def _send(self, msg, max_output_tokens=None):
-        'Send one message through the callback pipeline; `HistoryCallback`/`UsageCallback` record it.'
+        'Send one message through the callback pipeline; owns the tool loop (parallel execution, budget, context recovery) when `parallel_tools=True`.'
         self.turn_msg, self._tc0 = mk_msg(msg), self.conv.token_count
         for _ in run_cbs(self, 'before_send'): pass
-        self.turn_res = Resp(self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens))
+        current = self.turn_msg
+        while True:
+            try: resp = self.conv.send_message(current, max_output_tokens=max_output_tokens)
+            except RuntimeError as e:
+                if not _is_ctx_error(self, e): raise
+                resp = self._recover_context(e); break
+            if not self.parallel_tools: break                # litert already resolved any tool calls internally
+            tcs = resp.get('tool_calls') if isinstance(resp, dict) else None
+            if not tcs: break
+            current = self.tool_handler.run(tcs)
+            if current is None: break                         # every call denied this round -> stop
+        self.turn_res = Resp(resp)
         for _ in run_cbs(self, 'after_response'): pass
         return self.turn_res
 
-    def _stream(self, msg, max_output_tokens=None, cbs=None):
-        'Stream a turn as markdown chunks; per-call `cbs` live only for this turn.'
+    def _stream_once(self, msg, max_output_tokens=None):
+        'One wire turn of streaming, yielding markdown chunks; owns the tool loop like `_send` when `parallel_tools=True`.'
+        current = msg
+        while True:
+            fmt, chunks = StreamFormatter(), []
+            try:
+                for o in self.conv.send_message_async(current, max_output_tokens=max_output_tokens):
+                    chunks.append(o); yield fmt.format_item(o)
+            except RuntimeError as e:
+                if not _is_ctx_error(self, e): raise
+                resp = self._recover_context(e)
+                yield StreamFormatter().format_item(resp)
+                self.turn_res = Resp(resp); return
+            resp = _merge_chunks(chunks)
+            if not self.parallel_tools: self.turn_res = resp; return
+            tcs = resp.get('tool_calls')
+            if not tcs: self.turn_res = resp; return
+            current = self.tool_handler.run(tcs)
+            if current is None: self.turn_res = resp; return
+
+    def _stream(self, msg, max_output_tokens=None):
+        'Stream one wire turn as markdown chunks; records history/usage via callbacks.'
+        self.turn_msg, self._tc0 = mk_msg(msg), self.conv.token_count
+        for _ in run_cbs(self, 'before_send'): pass
+        yield from self._stream_once(self.turn_msg, max_output_tokens)
+        for _ in run_cbs(self, 'after_response'): pass
+
+    def _stream_turn(self, msg, max_output_tokens=None, cbs=None):
+        'Adds per-call `cbs`, streams one turn, and auto-issues one `final_prompt` round if the tool-call budget was hit.'
         added = self.add_cbs(cbs)
         try:
-            self.turn_msg, self._tc0 = mk_msg(msg), self.conv.token_count
-            for _ in run_cbs(self, 'before_send'): pass
-            fmt, chunks = StreamFormatter(), []
-            for o in self.conv.send_message_async(self.turn_msg, max_output_tokens=max_output_tokens):
-                chunks.append(o); yield fmt.format_item(o)
-            self.turn_res = _merge_chunks(chunks)
-            for _ in run_cbs(self, 'after_response'): pass
+            yield from self._stream(msg, max_output_tokens)
+            if self._budget_exceeded: yield from self._stream(self.final_prompt, max_output_tokens)
         finally: self.remove_cbs(added)
 
     def __call__(self, msg:list|str|Content|bytes|os.PathLike=None, stream=False, max_output_tokens=None,
                  cbs=None # extra callbacks for this turn only (added before, removed after)
     ):
-        'Run one chat turn; returns the litert response dict (or a markdown-chunk generator when `stream=True`).'
-        self.use = UsageStats()
-        if stream: return self._stream(msg, max_output_tokens, cbs)
+        'Run one chat turn; returns the litert response dict (or a markdown-chunk generator when `stream=True`). Auto-issues one `final_prompt` round if the tool-call budget was hit.'
+        self.use, self._steps, self._budget_exceeded = UsageStats(), 0, False
+        if stream: return self._stream_turn(msg, max_output_tokens, cbs)
         added = self.add_cbs(cbs)
-        try: return self._send(msg, max_output_tokens)
+        try:
+            r = self._send(msg, max_output_tokens)
+            if self._budget_exceeded: r = self._send(self.final_prompt)
+            return r
         finally: self.remove_cbs(added)
 
     def print_hist(self):
@@ -368,6 +494,7 @@ class Chat:
         md = '\n\n---\n\n'.join(f"**{m.get('role','?')}**\n\n{Resp(m)._repr_markdown_()}" for m in self.hist)
         try: from IPython.display import Markdown, display; display(Markdown(md))
         except Exception: print(md)
+
 
 # %% ../nbs/00_core.ipynb #eb2eebb0
 def _ask_console(tc):
