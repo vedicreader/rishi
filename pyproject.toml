@@ -17,12 +17,23 @@ classifiers = [
 ]
 dependencies = [
     "huggingface-hub>=1.23.0",
-    "litert-lm-api>=0.14.0",
     "safepyrun>=0.2.3",
-    "llama-cpp-python==0.3.30",  # pinned: abetlen's 0.3.33/0.3.34 metal wheels are corrupt upstream (bad internal CRCs)
     "toolslm>=0.3.0",
-    "soundfile>=0.14.0",
 ]
+
+# Backends are opt-in: `rishi.core` is backend-agnostic, and a machine that only wants one engine
+# shouldn't have to build the others. `Chat(model)` imports the backend it needs on demand.
+[project.optional-dependencies]
+litert = ["litert-lm-api>=0.14.0"]
+llama = [
+    "llama-cpp-python==0.3.30",  # pinned: abetlen's 0.3.33/0.3.34 metal wheels are corrupt upstream (bad internal CRCs)
+    "soundfile>=0.14.0",
+    "numpy",
+]
+# mlx is Apple-silicon only; the marker lets `rishi[all]` stay installable everywhere
+mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
+all = ["rishi[litert,llama,mlx]"]
+dev = ["rishi[litert,llama]"]   # what CI installs: every backend that builds on linux
 
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"

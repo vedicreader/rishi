@@ -148,18 +148,22 @@ class _UsageCallback(ChatCallback):
 def _tc_name(tc): return tc.get('function', {}).get('name', '')
 
 class ChatToolHandler(ToolEventHandler):
-    "Bridge litert's in-engine tool loop to Chat callbacks, HITL approval, and history."
+    "Bridge litert's in-engine tool loop to Chat callbacks, HITL approval, the tool-call budget, and history."
     def __init__(self, chat): self.chat = chat
     def approve_tool_call(self, tool_call):
-        self.chat.turn_tc = tool_call
-        for _ in run_cbs(self.chat, 'before_tool_calls'): pass
-        ok = self.chat.approve(tool_call) if self.chat.approve else True
+        c = self.chat
+        c.turn_tc = tool_call
+        for _ in run_cbs(c, 'before_tool_calls'): pass
+        over = c._budget_exceeded or (c.max_steps is not None and c._steps >= c.max_steps)
+        ok = False if over else (c.approve(tool_call) if c.approve else True)
+        if ok: c._steps += 1
+        else: c._budget_exceeded = c._budget_exceeded or over
         fn = tool_call.get('function', {}); self._tcid = _call_id()
-        self.chat.hist.append({'role': 'assistant', 'content': '',
+        c.hist.append({'role': 'assistant', 'content': '',
             'tool_calls': [{'id': self._tcid, 'type': 'function',
                             'function': {'name': fn.get('name', ''), 'arguments': fn.get('arguments', {})}}]})
-        if not ok: self.chat.hist.append({'role': 'tool', 'tool_call_id': self._tcid,
-                                          'name': fn.get('name', ''), 'content': 'Denied by human operator'})
+        if not ok: c.hist.append({'role': 'tool', 'tool_call_id': self._tcid, 'name': fn.get('name', ''),
+                                  'content': budget_msg_ if over else 'Denied by human operator'})
         return ok
     def process_tool_response(self, tool_response):
         mx = getattr(self.chat, 'tool_max_len', None)
@@ -229,8 +233,12 @@ class LitertChat(core.Chat):
     def __init__(self, model=None, *, runtime=None, model_path=None, engine=None, backend=Backend.CPU(),
                  multimodal=True, cache_dir=None, enable_speculative_decoding=None, eng_kw=None,
                  sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None,
-                 max_steps=10, think=False, filter_think=True, temp=None, top_k=None, top_p=None,
+                 max_steps=10, final_prompt=dflt_final_prompt_, parallel_tools=False,
+                 think=False, filter_think=True, temp=None, top_k=None, top_p=None,
                  seed=None, sampler_config=None, max_output_tokens=None, conv_kw=None, cbs=None, default_cbs=True):
+        if parallel_tools: raise NotImplementedError(
+            "litert runs its tool loop inside the engine, so it can't dispatch calls in parallel; "
+            "use runtime='llama' (or 'mlx') for parallel_tools=True.")
         model = core.split_runtime(model)[1]
         model_id = None if model is None or core._is_path(model) else model
         model_path = model_path or (model if model and core._is_path(model) else None)
@@ -248,7 +256,8 @@ class LitertChat(core.Chat):
             tools=list(L(tools)) or None, tool_event_handler=ChatToolHandler(self), **cvk))
         self.ctx_limit = ctx_limit
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
-                    tool_max_len=tool_max_len, max_steps=max_steps, cbs=cbs, default_cbs=default_cbs)
+                    tool_max_len=tool_max_len, max_steps=max_steps, final_prompt=final_prompt,
+                    cbs=cbs, default_cbs=default_cbs)
 
     @property
     def token_count(self): return self.conv.token_count

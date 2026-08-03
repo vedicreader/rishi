@@ -17,6 +17,7 @@ from base64 import b64encode
 from dataclasses import is_dataclass, dataclass
 from typing import get_type_hints
 from llama_cpp import Llama
+from toolslm.funccall import get_schema, mk_ns
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
 from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, AttrDict
 from . import core
@@ -160,10 +161,10 @@ def _create_bitmap_from_bytes(self:MTMDChatHandler, image_bytes):
     return bm
 
 # %% ../nbs/01_llama.ipynb #62bf39bf
-class LlamaChat(Chat):
-    "Sync chat over a local llama.cpp model - the `rishi.core.Chat` API with a Python-side tool loop."
+class LlamaChat(ToolLoopMixin, Chat):
+    "Sync chat over a local llama.cpp model - the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
     _runtime = 'llama'
-    _dflt_cbs = [_UsageCallback, _ToolReminderCallback]
+    _dflt_cbs = [UsageCallback, ToolReminderCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(_mk_content), staticmethod(_mk_msg), staticmethod(_mk_msgs)
 
     @staticmethod
@@ -189,7 +190,8 @@ class LlamaChat(Chat):
     def __init__(self, model=None, *, runtime=None, model_path=None, engine=None,
                  quant='Q4_K_M', n_ctx=8192, n_gpu_layers=0, mmproj=None, eng_kw=None,
                  sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None,
-                 max_steps=10, think=None, temp=None, top_k=None, top_p=None, seed=None,
+                 max_steps=10, parallel_tools=False, final_prompt=dflt_final_prompt_, think=None,
+                 temp=None, top_k=None, top_p=None, seed=None,
                  max_output_tokens=None, comp_kw=None, cbs=None, default_cbs=True):
         model = core.split_runtime(model)[1]
         model_id = None if model is None or core._is_path(model) else model
@@ -205,7 +207,8 @@ class LlamaChat(Chat):
         store_attr('think,max_output_tokens', self)
         self.ctx_limit, self.comp_kw, self._ctx_tokens = ifnone(ctx_limit, engine.n_ctx()), comp_kw or {}, 0
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
-                    tool_max_len=tool_max_len, max_steps=max_steps, cbs=cbs, default_cbs=default_cbs)
+                    tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
+                    final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
 
     def close(self):
         "Release the engine (only if this Chat created it); idempotent."
@@ -234,22 +237,9 @@ class LlamaChat(Chat):
         return self.engine.create_chat_completion(self._msgs(), tools=self.toolspecs or None, stream=stream,
             max_tokens=ifnone(max_output_tokens, self.max_output_tokens), **self._samp, **self.comp_kw)
 
-    def _run_tools(self, res):
-        "Record `res` in `hist`, then execute its tool calls (with approval), appending the results."
-        self.hist.append(res)
-        for tc in res.get('tool_calls') or []:
-            self.turn_tc = tc
-            for _ in run_cbs(self, 'before_tool_calls'): pass
-            if self.approve is None or self.approve(tc):
-                try: out = call_func(tc['function']['name'], tc['function']['arguments'], ns=self.ns)
-                except Exception as e: out = f"{type(e).__name__}: {e}"
-            else: out = 'Denied by human operator'
-            if self.tool_max_len and isinstance(out, str) and len(out) > self.tool_max_len:
-                out = out[:self.tool_max_len] + ' ...[truncated]'
-            self.turn_tool_result = out
-            self.hist.append({'role': 'tool', 'tool_call_id': tc.get('id'), 'name': tc['function'].get('name', ''),
-                              'content': str(out)})
-            for _ in run_cbs(self, 'after_tool_calls'): pass
+    def _model_step(self, max_output_tokens=None):
+        "One completion, normalized to a `Resp` - the single wire call `ToolLoopMixin` drives."
+        return norm_resp(self._step(max_output_tokens))
 
     def _oneshot(self, prompt, sp):
         "Stateless one-shot completion text."
@@ -260,24 +250,6 @@ class LlamaChat(Chat):
         rf = {'type':'json_object','schema': get_schema(schema)['input_schema']}
         msgs = ([{'role':'system','content':sp}] if sp else []) + [{'role':'user','content':prompt}]
         return json.loads(resp_text(norm_resp(self.engine.create_chat_completion(msgs, response_format=rf, **self._samp))))
-    def _send(self, msg, max_output_tokens=None):
-        'Send one message through the callback pipeline, running the tool loop up to `max_steps` rounds.'
-        self.turn_msg = _mk_msg(msg)
-        for _ in run_cbs(self, 'before_send'): pass
-        if self.turn_msg is not None: self.hist.append(self.turn_msg)
-        us, steps = [], 0
-        while True:
-            res = norm_resp(self._step(max_output_tokens))
-            us.append(res.get('usage'))
-            if not res.get('tool_calls') or steps >= self.max_steps: break
-            self._run_tools(res); steps += 1
-        if (u := _sum_usage(us)): res['usage'] = u
-        self._ctx_tokens = (us[-1] or {}).get('total_tokens', self._ctx_tokens)
-        self.turn_res = res
-        self.hist.append(res)
-        for _ in run_cbs(self, 'after_response'): pass
-        return self.turn_res
-
     def _stream_step(self, max_output_tokens=None):
         "Stream one completion; yields chunk dicts and leaves the merged `Resp` on `self._step_res`."
         split, tcs, fin = StreamSplit(), [], None
@@ -300,32 +272,6 @@ class LlamaChat(Chat):
         res['usage'] = {'prompt_tokens': max(n - out, 0), 'completion_tokens': out, 'total_tokens': n}
         self._step_res = Resp(res)
 
-    def _stream(self, msg, max_output_tokens=None, cbs=None):
-        'Stream a turn as markdown chunks; per-call `cbs` live only for this turn.'
-        added = self.add_cbs(cbs); prev = getattr(self, '_streaming', False); self._streaming = True
-        try:
-            self.turn_msg = _mk_msg(msg)
-            for _ in run_cbs(self, 'before_send'): pass
-            if self.turn_msg is not None: self.hist.append(self.turn_msg)
-            fmt, us, steps = StreamFormatter(), [], 0
-            while True:
-                for o in self._stream_step(max_output_tokens):
-                    if (s := fmt.format_item(o)): yield s
-                if fmt._inthink: fmt._inthink = False; yield '\n\n'
-                res = self._step_res
-                us.append(res.get('usage'))
-                if not res.get('tool_calls') or steps >= self.max_steps: break
-                for tc in res['tool_calls']:
-                    yield fmt.format_item({'content': [{'type': 'tool_call', 'name': tc['function'].get('name', ''),
-                                                        'arguments': tc['function'].get('arguments', {})}]})
-                self._run_tools(res); steps += 1
-            if (u := _sum_usage(us)): res['usage'] = u
-            self._ctx_tokens = (us[-1] or {}).get('total_tokens', self._ctx_tokens)
-            self.turn_res = res
-            self.hist.append(res)
-            yield from run_cbs(self, 'after_response')
-            return self.turn_res
-        finally: self._streaming = prev; self.remove_cbs(added)
 
 # %% ../nbs/01_llama.ipynb #038660da
 def _mk_obj(schema, d):
