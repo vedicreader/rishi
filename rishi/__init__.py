@@ -7,7 +7,7 @@ from .core import Chat, AsyncChat
 # eagerly here would make `import rishi` fail on a machine that only has the others. `Chat(model)`
 # imports the backend it actually needs, lazily, via `core.get_runtime`. `rishi.litert` and friends
 # still work as ordinary submodule imports; this only stops them being *required*.
-_backends = ('litert', 'llama', 'mlx')
+_backends = ('litert', 'llama', 'mlx', 'remote')
 
 def __getattr__(name):
     "Import a backend submodule on first attribute access (`rishi.llama` without a hard dependency)."

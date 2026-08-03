@@ -37,6 +37,15 @@ that receive tool calls as data (llama today, MLX next):
   shrunk, backend state is rebuilt, and the model is asked to summarize. Only if that retry also
   fails does it raise the new `ContextWindowExceededError`.
 
+**`rishi.remote`.** Hosted models - Anthropic, OpenAI, Gemini, DeepSeek, Moonshot, OpenRouter -
+through [fastllm](https://github.com/AnswerDotAI/fastllm)'s `acomplete`, routed on the model name
+(`Chat('claude-sonnet-4-5')`). It reuses `ToolLoopMixin`, so approval, the budget, parallel tools and
+the callbacks behave exactly as on the local backends; the async wire call is bridged with `run_coro`
+and the new `sync_iter`. `tool_choice` and `reasoning_effort` are passed through natively, and
+provider-run tools arrive with `server=True` and are never executed locally. History converts both
+ways between rishi's canonical dicts and fastllm's `Msg`/`Part`, carrying images and audio as data
+URLs, so a local conversation can move to a hosted model and back without losing anything.
+
 **Closing fastllm gaps.** `chat(msg, stream='raw')` yields the underlying chunk dicts instead of
 rendered markdown, for consumers that want the text/thinking/tool-call structure (`stream=True` is
 unchanged). `ToolCall` builds a canonical tool call as a `dict` subclass with `.name`/`.arguments`

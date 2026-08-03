@@ -34,8 +34,10 @@ llama = [
 mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 # vision/audio MLX models; kept separate because mlx-vlm pulls opencv and friends
 mlx-vlm = ["rishi[mlx]", "mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'"]
-all = ["rishi[litert,llama,mlx,mlx-vlm]"]
-dev = ["rishi[litert,llama]"]   # what CI installs: every backend that builds on linux
+# hosted models (Anthropic, OpenAI, Gemini, ...) through fastllm
+remote = ["python-fastllm>=0.0.36"]
+all = ["rishi[litert,llama,mlx,mlx-vlm,remote]"]
+dev = ["rishi[litert,llama,remote]"]   # what CI installs: every backend that builds on linux
 
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"

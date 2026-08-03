@@ -13,7 +13,7 @@ __all__ = ['tool_reminder_', 'runtimes', 'dflt_runtime', 'budget_msg_', 'dflt_fi
            'ToolReminderCallback', 'common_prefix_len', 'split_runtime', 'infer_runtime', 'resolve_runtime',
            'get_runtime', 'ToolCall', 'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError',
            'is_ctx_error', 'Chat', 'ToolLoopMixin', 'AsyncChat', 'adisplay_stream', 'hitl_policy', 'extract_code',
-           'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'task_complete', 'output_matches',
+           'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'sync_iter', 'task_complete', 'output_matches',
            'PyFenceCallback', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #acd92ae986b06129
@@ -291,10 +291,12 @@ def to_oai_msg(m):
     return out
 
 def sum_usage(us):
-    "Sum OpenAI usage dicts (ignoring Nones); None if nothing to sum."
+    "Sum OpenAI usage dicts (ignoring Nones); None if nothing to sum. A `model` name, if any, is carried through rather than summed."
     us = [u for u in us if u]
     if not us: return None
-    return {k: sum(u.get(k, 0) for u in us) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'cached_tokens')}
+    out = {k: sum(u.get(k, 0) for u in us) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'cached_tokens')}
+    if (m := first(us, lambda u: u.get('model'))): out['model'] = m['model']
+    return out
 
 _media_ph = {'image_url': '[image]', 'input_audio': '[audio]'}
 
@@ -384,7 +386,7 @@ class UsageCallback(ChatCallback):
     def after_response(self):
         u = self.chat.turn_res.get('usage') or {}
         self.chat.use += UsageStats(u.get('prompt_tokens', 0), u.get('completion_tokens', 0), u.get('total_tokens', 0),
-                                    1, cached_tokens=u.get('cached_tokens', 0))
+                                    1, cached_tokens=u.get('cached_tokens', 0), model=u.get('model'))
 
 class ToolReminderCallback(ChatCallback):
     'Inject a tool-summary reminder into the outgoing message when tools are registered.'
@@ -407,10 +409,12 @@ def common_prefix_len(a, b):
 
 # %% ../nbs/00_core.ipynb #core_runtime
 runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat'),
-            'mlx': ('rishi.mlx','MlxChat')}
+            'mlx': ('rishi.mlx','MlxChat'), 'remote': ('rishi.remote','RemoteChat')}
 dflt_runtime = 'litert'
+# checked in order, so the local file/repo shapes win over the hosted model-name patterns
 _pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'), 'llama': ('.gguf','gguf'),
-         'mlx': ('mlx-community','mlx_lm','-mlx','mlx-')}
+         'mlx': ('mlx-community','mlx_lm','-mlx','mlx-'),
+         'remote': ('claude-','gpt-','gemini-','kimi-','deepseek-','grok-','sonnet','opus','haiku','fable')}
 
 def split_runtime(model):
     "Split `'runtime/model'` into `(runtime, model)`; the prefix must name a known runtime, else `(None, model)`."
@@ -791,8 +795,29 @@ def run_coro(coro):
     'Run an awaitable to completion from sync code, even inside a running event loop.'
     try: asyncio.get_running_loop()
     except RuntimeError: return asyncio.run(coro)
-    from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(1) as ex: return ex.submit(asyncio.run, coro).result()
+
+def sync_iter(agen_fn):
+    '''Drive the async generator returned by `agen_fn()` from sync code, yielding its items.
+
+    The whole generator runs on one event loop in one background thread, rather than a fresh loop per
+    item: a streaming HTTP response is bound to the loop that opened it, so pumping it with repeated
+    `asyncio.run` calls would tear the connection down mid-stream.'''
+    from queue import Queue
+    from threading import Thread
+    q, done = Queue(), object()
+    async def _pump():
+        try:
+            async for o in agen_fn(): q.put(o)
+        except BaseException as e: q.put(e)
+        finally: q.put(done)
+    t = Thread(target=lambda: asyncio.run(_pump()), daemon=True)
+    t.start()
+    try:
+        while (o := q.get()) is not done:
+            if isinstance(o, BaseException): raise o
+            yield o
+    finally: t.join(timeout=5)
 
 @patch
 def run_py(self:Chat, code, ban_defs=False, g=None):

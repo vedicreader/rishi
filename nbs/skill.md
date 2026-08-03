@@ -5,9 +5,9 @@ description: Run local models through rishi's Chat API - Gemma .litertlm builds 
 
 # rishi
 
-rishi wraps three on-device engines in one callable `Chat`. Models run locally, so there are no API keys and no network once weights are cached. The backend-agnostic API lives in `rishi.core`; the engines are `rishi.litert` (Gemma `.litertlm` via litert_lm), `rishi.llama` (any GGUF via llama-cpp-python) and `rishi.mlx` (Apple silicon via mlx-lm/mlx-vlm). `Chat(model)` picks one from the model name.
+rishi wraps four engines - three on-device, one hosted - in one callable `Chat`. Models run locally, so there are no API keys and no network once weights are cached. The backend-agnostic API lives in `rishi.core`; the engines are `rishi.litert` (Gemma `.litertlm` via litert_lm), `rishi.llama` (any GGUF via llama-cpp-python), `rishi.mlx` (Apple silicon via mlx-lm/mlx-vlm) and `rishi.remote` (hosted APIs via fastllm). `Chat(model)` picks one from the model name.
 
-Backends are **opt-in extras**: `pip install 'rishi[litert]'`, `'rishi[llama]'`, `'rishi[mlx]'`, `'rishi[mlx-vlm]'`, or `'rishi[all]'`. A bare `pip install rishi` gives you `rishi.core` and no engine. `import rishi` works with any subset installed - backend modules load lazily - and asking for a missing one raises an ImportError naming the extra to install.
+Backends are **opt-in extras**: `pip install 'rishi[litert]'`, `'rishi[llama]'`, `'rishi[mlx]'`, `'rishi[mlx-vlm]'`, `'rishi[remote]'`, or `'rishi[all]'`. A bare `pip install rishi` gives you `rishi.core` and no engine. `import rishi` works with any subset installed - backend modules load lazily - and asking for a missing one raises an ImportError naming the extra to install.
 
 ## The one thing to remember
 
@@ -121,9 +121,9 @@ A Chat that built its own engine frees it on `close()`; a Chat handed an engine 
 - Tool and structured-output arguments arrive as floats (`21.0`) from the model's JSON. Cast inside the tool if you need strict ints.
 - `run_text_scoring` is not available on this runtime, so `classify` and `check` grade by generation, not log-likelihood scoring.
 
-## One interface for all three backends
+## One interface for all four backends
 
-`Chat` picks the backend from the model name, fastllm-style, and returns that backend's own `Chat` subclass (`LitertChat`/`LlamaChat`/`MlxChat`) - a real subclass, not a wrapper, so `isinstance(chat, Chat)` holds, `chat.runtime` says which, and callbacks, tools, `hist`, `use` and streaming are exactly as documented per backend. `**kw` passes straight through, so backend-specific arguments (`backend=Backend.GPU()`, `mmproj=`, `n_gpu_layers=`, `kv_bits=`) still work.
+`Chat` picks the backend from the model name, fastllm-style, and returns that backend's own `Chat` subclass (`LitertChat`/`LlamaChat`/`MlxChat`/`RemoteChat`) - a real subclass, not a wrapper, so `isinstance(chat, Chat)` holds, `chat.runtime` says which, and callbacks, tools, `hist`, `use` and streaming are exactly as documented per backend. `**kw` passes straight through, so backend-specific arguments (`backend=Backend.GPU()`, `mmproj=`, `n_gpu_layers=`, `kv_bits=`) still work.
 
 ```python
 from rishi import Chat, AsyncChat
@@ -132,6 +132,8 @@ Chat('litert-community/gemma-4-E2B-it-litert-lm')   # -> litert
 Chat('Qwen/Qwen3-4B-GGUF')                          # -> llama.cpp
 Chat('mlx-community/Qwen3-4B-4bit')                 # -> mlx
 Chat('mlx-community/Qwen3-VL-4B-Instruct-4bit')     # -> mlx, and on to MlxVlmChat (vision)
+Chat('claude-sonnet-4-5')                           # -> remote (hosted, via fastllm)
+Chat('openrouter/moonshotai/kimi-k2')               # vendor-prefixed hosted names work too
 Chat('/models/mine.gguf')                           # local file -> model_path=
 Chat('my-org/private', runtime='llama')             # explicit wins
 Chat('llama/my-org/private')                        # or prefix the name
@@ -139,7 +141,7 @@ Chat()                                              # nothing to go on -> litert
 achat = AsyncChat('Qwen/Qwen3-4B-GGUF')             # async on any backend
 ```
 
-Resolution order: explicit `runtime=`, then a `runtime/` prefix (only if it names a known runtime, so `litert-community/...` is left alone), then the shape of the id/path (`.litertlm`/`litert-community`/`litert-lm` vs `.gguf`/`GGUF` vs `mlx-community`/`-mlx`), then the default (`litert`). A bare name it can't place raises with instructions rather than guessing - there is no alias table, so pass a full hub repo id or path. `resolve_runtime`, `split_runtime`, `infer_runtime` and `get_runtime` are exported if you want the decision without building anything.
+Resolution order: explicit `runtime=`, then a `runtime/` prefix (only if it names a known runtime, so `litert-community/...` is left alone), then the shape of the id/path (`.litertlm`/`litert-community`/`litert-lm` vs `.gguf`/`GGUF` vs `mlx-community`/`-mlx` vs hosted names like `claude-*`/`gpt-*`/`gemini-*`), then the default (`litert`). Local shapes are checked before hosted name patterns. A bare name it can't place raises with instructions rather than guessing - there is no alias table, so pass a full hub repo id or path. `resolve_runtime`, `split_runtime`, `infer_runtime` and `get_runtime` are exported if you want the decision without building anything.
 
 The selector is `runtime=`, not `backend=` - `backend=` stays free for litert's hardware backend (`Backend.GPU()`), which passes straight through.
 
@@ -192,8 +194,26 @@ What is different from the other two backends:
 - `structured` has no grammar constraint on this backend: it asks for JSON and parses the reply (fenced ```json first, then the outermost braces), raising `ValueError` if neither works. `classify`, `check` and `grades` work as elsewhere.
 - **Vision and audio** route automatically: `Chat` reads the repo's `config.json`, and a model with a vision/audio tower gets `MlxVlmChat` (mlx-vlm) instead. Force it with `vlm=True`/`False`. Pass media as `bytes` or a `Path` in the message list, exactly as on llama. Two caveats: mlx-vlm has no per-model tool-call parsers, so tool use there depends on the model emitting `<tool_call>` tags, and it manages its own vision-feature cache, so cross-turn token prefix reuse is off on that path. A text-only MLX model raises a `TypeError` pointing at `rishi[mlx-vlm]` rather than silently dropping the image.
 
+## Hosted models (rishi.remote)
+
+`pip install 'rishi[remote]'` (adds [fastllm](https://github.com/AnswerDotAI/fastllm)) and set the vendor's key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, ...). Same `Chat` API against Anthropic, OpenAI, Gemini, DeepSeek, Moonshot, OpenRouter and the rest:
+
+```python
+from rishi import Chat
+chat = Chat('claude-sonnet-4-5', sp='You are concise.')
+print(resp_text(chat("Say hello.")))
+```
+
+- `Chat(model, *, api_key=None, base_url=None, vendor_name=None, api_name=None, sp='', messages=None, tools=None, approve=None, tool_max_len=None, max_steps=10, parallel_tools=False, tool_choice=None, reasoning_effort=None, temp=None, max_output_tokens=4096, retries=2, comp_kw=None, cbs=None, default_cbs=True)`.
+- It rides the same `ToolLoopMixin` as llama and mlx, so approval, the budget, `parallel_tools`, callbacks and `PyFenceCallback` behave identically. The wire call is async (`fastllm.acomplete`), bridged to the sync API with `run_coro` and `sync_iter`.
+- **`tool_choice`** (`'auto'`/`'required'`/`'none'`, or a tool name) and **`reasoning_effort`** (`'low'`/`'medium'`/`'high'`) are passed straight through - hosted APIs support both natively, unlike the local backends.
+- **Server-side tools** (a provider-run web search) come back with `server=True` on the `ToolCall`. The tool loop records them and never executes anything locally.
+- History conversion is `to_msg`/`to_hist` between rishi's canonical dicts and fastllm's `Msg`/`Part`. Text, thinking, tool calls, tool results, images and audio all round-trip - media is carried as a data URL rather than collapsed to a placeholder, so a local -> hosted hop keeps the picture.
+- `structured` forces the tool call (`tool_choice=<name>`), so arguments parse reliably; it falls back to parsing a JSON reply.
+- `chat.use` gets `cached_tokens` from the provider's prompt-cache accounting, the same field MLX fills from prefix reuse, so a mixed local/hosted tally adds up in one `UsageStats`. `close()` is a no-op: the HTTP client belongs to fastllm.
+
 ## Working on rishi itself
 
-It's an nbdev project. Edit `nbs/00_core.ipynb`, `nbs/01_llama.ipynb`, `nbs/02_litert.ipynb` or `nbs/03_mlx.ipynb`, not the generated files in `rishi/`. Tests are non-exported `#| hide` cells; model-dependent cells are `#| eval: false` to keep the test run offline. `nbs/03_mlx.ipynb` is additionally marked `skip_exec: true` in its frontmatter, because CI runs on linux where MLX doesn't exist - run it on a Mac. Run `nbdev-prepare` (with a hyphen) after changes.
+It's an nbdev project. Edit `nbs/00_core.ipynb`, `nbs/01_llama.ipynb`, `nbs/02_litert.ipynb`, `nbs/03_mlx.ipynb` or `nbs/04_remote.ipynb`, not the generated files in `rishi/`. Tests are non-exported `#| hide` cells; model-dependent cells are `#| eval: false` to keep the test run offline. `nbs/03_mlx.ipynb` is additionally marked `skip_exec: true` in its frontmatter, because CI runs on linux where MLX doesn't exist - run it on a Mac. Run `nbdev-prepare` (with a hyphen) after changes.
 
-The tool loop itself lives once, in `rishi.core.ToolLoopMixin`: a backend that receives tool calls as data (llama, mlx) supplies `_model_step` and `_stream_step` plus an `ns` tool namespace, and the mixin owns approval, history, the budget, parallel dispatch and context recovery. litert runs its loop inside the engine and bridges back through `ChatToolHandler` instead.
+The tool loop itself lives once, in `rishi.core.ToolLoopMixin`: a backend that receives tool calls as data (llama, mlx) supplies `_model_step` and `_stream_step` plus an `ns` tool namespace, and the mixin owns approval, history, the budget, parallel dispatch and context recovery. litert runs its loop inside the engine and bridges back through `ChatToolHandler` instead. `rishi.remote`'s tests patch `acomplete` with a fake, so the whole backend - conversions, tool loop, budget, streaming - is covered in CI without a key.
