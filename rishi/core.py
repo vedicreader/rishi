@@ -10,10 +10,10 @@ __all__ = ['tool_reminder_', 'runtimes', 'dflt_runtime', 'budget_msg_', 'dflt_fi
            'StreamFormatter', 'display_stream', 'truncated', 'TruncationCallback', 'mk_oai_content', 'mk_oai_msg',
            'mk_oai_msgs', 'is_media', 'mk_toolspec', 'split_think', 'mk_tag_tc', 'parse_tool_tags', 'parse_args',
            'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback',
-           'ToolReminderCallback', 'split_runtime', 'infer_runtime', 'resolve_runtime', 'get_runtime',
-           'ContextWindowExceededError', 'is_ctx_error', 'Chat', 'ToolLoopMixin', 'AsyncChat', 'adisplay_stream',
-           'hitl_policy', 'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'task_complete',
-           'output_matches', 'PyFenceCallback', 'repo_root', 'mv_skill_md']
+           'ToolReminderCallback', 'common_prefix_len', 'split_runtime', 'infer_runtime', 'resolve_runtime',
+           'get_runtime', 'ContextWindowExceededError', 'is_ctx_error', 'Chat', 'ToolLoopMixin', 'AsyncChat',
+           'adisplay_stream', 'hitl_policy', 'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro',
+           'task_complete', 'output_matches', 'PyFenceCallback', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #acd92ae986b06129
 import json, re, os, asyncio, io, ast, inspect, warnings, uuid
@@ -64,9 +64,10 @@ setattr(_spc, '__run_python', _rishi_run_python)
 
 # %% ../nbs/00_core.ipynb #142b81b8
 class UsageStats:
-    "Token usage for a chat turn. `cost`/`model` are always present (`cost` is 0 for local inference) so a harness merging local and hosted usage can carry one type instead of two."
-    _sums = ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n', 'cost')
-    def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0, cost=0.0, model=None): store_attr()
+    "Token usage for a chat turn. `cached_tokens` is the part of the prompt served from a KV/prefix cache. `cost`/`model` are always present (`cost` is 0 for local inference) so a harness merging local and hosted usage can carry one type instead of two."
+    _sums = ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n', 'cached_tokens', 'cost')
+    def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0, cached_tokens=0,
+                 cost=0.0, model=None): store_attr()
     def __add__(self, other):
         if other is None: return self
         return UsageStats(*[getattr(self, k) + getattr(other, k) for k in self._sums], model=self.model or other.model)
@@ -74,6 +75,7 @@ class UsageStats:
     def __repr__(self):
         parts = [f'total={self.total_tokens:,}', f'in={self.prompt_tokens:,}',
                  f'out={self.completion_tokens:,}', f'turns={self.n}']
+        if self.cached_tokens: parts.append(f'cached={self.cached_tokens:,}')
         if self.cost: parts.append(f'cost=${self.cost:,.4f}')
         if self.model: parts.append(f'model={self.model}')
         return '|'.join(parts)
@@ -291,7 +293,7 @@ def sum_usage(us):
     "Sum OpenAI usage dicts (ignoring Nones); None if nothing to sum."
     us = [u for u in us if u]
     if not us: return None
-    return {k: sum(u.get(k, 0) for u in us) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens')}
+    return {k: sum(u.get(k, 0) for u in us) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'cached_tokens')}
 
 _media_ph = {'image_url': '[image]', 'input_audio': '[audio]'}
 
@@ -380,7 +382,8 @@ class UsageCallback(ChatCallback):
     order = 10
     def after_response(self):
         u = self.chat.turn_res.get('usage') or {}
-        self.chat.use += UsageStats(u.get('prompt_tokens', 0), u.get('completion_tokens', 0), u.get('total_tokens', 0), 1)
+        self.chat.use += UsageStats(u.get('prompt_tokens', 0), u.get('completion_tokens', 0), u.get('total_tokens', 0),
+                                    1, cached_tokens=u.get('cached_tokens', 0))
 
 class ToolReminderCallback(ChatCallback):
     'Inject a tool-summary reminder into the outgoing message when tools are registered.'
@@ -392,10 +395,21 @@ class ToolReminderCallback(ChatCallback):
         if isinstance(m.get('content'), str): m['content'] += self.tool_reminder
         elif isinstance(m.get('content'), list): m['content'].append({'type': 'text', 'text': self.tool_reminder})
 
+# %% ../nbs/00_core.ipynb #core_prefix
+def common_prefix_len(a, b):
+    "Length of the longest common prefix of sequences `a` and `b`."
+    n = 0
+    for x, y in zip(a, b):
+        if x != y: break
+        n += 1
+    return n
+
 # %% ../nbs/00_core.ipynb #core_runtime
-runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat')}
+runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat'),
+            'mlx': ('rishi.mlx','MlxChat')}
 dflt_runtime = 'litert'
-_pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'), 'llama': ('.gguf','gguf')}
+_pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'), 'llama': ('.gguf','gguf'),
+         'mlx': ('mlx-community','mlx_lm','-mlx','mlx-')}
 
 def split_runtime(model):
     "Split `'runtime/model'` into `(runtime, model)`; the prefix must name a known runtime, else `(None, model)`."
@@ -416,8 +430,8 @@ def resolve_runtime(model=None, runtime=None, model_path=None):
     nm = runtime or pre or infer_runtime(model) or infer_runtime(model_path)
     if nm is None and model is None and model_path is None: nm = dflt_runtime
     if nm is None: raise ValueError(
-        f"Can't tell which backend {model!r} needs. Pass runtime='litert'|'llama', prefix the name "
-        f"(e.g. 'llama/{model}'), or give a full repo id or path (.litertlm / .gguf).")
+        f"Can't tell which backend {model!r} needs. Pass runtime={'|'.join(map(repr, runtimes))}, prefix "
+        f"the name (e.g. 'llama/{model}'), or give a full repo id or path (.litertlm / .gguf / an mlx repo).")
     if nm not in runtimes: raise ValueError(f"Unknown runtime {nm!r}; known runtimes: {', '.join(runtimes)}.")
     return nm, model
 
@@ -469,7 +483,10 @@ class Chat:
     def __new__(cls, model=None, *, runtime=None, model_path=None, **kw):
         if cls is not Chat: return super().__new__(cls)
         nm, _ = resolve_runtime(model, runtime, model_path)
-        return super().__new__(get_runtime(nm))
+        sub = get_runtime(nm)
+        # go through the subclass's own `__new__` rather than `object.__new__` directly, so a backend
+        # can re-route further (MlxChat picks MlxVlmChat for a vision repo)
+        return sub.__new__(sub, model, runtime=runtime, model_path=model_path, **kw)
 
     def fmt2hist(self, msgs):
         "Backend messages -> canonical rishi history dicts (backends override; the base just normalizes)."

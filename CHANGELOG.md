@@ -4,7 +4,19 @@
 
 ## 0.1.0
 
-Groundwork for a third backend (MLX), plus the tool-loop hardening that goes with it.
+A third backend - MLX on Apple silicon - plus the tool-loop hardening that goes with it.
+
+**`rishi.mlx`.** The same `Chat` API over [mlx-lm](https://github.com/ml-explore/mlx-lm), routed
+automatically from an `mlx-community` model id. It is the only backend that keeps its KV cache alive
+between turns: each turn is tokenized, compared against what the cache already holds, trimmed where
+the two diverge, and only the new tail is prefilled - reported as `use.cached_tokens`.
+`save_cache`/`load_cache` persist a warmed cache across sessions. Also `kv_bits` for a quantized KV
+cache, `draft_model` for speculative decoding, and `adapter_path` for LoRA adapters.
+
+Vision and audio models are routed to `MlxVlmChat` (via
+[mlx-vlm](https://github.com/Blaizzy/mlx-vlm), `pip install 'rishi[mlx-vlm]'`) by reading the repo's
+`config.json`; `vlm=True`/`False` overrides. A text-only MLX model given an image now raises a
+`TypeError` that names the extra to install rather than dropping the image silently.
 
 **Backends are now opt-in.** `pip install rishi` no longer pulls litert-lm-api or
 llama-cpp-python; install what you need with `pip install 'rishi[litert]'`, `'rishi[llama]'`, or

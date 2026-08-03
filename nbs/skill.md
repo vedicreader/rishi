@@ -1,11 +1,13 @@
 ---
 name: rishi
-description: Run local models through rishi's Chat API - Gemma .litertlm builds over litert_lm (rishi.core/rishi.litert) or any GGUF model over llama-cpp-python (rishi.llama, with AsyncChat) - local chat with tool calling and human approval, streaming, thinking, a python sandbox, structured output, classification, and graded answers. Use when writing or debugging offline LLM chat, local tool-use agents, or anything mentioning rishi, litert_lm, gemma .litertlm models, or local GGUF/llama.cpp chat.
+description: Run local models through rishi's Chat API - Gemma .litertlm builds over litert_lm (rishi.litert), any GGUF model over llama-cpp-python (rishi.llama), or quantized models on Apple silicon over MLX (rishi.mlx) - local chat with tool calling and human approval, a tool-call budget, streaming, thinking, a python sandbox, structured output, classification, and graded answers. Use when writing or debugging offline LLM chat, local tool-use agents, or anything mentioning rishi, litert_lm, gemma .litertlm models, local GGUF/llama.cpp chat, or mlx-lm/mlx-vlm.
 ---
 
 # rishi
 
-rishi wraps Google's on-device litert_lm engine in a callable `Chat`. Models run locally (CPU or GPU), so there are no API keys and no network once weights are cached. Import everything from `rishi.core`. A second backend, `rishi.llama` (see the last section), runs any GGUF model through llama-cpp-python with the same `Chat` API plus an `AsyncChat`.
+rishi wraps three on-device engines in one callable `Chat`. Models run locally, so there are no API keys and no network once weights are cached. The backend-agnostic API lives in `rishi.core`; the engines are `rishi.litert` (Gemma `.litertlm` via litert_lm), `rishi.llama` (any GGUF via llama-cpp-python) and `rishi.mlx` (Apple silicon via mlx-lm/mlx-vlm). `Chat(model)` picks one from the model name.
+
+Backends are **opt-in extras**: `pip install 'rishi[litert]'`, `'rishi[llama]'`, `'rishi[mlx]'`, `'rishi[mlx-vlm]'`, or `'rishi[all]'`. A bare `pip install rishi` gives you `rishi.core` and no engine. `import rishi` works with any subset installed - backend modules load lazily - and asking for a missing one raises an ImportError naming the extra to install.
 
 ## The one thing to remember
 
@@ -28,7 +30,11 @@ print(resp_text(r))
 - Chat methods: `run_py(code)`, `classify(text, labels)`, `structured(prompt, schema)`, `check(question, expected, ...)`, `grades(question, expected, actual)`, `count_tokens(text)`, `render(msg)`, `cancel()`, `add_cb`/`add_cbs`/`remove_cb`/`remove_cbs`, `close()`.
 - `Chat.create_engine(...)` is a classmethod that builds the `Engine` (resolves the model, makes `cache_dir`, wires multimodal backends). Patch it or pass `engine=` to override.
 - Module helpers: `resp_text`, `thought`, `display_stream`, `hitl_policy`, `output_matches`, `task_complete`, `bench`. Model ids: `gemma4_e2b`, `gemma4_e4b`, `gemma4_12b`. The message builders (`mk_msg`/`mk_content`/`mk_msgs`) and model resolver are backend-specific, so reach them per backend as `chat.mk_msg(...)` / `LitertChat.mk_msg` rather than as a bare `from rishi import *` name (both backends define their own, so they aren't re-exported at the top level).
-- Callbacks: `ChatCallback` (base), `PyFenceCallback`, and `TruncationCallback` are public in `rishi.core`. Each backend's default callbacks (history, usage, tool-reminder) are internal and on by default; pass `default_cbs=False` to drop them.
+- Callbacks: `ChatCallback` (base), `PyFenceCallback`, and `TruncationCallback` are public in `rishi.core`, along with the shared `UsageCallback`/`ToolReminderCallback` that llama and mlx use as defaults. litert's history/usage callbacks are internal. All defaults are on unless you pass `default_cbs=False`.
+- Tool-call budget: `max_steps` (default 10) caps tool *calls* per turn on every backend. Past the cap, calls are denied with `budget_msg_`, and rishi sends `final_prompt` asking the model to answer with what it has, so a runaway loop ends in prose. `max_steps=None` removes the cap.
+- `parallel_tools=True` (llama and mlx; litert raises `NotImplementedError`) runs independent calls from one turn concurrently. Approval stays sequential, so HITL order and budget accounting don't change, and history is identical either way.
+- Context recovery: if the window fills mid-turn, rishi truncates the oldest tool results, rebuilds backend state, and asks for a summary; `ContextWindowExceededError` is raised only if that retry also fails.
+- `chat.use` is a `UsageStats` with `prompt_tokens`, `completion_tokens`, `total_tokens`, `n`, `cached_tokens` (prompt tokens served from a KV/prefix cache - real on mlx, 0 elsewhere), plus `cost`/`model` for merging with hosted-API usage.
 
 ## Streaming and thinking
 
@@ -113,23 +119,25 @@ A Chat that built its own engine frees it on `close()`; a Chat handed an engine 
 - Tool and structured-output arguments arrive as floats (`21.0`) from the model's JSON. Cast inside the tool if you need strict ints.
 - `run_text_scoring` is not available on this runtime, so `classify` and `check` grade by generation, not log-likelihood scoring.
 
-## One interface for both backends
+## One interface for all three backends
 
-`Chat` picks the backend from the model name, fastllm-style, and returns that backend's own `Chat` subclass (`LitertChat`/`LlamaChat`) - a real subclass, not a wrapper, so `isinstance(chat, Chat)` holds, `chat.runtime` says which, and callbacks, tools, `hist`, `use` and streaming are exactly as documented per backend. `**kw` passes straight through, so backend-specific arguments (`backend=Backend.GPU()`, `mmproj=`, `n_gpu_layers=`) still work.
+`Chat` picks the backend from the model name, fastllm-style, and returns that backend's own `Chat` subclass (`LitertChat`/`LlamaChat`/`MlxChat`) - a real subclass, not a wrapper, so `isinstance(chat, Chat)` holds, `chat.runtime` says which, and callbacks, tools, `hist`, `use` and streaming are exactly as documented per backend. `**kw` passes straight through, so backend-specific arguments (`backend=Backend.GPU()`, `mmproj=`, `n_gpu_layers=`, `kv_bits=`) still work.
 
 ```python
 from rishi import Chat, AsyncChat
 
 Chat('litert-community/gemma-4-E2B-it-litert-lm')   # -> litert
 Chat('Qwen/Qwen3-4B-GGUF')                          # -> llama.cpp
+Chat('mlx-community/Qwen3-4B-4bit')                 # -> mlx
+Chat('mlx-community/Qwen3-VL-4B-Instruct-4bit')     # -> mlx, and on to MlxVlmChat (vision)
 Chat('/models/mine.gguf')                           # local file -> model_path=
 Chat('my-org/private', runtime='llama')             # explicit wins
 Chat('llama/my-org/private')                        # or prefix the name
 Chat()                                              # nothing to go on -> litert, as before
-achat = AsyncChat('Qwen/Qwen3-4B-GGUF')             # async on either backend
+achat = AsyncChat('Qwen/Qwen3-4B-GGUF')             # async on any backend
 ```
 
-Resolution order: explicit `runtime=`, then a `runtime/` prefix (only if it names a known runtime, so `litert-community/...` is left alone), then the shape of the id/path (`.litertlm`/`litert-community`/`litert-lm` vs `.gguf`/`GGUF`), then the default (`litert`). A bare name it can't place raises with instructions rather than guessing - there is no alias table, so pass a full hub repo id or path. `resolve_runtime`, `split_runtime`, `infer_runtime` and `get_runtime` are exported if you want the decision without building anything.
+Resolution order: explicit `runtime=`, then a `runtime/` prefix (only if it names a known runtime, so `litert-community/...` is left alone), then the shape of the id/path (`.litertlm`/`litert-community`/`litert-lm` vs `.gguf`/`GGUF` vs `mlx-community`/`-mlx`), then the default (`litert`). A bare name it can't place raises with instructions rather than guessing - there is no alias table, so pass a full hub repo id or path. `resolve_runtime`, `split_runtime`, `infer_runtime` and `get_runtime` are exported if you want the decision without building anything.
 
 The selector is `runtime=`, not `backend=` - `backend=` stays free for litert's hardware backend (`Backend.GPU()`), which passes straight through.
 
@@ -161,6 +169,29 @@ Differences from the litert backend:
 - `structured` forces the tool call with a JSON-schema grammar, so arguments always parse. No `render()`, `cancel()`, or `bench()`.
 - `AsyncChat` wraps a `Chat` (pass one, or its kwargs); calls run in a worker thread. `await achat(msg)`; `async for c in await achat(msg, stream=True)`.
 
+## MLX backend (rishi.mlx)
+
+`pip install 'rishi[mlx]'` (Apple silicon only; `'rishi[mlx-vlm]'` adds vision/audio). Same `Chat` API over any [mlx-community](https://huggingface.co/mlx-community) repo:
+
+```python
+from rishi.mlx import MlxChat, qwen3_4b
+chat = MlxChat(qwen3_4b, sp='You are concise.', think=False)
+print(resp_text(chat("Say hello.")))
+print(chat.use)          # cached_tokens > 0 from the second turn on
+```
+
+What is different from the other two backends:
+
+- **The prompt cache is the point.** litert and llama re-send the whole conversation every call; MLX keeps its KV cache alive between turns. Each turn rishi renders the conversation to token ids, compares them against what the cache holds (`common_prefix_len`), trims any diverged tail off the cache, and prefills only the new tokens. The reuse is reported as `use.cached_tokens`. Turn it off with `prompt_cache=False`. `save_cache(path)`/`load_cache(path)` persist a warmed cache, so a long system prompt can be prefilled once and reused in later sessions.
+- Comparing tokens (rather than trusting the cache) is what makes an edited history safe: a chat template need not re-render an assistant turn as the tokens the model generated, and context recovery rewrites history outright. A mismatch just costs a re-prefill.
+- `Chat(model_id, *, model_path=None, vlm=None, engine=None, adapter_path=None, draft_model=None, sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None, max_steps=10, parallel_tools=False, final_prompt=..., think=None, temp=None, top_k=None, top_p=None, min_p=None, seed=None, max_output_tokens=1024, prompt_cache=True, max_kv_size=None, kv_bits=None, kv_group_size=64, quantized_kv_start=0, tmpl_kw=None, gen_kw=None, cbs=None, default_cbs=True)`. Model ids: `qwen3_06b`, `qwen3_17b`, `qwen3_4b`, `qwen3_8b`, `qwen3_30b`, `gemma3_4b`, `llama32_3b`, `qwen3vl_4b`.
+- `kv_bits=4` quantizes the KV cache (with `kv_group_size`, `quantized_kv_start`) for long contexts. `draft_model=qwen3_06b` turns on speculative decoding. `adapter_path='./adapters'` applies a LoRA adapter at load time.
+- Tools come back as `<tool_call>{json}</tool_call>` text (mlx-lm has no built-in parser), which rishi parses with the same `StreamSplit` llama uses. Thinking is `<think>` tags; `think=True/False` is passed to the chat template as `enable_thinking`, which Qwen3-style templates read.
+- `structured` has no grammar constraint on this backend: it asks for JSON and parses the reply (fenced ```json first, then the outermost braces), raising `ValueError` if neither works. `classify`, `check` and `grades` work as elsewhere.
+- **Vision and audio** route automatically: `Chat` reads the repo's `config.json`, and a model with a vision/audio tower gets `MlxVlmChat` (mlx-vlm) instead. Force it with `vlm=True`/`False`. Pass media as `bytes` or a `Path` in the message list, exactly as on llama. Two caveats: mlx-vlm has no per-model tool-call parsers, so tool use there depends on the model emitting `<tool_call>` tags, and it manages its own vision-feature cache, so cross-turn token prefix reuse is off on that path. A text-only MLX model raises a `TypeError` pointing at `rishi[mlx-vlm]` rather than silently dropping the image.
+
 ## Working on rishi itself
 
-It's an nbdev project. Edit `nbs/00_core.ipynb`, `nbs/01_llama.ipynb`, or `nbs/02_litert.ipynb`, not the generated files in `rishi/`. Tests are non-exported `#| hide` cells; model-dependent cells are `#| eval: false` to keep the test run offline. Run `nbdev-prepare` (with a hyphen) after changes.
+It's an nbdev project. Edit `nbs/00_core.ipynb`, `nbs/01_llama.ipynb`, `nbs/02_litert.ipynb` or `nbs/03_mlx.ipynb`, not the generated files in `rishi/`. Tests are non-exported `#| hide` cells; model-dependent cells are `#| eval: false` to keep the test run offline. `nbs/03_mlx.ipynb` is additionally marked `skip_exec: true` in its frontmatter, because CI runs on linux where MLX doesn't exist - run it on a Mac. Run `nbdev-prepare` (with a hyphen) after changes.
+
+The tool loop itself lives once, in `rishi.core.ToolLoopMixin`: a backend that receives tool calls as data (llama, mlx) supplies `_model_step` and `_stream_step` plus an `ns` tool namespace, and the mixin owns approval, history, the budget, parallel dispatch and context recovery. litert runs its loop inside the engine and bridges back through `ChatToolHandler` instead.

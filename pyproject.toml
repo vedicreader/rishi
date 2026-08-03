@@ -32,7 +32,9 @@ llama = [
 ]
 # mlx is Apple-silicon only; the marker lets `rishi[all]` stay installable everywhere
 mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
-all = ["rishi[litert,llama,mlx]"]
+# vision/audio MLX models; kept separate because mlx-vlm pulls opencv and friends
+mlx-vlm = ["rishi[mlx]", "mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'"]
+all = ["rishi[litert,llama,mlx,mlx-vlm]"]
 dev = ["rishi[litert,llama]"]   # what CI installs: every backend that builds on linux
 
 [project.urls]
