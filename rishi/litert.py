@@ -242,22 +242,52 @@ class LitertChat(core.Chat):
         model = core.split_runtime(model)[1]
         model_id = None if model is None or core._is_path(model) else model
         model_path = model_path or (model if model and core._is_path(model) else None)
-        self._stack = ExitStack()
+        self._stack, self._conv_stack = ExitStack(), ExitStack()
         if not engine: engine = self.create_engine(model_id or gemma4_e2b, model_path, backend,
             multimodal=multimodal, cache_dir=cache_dir, enable_speculative_decoding=enable_speculative_decoding, **(eng_kw or {}))
         self.engine = self._stack.enter_context(engine)
-        preface = ([{'role': 'system', 'content': sp}] if sp else []) + [_to_litert_msg(m) for m in listify(messages)]
+        # the system prompt is kept apart from `hist` and re-applied on every rebuild, so eviction can
+        # never drop it - it is the anchor a sliding window is supposed to preserve
+        self._sys_pre = [{'role': 'system', 'content': sp}] if sp else []
         if sampler_config is None and any(x is not None for x in (temp, top_k, top_p, seed)):
             sampler_config = SamplerConfig(temperature=temp, top_k=top_k, top_p=top_p, seed=seed)
         cvk = dict(sampler_config=sampler_config, max_output_tokens=max_output_tokens, **(conv_kw or {}))
         if think: cvk['extra_context'] = {**cvk.get('extra_context', {}), 'enable_thinking': True}
         if filter_think: cvk['filter_channel_content_from_kv_cache'] = True
-        self.conv = self._stack.enter_context(engine.create_conversation(messages=preface or None,
-            tools=list(L(tools)) or None, tool_event_handler=ChatToolHandler(self), **cvk))
+        self._conv_kw, self.tools, self.conv = cvk, L(tools), None
+        self.tool_handler = ChatToolHandler(self)
+        self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in listify(messages)])
         self.ctx_limit = ctx_limit
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
                     tool_max_len=tool_max_len, max_steps=max_steps, final_prompt=final_prompt,
                     cbs=cbs, default_cbs=default_cbs)
+
+    def _mk_conv(self, messages=None):
+        "Build the conversation from `messages`, releasing any current one first."
+        self._conv_stack.close()
+        self._conv_stack = ExitStack()
+        self.conv = self._conv_stack.enter_context(self.engine.create_conversation(
+            messages=messages or None, tools=list(self.tools) or None,
+            tool_event_handler=self.tool_handler, **self._conv_kw))
+        return self.conv
+
+    def _recreate_conv(self):
+        "Rebuild the `Conversation` from the current (possibly evicted) `hist`, re-applying the system prompt."
+        self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in self.hist])
+
+    def _retry_evicted(self, err, max_output_tokens=None, keep_first=2, keep_last=6):
+        "The window filled up mid-turn: evict the middle of `hist`, rebuild, and send the same turn again."
+        kept, dropped = evict_middle(self.hist, keep_first, keep_last)
+        if not dropped:
+            raise ContextWindowExceededError(f"context window full and nothing left to evict: {err}") from err
+        self.hist[:] = kept
+        self.evicted = getattr(self, 'evicted', 0) + len(dropped)
+        self._recreate_conv()
+        self._tc0 = self.conv.token_count            # the rebuilt cache is a new baseline for usage
+        try: return self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens)
+        except RuntimeError as e:
+            raise ContextWindowExceededError(
+                f"could not recover after evicting {len(dropped)} messages: {err}") from err
 
     @property
     def token_count(self): return self.conv.token_count
@@ -271,18 +301,24 @@ class LitertChat(core.Chat):
         "The exact templated string litert will send for `msg`."
         return self.conv.render_message_to_string(_mk_msg(msg))
     def _send(self, msg, max_output_tokens=None):
-        'Send one message through the callback pipeline.'
-        self.turn_msg, self._tc0 = _mk_msg(msg), self.conv.token_count
+        'Send one message through the callback pipeline, evicting and retrying once if the context window fills up.'
+        self.turn_msg = _mk_msg(msg)
         for _ in run_cbs(self, 'before_send'): pass
-        self.turn_res = Resp(self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens))
+        self._tc0 = self.conv.token_count      # after the callbacks: one of them may have rebuilt `conv`
+        try: r = self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens)
+        except RuntimeError as e:
+            if not is_ctx_error(self, e): raise
+            r = self._retry_evicted(e, max_output_tokens)
+        self.turn_res = Resp(r)
         for _ in run_cbs(self, 'after_response'): pass
         return self.turn_res
     def _stream(self, msg, max_output_tokens=None, cbs=None):
         'Stream a turn as markdown chunks; per-call `cbs` live only for this turn.'
         added = self.add_cbs(cbs); prev = getattr(self, '_streaming', False); self._streaming = True
         try:
-            self.turn_msg, self._tc0 = _mk_msg(msg), self.conv.token_count
+            self.turn_msg = _mk_msg(msg)
             for _ in run_cbs(self, 'before_send'): pass
+            self._tc0 = self.conv.token_count   # after the callbacks: one of them may have rebuilt `conv`
             fmt, chunks = StreamFormatter(), []
             for o in self.conv.send_message_async(self.turn_msg, max_output_tokens=max_output_tokens):
                 chunks.append(o); yield self._emit(o, fmt)
@@ -303,8 +339,10 @@ class LitertChat(core.Chat):
         try: return json.loads(extract_fence(resp_text(r), 'json'))
         except (json.JSONDecodeError, TypeError) as e: raise ValueError(f"model neither called the tool nor returned JSON; reply: {resp_text(r)[:200]!r}") from e
     def close(self):
-        "Release the conversation/engine (idempotent)."
+        "Release the conversation, then the engine (idempotent, and in that order)."
+        if getattr(self, '_conv_stack', None) is not None: self._conv_stack.close(); self._conv_stack = None
         if getattr(self, '_stack', None) is not None: self._stack.close(); self._stack = None
+        self.conv = None
 
 # %% ../nbs/02_litert.ipynb #bea63711
 def bench(model_id=gemma4_e2b, model_path=None, backend=Backend.CPU(), prefill_tokens=64, decode_tokens=64, **kw):

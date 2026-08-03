@@ -4,7 +4,8 @@
 
 ## 0.1.0
 
-A third backend - MLX on Apple silicon - plus the tool-loop hardening that goes with it.
+Two new backends - MLX on Apple silicon and hosted models via fastllm - plus the shared tool loop
+and context-window management that go with them.
 
 **`rishi.mlx`.** The same `Chat` API over [mlx-lm](https://github.com/ml-explore/mlx-lm), routed
 automatically from an `mlx-community` model id. It is the only backend that keeps its KV cache alive
@@ -19,12 +20,12 @@ Vision and audio models are routed to `MlxVlmChat` (via
 `TypeError` that names the extra to install rather than dropping the image silently.
 
 **Backends are now opt-in.** `pip install rishi` no longer pulls litert-lm-api or
-llama-cpp-python; install what you need with `pip install 'rishi[litert]'`, `'rishi[llama]'`, or
-`'rishi[all]'`. `import rishi` works with any subset installed, and `Chat(model)` imports the backend
+llama-cpp-python; install what you need with `pip install 'rishi[litert]'`, `'rishi[llama]'`,
+`'rishi[mlx]'`, `'rishi[remote]'`, or `'rishi[all]'`. `import rishi` works with any subset installed, and `Chat(model)` imports the backend
 it needs on demand. Asking for a backend that isn't installed now names the extra to install.
 
-**A shared tool loop.** `ToolLoopMixin` in `rishi.core` owns the Python-side tool loop for backends
-that receive tool calls as data (llama today, MLX next):
+**A shared tool loop.** `ToolLoopMixin` in `rishi.core` owns the Python-side tool loop for every
+backend that receives tool calls as data (llama, MLX, remote):
 
 - `max_steps` is now a real budget, and is enforced on **litert** too - previously litert ignored it
   entirely, so a chat with tools had no cap. Past the cap, calls are denied, the model is told why,
@@ -36,6 +37,21 @@ that receive tool calls as data (llama today, MLX next):
 - A context window that fills up mid-turn is now recovered: the oldest tool results in `hist` are
   shrunk, backend state is rebuilt, and the model is asked to summarize. Only if that retry also
   fails does it raise the new `ContextWindowExceededError`.
+
+**Context-window management.** `SlidingWindowCallback` keeps a long conversation from ever hitting
+the wall: before each turn it checks `pct_full` and, past a threshold, drops whole message groups from
+the middle of `hist` - keeping the earliest turns and the live thread - then has the backend rebuild
+from the shortened history. A tool call and its results are one group and are never split, and the
+system prompt is never at risk because it lives outside `hist`. `summarize=True` replaces the dropped
+middle with a model-written summary. Opt in via `cbs=[SlidingWindowCallback()]`; eviction is lossy, so
+it is not on by default. The policy is also usable directly as `evict_middle`/`msg_groups`.
+
+This is aimed at litert in particular, where litert-lm has no automatic KV-cache recycling
+([gallery#856](https://github.com/google-ai-edge/gallery/issues/856)): a full cache OOMs on GPU/NPU
+and sends the CPU path into an infinite repetition loop instead of raising. `LitertChat` can now
+rebuild its `Conversation` from `hist` (`_recreate_conv`), re-applying the system prompt, and if the
+window does fill mid-turn it evicts and retries once before raising `ContextWindowExceededError`.
+It previously had no context recovery at all.
 
 **`rishi.remote`.** Hosted models - Anthropic, OpenAI, Gemini, DeepSeek, Moonshot, OpenRouter -
 through [fastllm](https://github.com/AnswerDotAI/fastllm)'s `acomplete`, routed on the model name

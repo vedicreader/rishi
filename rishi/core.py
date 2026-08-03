@@ -12,9 +12,9 @@ __all__ = ['tool_reminder_', 'runtimes', 'dflt_runtime', 'budget_msg_', 'dflt_fi
            'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback',
            'ToolReminderCallback', 'common_prefix_len', 'split_runtime', 'infer_runtime', 'resolve_runtime',
            'get_runtime', 'ToolCall', 'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError',
-           'is_ctx_error', 'Chat', 'ToolLoopMixin', 'AsyncChat', 'adisplay_stream', 'hitl_policy', 'extract_code',
-           'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'sync_iter', 'task_complete', 'output_matches',
-           'PyFenceCallback', 'repo_root', 'mv_skill_md']
+           'is_ctx_error', 'Chat', 'ToolLoopMixin', 'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'AsyncChat',
+           'adisplay_stream', 'hitl_policy', 'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro',
+           'sync_iter', 'task_complete', 'output_matches', 'PyFenceCallback', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #acd92ae986b06129
 import json, re, os, asyncio, io, ast, inspect, warnings, uuid
@@ -590,6 +590,10 @@ class Chat:
             r = yield from self._stream(self.final_prompt, max_output_tokens, cbs)
         return r
 
+    def _recreate_conv(self):
+        "Rebuild whatever conversation state the backend holds from `self.hist`. A no-op for backends that re-send the whole message list every call (llama, remote); mlx drops its KV cache, litert recreates its `Conversation`."
+        pass
+
     def close(self):
         "Release backend resources (overridden per backend)."
         pass
@@ -649,10 +653,6 @@ class ToolLoopMixin:
         else: outs = [self.call_tool(tc) for tc in todo]
         outs = iter(outs)
         for tc, (ok, denial) in zip(tcs, oks): self._record_tool(tc, next(outs) if ok else denial)
-
-    def _recreate_conv(self):
-        "Rebuild backend conversation state from `self.hist`. A no-op for backends that re-send the whole message list on every call (llama, mlx); litert recreates its `Conversation`."
-        pass
 
     def _recover_context(self, err, max_output_tokens=None, keep_last=4, mx=500):
         "Context window full mid-turn: shrink the oldest tool results, rebuild backend state, and ask for a summary rather than raising."
@@ -725,6 +725,64 @@ class ToolLoopMixin:
             yield from run_cbs(self, 'after_response')
             return self.turn_res   # stream's final Resp, captured by SaveReturn / AsyncChat `.value`
         finally: self._streaming = prev; self.remove_cbs(added)
+
+# %% ../nbs/00_core.ipynb #core_window
+def msg_groups(hist):
+    "Split `hist` into atomic groups: an assistant message with `tool_calls` stays with the `tool` results that answer it."
+    groups, cur = [], []
+    for m in hist:
+        if m.get('role') == 'tool':
+            if cur: cur.append(m); continue
+            groups.append([m]); continue           # orphan result (shouldn't happen); keep it whole
+        if cur: groups.append(cur); cur = []
+        if m.get('tool_calls'): cur = [m]
+        else: groups.append([m])
+    if cur: groups.append(cur)
+    return groups
+
+def evict_middle(hist, keep_first=2, keep_last=8):
+    "Drop whole groups from the middle of `hist`, keeping the first and last few. Returns `(new_hist, dropped_msgs)`."
+    groups = msg_groups(hist)
+    if len(groups) <= keep_first + keep_last: return list(hist), []
+    keep = groups[:keep_first] + (groups[-keep_last:] if keep_last else [])
+    drop = groups[keep_first:len(groups) - keep_last] if keep_last else groups[keep_first:]
+    return [m for g in keep for m in g], [m for g in drop for m in g]
+
+_sum_sp = 'Summarize the conversation extract faithfully and briefly. Reply with the summary only.'
+
+class SlidingWindowCallback(ChatCallback):
+    """Evict the middle of `hist` before a turn that would overflow the context window.
+
+    Needs `chat.ctx_limit` to be set - without a limit there is nothing to measure `pct_full` against,
+    and the callback stays out of the way."""
+    order = 5
+    def __init__(self,
+                 threshold=0.9,   # evict once the context is this full
+                 keep_first=2,    # leading groups to anchor (the task, usually)
+                 keep_last=8,     # trailing groups to keep (the live thread)
+                 summarize=False, # spend one model call to replace the dropped middle with a summary
+                 mx=4000          # chars of dropped conversation to feed the summarizer
+                ): store_attr()
+
+    def _summary(self, dropped):
+        "One-line stand-in for the dropped middle, or None if the model can't produce one."
+        convo = '\n'.join(f"{m.get('role','?')}: {resp_text(m)}" for m in dropped)[:self.mx]
+        try: return self.chat._oneshot(f"Summarize this earlier part of a conversation:\n\n{convo}", _sum_sp)
+        except Exception: return None
+
+    def before_send(self):
+        c = self.chat
+        if not getattr(c, 'ctx_limit', None) or c.pct_full < self.threshold: return
+        kept, dropped = evict_middle(c.hist, self.keep_first, self.keep_last)
+        if not dropped: return
+        if self.summarize and (s := self._summary(dropped)):
+            # a user/assistant pair, so message alternation survives the splice
+            kept = (kept[:self.keep_first] +
+                    [{'role': 'user', 'content': f'[Summary of earlier conversation]\n{s}'},
+                     {'role': 'assistant', 'content': 'Understood.'}] + kept[self.keep_first:])
+        c.hist[:] = kept
+        c.evicted = getattr(c, 'evicted', 0) + len(dropped)
+        c._recreate_conv()
 
 # %% ../nbs/00_core.ipynb #core_async
 class AsyncChat(GetAttr):
