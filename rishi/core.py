@@ -64,14 +64,19 @@ setattr(_spc, '__run_python', _rishi_run_python)
 
 # %% ../nbs/00_core.ipynb #142b81b8
 class UsageStats:
-    "Token usage for a chat turn, fed by `conv.token_count` diffs."
-    def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0): store_attr()
+    "Token usage for a chat turn. `cost`/`model` are always present (`cost` is 0 for local inference) so a harness merging local and hosted usage can carry one type instead of two."
+    _sums = ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n', 'cost')
+    def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0, cost=0.0, model=None): store_attr()
     def __add__(self, other):
         if other is None: return self
-        return UsageStats(*[getattr(self, k) + getattr(other, k) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n')])
+        return UsageStats(*[getattr(self, k) + getattr(other, k) for k in self._sums], model=self.model or other.model)
     def __radd__(self, other): return self if other in (None, 0) else self.__add__(other)
     def __repr__(self):
-	    return '|'.join([f'total={self.total_tokens:,}',f'in={self.prompt_tokens:,}',f'out={self.completion_tokens:,}',f'turns={self.n}'])
+        parts = [f'total={self.total_tokens:,}', f'in={self.prompt_tokens:,}',
+                 f'out={self.completion_tokens:,}', f'turns={self.n}']
+        if self.cost: parts.append(f'cost=${self.cost:,.4f}')
+        if self.model: parts.append(f'model={self.model}')
+        return '|'.join(parts)
     def fmt(self):
         "Markdown `<details>` token block."
         if not self.total_tokens: return ''
