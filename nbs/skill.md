@@ -22,13 +22,13 @@ print(resp_text(r))
 
 ## API surface
 
-- `Chat(engine=None, model_id=gemma4_e2b, model_path=None, backend=Backend.CPU(), multimodal=True, cache_dir=None, sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None, think=False, filter_think=True, temp=None, top_k=None, top_p=None, seed=None, sampler_config=None, max_output_tokens=None, cbs=None, default_cbs=True)`.
+- `Chat(model=None, *, runtime=None, model_path=None, engine=None, backend=Backend.CPU(), multimodal=True, cache_dir=None, sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None, think=False, filter_think=True, temp=None, top_k=None, top_p=None, seed=None, sampler_config=None, max_output_tokens=None, cbs=None, default_cbs=True)` — `model` first (a repo id or local path); `Chat` dispatches by `runtime`/model shape and returns a `LitertChat`/`LlamaChat`. Litert-specific kwargs shown; llama adds `quant`, `n_ctx`, `n_gpu_layers`, `mmproj`, `comp_kw`.
 - `chat(msg=None, stream=False, max_output_tokens=None, cbs=None)` runs a turn. `stream=True` returns a generator of markdown chunks. `cbs=` registers callbacks for that turn only.
 - State: `chat.hist` (Python-visible history, print with `chat.print_hist()`), `chat.use` (a `UsageStats`: `total`, `in`, `out`, `turns`), `chat.token_count` (live context size), `chat.pct_full` (that over `ctx_limit`).
 - Chat methods: `run_py(code)`, `classify(text, labels)`, `structured(prompt, schema)`, `check(question, expected, ...)`, `grades(question, expected, actual)`, `count_tokens(text)`, `render(msg)`, `cancel()`, `add_cb`/`add_cbs`/`remove_cb`/`remove_cbs`, `close()`.
 - `Chat.create_engine(...)` is a classmethod that builds the `Engine` (resolves the model, makes `cache_dir`, wires multimodal backends). Patch it or pass `engine=` to override.
-- Module helpers: `resp_text`, `thought`, `display_stream`, `mk_msg`/`mk_content`/`mk_msgs`, `hitl_policy`, `output_matches`, `task_complete`, `bench`, `get_model`. Model ids: `gemma4_e2b`, `gemma4_e4b`, `gemma4_12b`.
-- Callbacks: `HistoryCallback`, `UsageCallback`, `ToolReminderCallback`, `TruncationCallback`, `PyFenceCallback`, and the `ChatCallback` base.
+- Module helpers: `resp_text`, `thought`, `display_stream`, `hitl_policy`, `output_matches`, `task_complete`, `bench`. Model ids: `gemma4_e2b`, `gemma4_e4b`, `gemma4_12b`. The message builders (`mk_msg`/`mk_content`/`mk_msgs`) and model resolver are backend-specific, so reach them per backend as `chat.mk_msg(...)` / `LitertChat.mk_msg` rather than as a bare `from rishi import *` name (both backends define their own, so they aren't re-exported at the top level).
+- Callbacks: `ChatCallback` (base), `PyFenceCallback`, and `TruncationCallback` are public in `rishi.core`. Each backend's default callbacks (history, usage, tool-reminder) are internal and on by default; pass `default_cbs=False` to drop them.
 
 ## Streaming and thinking
 
@@ -92,7 +92,7 @@ chat.check("Name a primary colour.", "red, blue, or yellow", judge=judge).ok  # 
 
 ## Callbacks
 
-Subclass `ChatCallback`, hook `before_send`, `after_response`, `before_tool_calls`, or `after_tool_calls`, and read turn state off the chat (`self.turn_res` is `chat.turn_res`). `order` sets when it runs; keep `HistoryCallback` (records the turn) and `UsageCallback` at the front. Register with `chat.add_cb(MyCb)` or `Chat(cbs=[...])`, run one for a single turn with `chat(msg, cbs=[...])`, and drop one with `chat.remove_cb(MyCb)` (by instance or class). The three defaults are on unless you pass `default_cbs=False`.
+Subclass `ChatCallback`, hook `before_send`, `after_response`, `before_tool_calls`, or `after_tool_calls`, and read turn state off the chat (`self.turn_res` is `chat.turn_res`). `order` sets when it runs; the backend's built-in history and usage callbacks sit at the front (low `order`). Register with `chat.add_cb(MyCb)` or `Chat(cbs=[...])`, run one for a single turn with `chat(msg, cbs=[...])`, and drop one with `chat.remove_cb(MyCb)` (by instance or class). The defaults are on unless you pass `default_cbs=False`.
 
 ## Sharing a model
 
@@ -107,31 +107,31 @@ A Chat that built its own engine frees it on `close()`; a Chat handed an engine 
 
 ## Gotchas
 
-- Model files: a repo can ship both a native `.litertlm` and a `-web` build. The web build has no CPU/GPU decode graph and fails with `TF_LITE_PREFILL_DECODE not found`. `get_model` already prefers the native one.
+- Model files: a repo can ship both a native `.litertlm` and a `-web` build. The web build has no CPU/GPU decode graph and fails with `TF_LITE_PREFILL_DECODE not found`. rishi's model resolver already prefers the native one.
 - GPU needs a writable `cache_dir`. Without it you get `Could not open ... mldrift_weight_cache.bin: No such file or directory`. `create_engine` makes the directory for you when you pass `cache_dir`.
 - The log line `WebGPU sampler not available, falling back to statically linked C API` is harmless. Quiet the noise with `set_min_log_severity(3)`.
 - Tool and structured-output arguments arrive as floats (`21.0`) from the model's JSON. Cast inside the tool if you need strict ints.
 - `run_text_scoring` is not available on this runtime, so `classify` and `check` grade by generation, not log-likelihood scoring.
 
-## One interface for both backends (rishi.auto)
+## One interface for both backends
 
-`rishi.auto.Chat` picks the backend from the model name, fastllm-style, and returns that backend's own `Chat` (a factory, not a wrapper - so callbacks, tools, `hist`, `use` and streaming are exactly as documented per backend). `**kw` passes straight through, so backend-specific arguments still work.
+`Chat` picks the backend from the model name, fastllm-style, and returns that backend's own `Chat` subclass (`LitertChat`/`LlamaChat`) - a real subclass, not a wrapper, so `isinstance(chat, Chat)` holds, `chat.runtime` says which, and callbacks, tools, `hist`, `use` and streaming are exactly as documented per backend. `**kw` passes straight through, so backend-specific arguments (`backend=Backend.GPU()`, `mmproj=`, `n_gpu_layers=`) still work.
 
 ```python
-from rishi.auto import Chat, AsyncChat
+from rishi import Chat, AsyncChat
 
 Chat('litert-community/gemma-4-E2B-it-litert-lm')   # -> litert
 Chat('Qwen/Qwen3-4B-GGUF')                          # -> llama.cpp
 Chat('/models/mine.gguf')                           # local file -> model_path=
-Chat('my-org/private', backend='llama')             # explicit wins
+Chat('my-org/private', runtime='llama')             # explicit wins
 Chat('llama/my-org/private')                        # or prefix the name
 Chat()                                              # nothing to go on -> litert, as before
 achat = AsyncChat('Qwen/Qwen3-4B-GGUF')             # async on either backend
 ```
 
-Resolution order: explicit `backend=`, then a `backend/` prefix (only if it names a known backend, so `litert-community/...` is left alone), then the shape of the id/path (`.litertlm`/`litert-community`/`litert-lm` vs `.gguf`/`GGUF`), then the default (`litert`). A bare name it can't place raises with instructions rather than guessing - there is no alias table, so pass a full hub repo id or path. `resolve_backend`, `split_backend`, `infer_backend` and `get_backend` are exported if you want the decision without building anything.
+Resolution order: explicit `runtime=`, then a `runtime/` prefix (only if it names a known runtime, so `litert-community/...` is left alone), then the shape of the id/path (`.litertlm`/`litert-community`/`litert-lm` vs `.gguf`/`GGUF`), then the default (`litert`). A bare name it can't place raises with instructions rather than guessing - there is no alias table, so pass a full hub repo id or path. `resolve_runtime`, `split_runtime`, `infer_runtime` and `get_runtime` are exported if you want the decision without building anything.
 
-`rishi.Chat` is still the litert class; the dispatcher lives at `rishi.auto.Chat`.
+The selector is `runtime=`, not `backend=` - `backend=` stays free for litert's hardware backend (`Backend.GPU()`), which passes straight through.
 
 ## llama.cpp backend (rishi.llama)
 
@@ -152,7 +152,7 @@ async for c in await achat("Stream it.", stream=True): print(c, end='')
 Differences from the litert backend:
 
 - `Chat(engine=None, model_id=qwen3_17b, model_path=None, quant='Q4_K_M', n_ctx=8192, n_gpu_layers=0, mmproj=None, sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None, max_steps=10, think=None, temp=None, top_k=None, top_p=None, seed=None, max_output_tokens=None, comp_kw=None, cbs=None, default_cbs=True)`. Model ids: `qwen3_06b`, `qwen3_17b`, `qwen3_4b`, `gemma3_1b`, `gemma3_4b`; `quant` picks the `.gguf` file from the repo. `n_gpu_layers=-1` offloads everything to GPU.
-- Images and audio: a multimodal GGUF needs an `mmproj` projector alongside the model. `Chat(model_id=gemma3_4b, mmproj=True)` resolves it from the same repo (cache-first, like `get_model`; `get_mmproj` does it standalone), or pass an explicit path. That builds llama.cpp's `MTMDChatHandler`. Then pass `bytes` or a `Path` in the message list: `chat(['Describe this.', Path('cat.jpg')])`, `chat(['Transcribe this.', Path('clip.wav')])`, or both in one turn (each becomes a media marker in document order).
+- Images and audio: a multimodal GGUF needs an `mmproj` projector alongside the model. `Chat(model_id=gemma3_4b, mmproj=True)` resolves it from the same repo (cache-first, same as the model lookup; `get_mmproj` does it standalone), or pass an explicit path. That builds llama.cpp's `MTMDChatHandler`. Then pass `bytes` or a `Path` in the message list: `chat(['Describe this.', Path('cat.jpg')])`, `chat(['Transcribe this.', Path('clip.wav')])`, or both in one turn (each becomes a media marker in document order).
 - Audio works because rishi `@patch`es `MTMDChatHandler`, which upstream wires for images only: `get_image_urls` also collects `input_audio` parts, `_get_template_messages` maps them to the media marker, `_create_bitmap_from_bytes` routes audio to `mtmd_bitmap_init_from_audio`, and `_init_mtmd_context` stops rejecting audio-only projectors. Images keep the original code path. **Note this makes `MTMDChatHandler.get_image_urls` an instance method** (upstream has it as a `staticmethod`); every call site inside llama-cpp-python is `self.`-bound, so this is safe, but don't call it on the class.
 - `read_audio(o, sr=16000)` decodes WAV to mono float32 at `sr`. **WAV only** - the wheel bundles stb_image but no audio decoder, so mp3/flac raise; convert first.
 - The tool loop runs in Python (litert runs it in-engine): structured `tool_calls` and Hermes/Qwen `<tool_call>` text tags are both parsed, each call goes through `approve` (`hitl_policy` works unchanged), results are fed back as `role='tool'` messages, up to `max_steps` rounds per turn. Tools are python callables (schemas via toolslm) or OpenAI tool-spec dicts.
