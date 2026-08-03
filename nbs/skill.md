@@ -35,6 +35,8 @@ print(resp_text(r))
 - `parallel_tools=True` (llama and mlx; litert raises `NotImplementedError`) runs independent calls from one turn concurrently. Approval stays sequential, so HITL order and budget accounting don't change, and history is identical either way.
 - Context recovery: if the window fills mid-turn, rishi truncates the oldest tool results, rebuilds backend state, and asks for a summary; `ContextWindowExceededError` is raised only if that retry also fails.
 - `chat.use` is a `UsageStats` with `prompt_tokens`, `completion_tokens`, `total_tokens`, `n`, `cached_tokens` (prompt tokens served from a KV/prefix cache - real on mlx, 0 elsewhere), plus `cost`/`model` for merging with hosted-API usage.
+- Streaming has two modes: `chat(msg, stream=True)` yields **markdown strings** (print them, or hand to `display_stream`); `chat(msg, stream='raw')` yields the underlying **chunk dicts** (`{'content': [{'type': 'text', ...}]}`, `{'channels': {'thought': ...}}`, `{'content': [{'type': 'tool_call', ...}]}`) for programmatic consumers that want structure rather than rendered text. Both run the same tool loop.
+- `ToolCall(name, arguments, id=None, server=False)` builds a canonical tool call - a `dict` subclass, so indexing still works, with `.name`/`.arguments`/`.server` accessors. A call with `server=True` is one the *provider* runs; the tool loop records it and never executes it locally. `mk_tool_res_msg(tc, result)` / `mk_tool_res_msgs(tcs, results)` build the `role='tool'` reply messages, if you're driving a loop by hand.
 
 ## Streaming and thinking
 

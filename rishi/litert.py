@@ -285,7 +285,7 @@ class LitertChat(core.Chat):
             for _ in run_cbs(self, 'before_send'): pass
             fmt, chunks = StreamFormatter(), []
             for o in self.conv.send_message_async(self.turn_msg, max_output_tokens=max_output_tokens):
-                chunks.append(o); yield fmt.format_item(o)
+                chunks.append(o); yield self._emit(o, fmt)
             self.turn_res = _merge_chunks(chunks)
             yield from run_cbs(self, 'after_response')
             return self.turn_res   # stream's final Resp, captured by SaveReturn / AsyncChat `.value`

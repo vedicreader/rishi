@@ -37,6 +37,12 @@ that receive tool calls as data (llama today, MLX next):
   shrunk, backend state is rebuilt, and the model is asked to summarize. Only if that retry also
   fails does it raise the new `ContextWindowExceededError`.
 
+**Closing fastllm gaps.** `chat(msg, stream='raw')` yields the underlying chunk dicts instead of
+rendered markdown, for consumers that want the text/thinking/tool-call structure (`stream=True` is
+unchanged). `ToolCall` builds a canonical tool call as a `dict` subclass with `.name`/`.arguments`
+accessors and a `server` flag for provider-run tools, which the loop records but never executes
+locally. `mk_tool_res_msg`/`mk_tool_res_msgs` are exported for driving a tool loop by hand.
+
 **Shared OpenAI-style layer.** The message, tool-schema, think/tool-tag parsing, streaming-split and
 usage/reminder callback helpers moved from `rishi.llama` into `rishi.core`, where MLX can share them.
 They keep their old names in `rishi.llama`, and `rishi.llama`'s public API is unchanged.

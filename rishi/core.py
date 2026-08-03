@@ -11,9 +11,10 @@ __all__ = ['tool_reminder_', 'runtimes', 'dflt_runtime', 'budget_msg_', 'dflt_fi
            'mk_oai_msgs', 'is_media', 'mk_toolspec', 'split_think', 'mk_tag_tc', 'parse_tool_tags', 'parse_args',
            'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback',
            'ToolReminderCallback', 'common_prefix_len', 'split_runtime', 'infer_runtime', 'resolve_runtime',
-           'get_runtime', 'ContextWindowExceededError', 'is_ctx_error', 'Chat', 'ToolLoopMixin', 'AsyncChat',
-           'adisplay_stream', 'hitl_policy', 'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro',
-           'task_complete', 'output_matches', 'PyFenceCallback', 'repo_root', 'mv_skill_md']
+           'get_runtime', 'ToolCall', 'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError',
+           'is_ctx_error', 'Chat', 'ToolLoopMixin', 'AsyncChat', 'adisplay_stream', 'hitl_policy', 'extract_code',
+           'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'task_complete', 'output_matches',
+           'PyFenceCallback', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #acd92ae986b06129
 import json, re, os, asyncio, io, ast, inspect, warnings, uuid
@@ -458,6 +459,35 @@ def _mk_obj(schema, d):
         return schema(**{k: (_mk_obj(hints[k], v) if k in hints else v) for k, v in d.items()})
     return schema(**d)
 
+# %% ../nbs/00_core.ipynb #core_toolcall
+class ToolCall(dict):
+    "One tool call in canonical form. A `dict` subclass, so anything that indexes it keeps working."
+    def __init__(self, name='', arguments=None, id=None, server=False):
+        super().__init__(id=id or f'call_{uuid.uuid4().hex[:8]}', type='function',
+                         function={'name': name, 'arguments': arguments if arguments is not None else {}})
+        if server: self['server'] = True
+    @property
+    def name(self): return self['function'].get('name', '')
+    @property
+    def arguments(self): return self['function'].get('arguments') or {}
+    @property
+    def server(self):
+        "True if the *provider* runs this tool (hosted web search and friends), so we must not."
+        return bool(self.get('server'))
+    def __repr__(self): return f'ToolCall({self.name}, {self.arguments})'
+
+def tc_name(tc):
+    "Name of a tool call, however it was built."
+    return (tc.get('function') or {}).get('name', '')
+
+def mk_tool_res_msg(tc, result):
+    "Canonical `role='tool'` message carrying `result` back for tool call `tc`."
+    return {'role': 'tool', 'tool_call_id': tc.get('id'), 'name': tc_name(tc), 'content': str(result)}
+
+def mk_tool_res_msgs(tcs, results):
+    "Canonical tool-result messages for several calls at once."
+    return [mk_tool_res_msg(tc, r) for tc, r in zip(tcs, results)]
+
 # %% ../nbs/00_core.ipynb #core_budget
 budget_msg_ = 'Tool-call budget exceeded; no more tools will run this turn.'
 dflt_final_prompt_ = ("You've reached the tool-call budget for this turn. Stop calling tools and "
@@ -478,8 +508,13 @@ def is_ctx_error(chat, e):
 
 # %% ../nbs/00_core.ipynb #core_chat
 class Chat:
-    "Backend-agnostic chat: `Chat(model)` dispatches to the litert/llama subclass by `runtime`/model shape."
+    "Backend-agnostic chat: `Chat(model)` dispatches to the litert/llama/mlx subclass by `runtime`/model shape."
     _dflt_cbs = []
+    _stream_raw = False      # `stream='raw'` yields chunk dicts instead of markdown strings
+
+    def _emit(self, o, fmt):
+        "One streamed chunk: the raw dict in raw mode, else `fmt`-rendered markdown (falsy = emit nothing)."
+        return o if self._stream_raw else fmt.format_item(o)
     def __new__(cls, model=None, *, runtime=None, model_path=None, **kw):
         if cls is not Chat: return super().__new__(cls)
         nm, _ = resolve_runtime(model, runtime, model_path)
@@ -526,8 +561,13 @@ class Chat:
         L(cbs).map(self.remove_cb); return self
 
     def __call__(self, msg=None, stream=False, max_output_tokens=None, cbs=None):
-        'Run one chat turn; a `Resp` (or a markdown-chunk generator when `stream=True`). Adds one `final_prompt` round if the tool-call budget ended the turn early.'
+        '''Run one chat turn; a `Resp`, or a generator when `stream` is set.
+
+        `stream=True` yields markdown strings, ready to print or hand to `display_stream`.
+        `stream='raw'` yields the underlying chunk dicts instead, for programmatic consumers that
+        want the text/thinking/tool-call structure rather than rendered markdown.'''
         self.use, self._steps, self._budget_exceeded, self._final_sent = UsageStats(), 0, False, False
+        self._stream_raw = stream == 'raw'
         if stream: return self._stream_turn(msg, max_output_tokens, cbs)
         added = self.add_cbs(cbs)
         try:
@@ -571,7 +611,9 @@ class ToolLoopMixin:
 
     def call_tool(self, tc):
         "Run one approved tool call against `self.ns`; an exception comes back as an error string."
-        try: return call_func(tc['function']['name'], tc['function']['arguments'], ns=self.ns)
+        # a server-side tool is the provider's to run, not ours - record it, never execute it
+        if tc.get('server'): return '(run by the provider)'
+        try: return call_func(tc_name(tc), (tc.get('function') or {}).get('arguments') or {}, ns=self.ns)
         except Exception as e: return f"{type(e).__name__}: {e}"
 
     def _approve1(self, tc):
@@ -589,8 +631,7 @@ class ToolLoopMixin:
         if self.tool_max_len and isinstance(out, str) and len(out) > self.tool_max_len:
             out = out[:self.tool_max_len] + ' ...[truncated]'
         self.turn_tc, self.turn_tool_result = tc, out
-        self.hist.append({'role': 'tool', 'tool_call_id': tc.get('id'),
-                          'name': tc['function'].get('name', ''), 'content': str(out)})
+        self.hist.append(mk_tool_res_msg(tc, out))
         for _ in run_cbs(self, 'after_tool_calls'): pass
 
     def _run_tools(self, res):
@@ -660,19 +701,20 @@ class ToolLoopMixin:
             while True:
                 try:
                     for o in self._stream_step(max_output_tokens):
-                        if (s := fmt.format_item(o)): yield s
+                        if (s := self._emit(o, fmt)): yield s
                 except Exception as e:
                     if not is_ctx_error(self, e): raise
                     res = self._recover_context(e, max_output_tokens)
-                    yield StreamFormatter().format_item(res)
+                    yield self._emit(res, StreamFormatter())
                     us.append(res.get('usage')); break
-                if fmt._inthink: fmt._inthink = False; yield '\n\n'
+                if fmt._inthink and not self._stream_raw: fmt._inthink = False; yield '\n\n'
                 res = self._step_res
                 us.append(res.get('usage'))
                 if not res.get('tool_calls') or self._budget_exceeded: break
                 for tc in res['tool_calls']:
-                    yield fmt.format_item({'content': [{'type': 'tool_call', 'name': tc['function'].get('name', ''),
-                                                        'arguments': tc['function'].get('arguments', {})}]})
+                    o = {'content': [{'type': 'tool_call', 'name': tc_name(tc),
+                                      'arguments': (tc.get('function') or {}).get('arguments', {})}]}
+                    if (s := self._emit(o, fmt)): yield s
                 self._run_tools(res)
                 if self._budget_exceeded: break
             self._finish_turn(res, us)
