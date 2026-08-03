@@ -7,19 +7,24 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 # %% auto #0
 __all__ = ['tool_reminder_', 'runtimes', 'dflt_runtime', 'qa_sp_', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text',
            'thought', 'quote_', 'Resp', 'tc_summary_', 'mk_tr_details', 'StreamFormatter', 'display_stream',
-           'truncated', 'TruncationCallback', 'split_runtime', 'infer_runtime', 'resolve_runtime', 'get_runtime',
-           'Chat', 'AsyncChat', 'adisplay_stream', 'hitl_policy', 'extract_code', 'extract_fence', 'matches_',
-           'mk_result_fence', 'run_coro', 'task_complete', 'output_matches', 'PyFenceCallback', 'repo_root',
-           'mv_skill_md']
+           'truncated', 'TruncationCallback', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs', 'is_media', 'mk_toolspec',
+           'split_think', 'mk_tag_tc', 'parse_tool_tags', 'parse_args', 'norm_resp', 'to_oai_msg', 'sum_usage',
+           'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback', 'ToolReminderCallback', 'split_runtime',
+           'infer_runtime', 'resolve_runtime', 'get_runtime', 'Chat', 'AsyncChat', 'adisplay_stream', 'hitl_policy',
+           'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'task_complete',
+           'output_matches', 'PyFenceCallback', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #acd92ae986b06129
-import json, re, os, asyncio, io, ast, inspect, warnings
+import json, re, os, asyncio, io, ast, inspect, warnings, uuid
 from html import escape
 from mimetypes import guess_type
 from contextlib import ExitStack, redirect_stdout
+from concurrent.futures import ThreadPoolExecutor
+from base64 import b64encode
 from importlib import import_module
 from dataclasses import is_dataclass
 from typing import get_type_hints
+from toolslm.funccall import get_schema, mk_ns, call_func
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
 from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, img_bytes, AttrDict, in_, SaveReturn, asave_iter
 from safepyrun import RunPython
@@ -169,6 +174,217 @@ class TruncationCallback(ChatCallback):
     def __init__(self, max_tokens): store_attr()
     def after_response(self):
         if self.chat.use.completion_tokens >= self.max_tokens: self.chat.turn_res['truncated'] = True
+
+# %% ../nbs/00_core.ipynb #08664b43
+_audio_fmts = {'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3'}
+
+def _audio_fmt(mime):
+    "OpenAI `input_audio` format name for a MIME type."
+    return _audio_fmts.get(mime, mime.split('/')[-1])
+
+def mk_oai_content(o):
+    'Convert `o` to an OpenAI-style content part (text, a base64 `image_url`, or an `input_audio`).'
+    if isinstance(o, dict): return o
+    if isinstance(o, str): return {'type': 'text', 'text': o}
+    if isinstance(o, os.PathLike): o = Path(o).read_bytes()
+    if isinstance(o, bytes):
+        mime = detect_mime(o) or 'application/octet-stream'
+        if mime.startswith('image/'):
+            return {'type': 'image_url', 'image_url': {'url': f"data:{mime};base64,{b64encode(o).decode()}"}}
+        if mime.startswith('audio/'):
+            return {'type': 'input_audio', 'input_audio': {'data': b64encode(o).decode(), 'format': _audio_fmt(mime)}}
+        raise TypeError(f"chat supports text, image, and audio content, got {mime}")
+    raise TypeError(f"Unsupported content type: {type(o)}")
+def mk_oai_msg(content, role='user'):
+    'Create an OpenAI-style message dict from str/bytes/list/dict.'
+    if content is None or isinstance(content, dict): return content
+    parts = [mk_oai_content(o) for o in content] if isinstance(content, list) else [mk_oai_content(content)]
+    if all(p.get('type') == 'text' for p in parts): return {'role': role, 'content': '\n'.join(p['text'] for p in parts)}
+    return {'role': role, 'content': parts}
+
+def mk_oai_msgs(msgs):
+    'Normalize a list of messages to OpenAI-style dicts.'
+    return [mk_oai_msg(m) for m in listify(msgs)] if msgs else []
+def is_media(p):
+    "Is `p` an image or audio content part?"
+    return isinstance(p, dict) and p.get('type') in ('image_url', 'input_audio')
+
+
+# %% ../nbs/00_core.ipynb #de644a6c
+def mk_toolspec(f):
+    'OpenAI-style tool spec for callable `f` (via toolslm `get_schema`); spec dicts pass through.'
+    if isinstance(f, dict): return f
+    sc = get_schema(f, pname='parameters')
+    sc.get('parameters', {}).pop('title', None)   # get_schema adds a stray title for classes/dataclasses
+    return {'type': 'function', 'function': sc}
+
+# %% ../nbs/00_core.ipynb #fa88990b
+_think_re = re.compile(r'<think>(.*?)</think>', re.DOTALL)
+_toolcall_re = re.compile(r'<tool_call>\s*(.*?)\s*</tool_call>', re.DOTALL)
+
+def split_think(text):
+    "Split `<think>...</think>` blocks out of `text`; returns `(clean_text, thought)`."
+    text = text or ''
+    ths = [m.strip() for m in _think_re.findall(text)]
+    text = _think_re.sub('', text)
+    if '<think>' in text:  # unterminated, e.g. cut off at the token cap
+        text, _, rest = text.partition('<think>')
+        ths.append(rest.strip())
+    return text.strip('\n'), '\n'.join(th for th in ths if th)
+
+def mk_tag_tc(s):
+    "Build a tool_call dict from the JSON inside a `<tool_call>` block, or None."
+    try: d = json.loads(s)
+    except (json.JSONDecodeError, TypeError): return None
+    if not isinstance(d, dict) or 'name' not in d: return None
+    return {'id': f"call_{uuid.uuid4().hex[:8]}", 'type': 'function',
+            'function': {'name': d.get('name', ''), 'arguments': d.get('arguments') or {}}}
+
+def parse_tool_tags(text):
+    "Parse Hermes/Qwen-style `<tool_call>{json}</tool_call>` blocks; returns `(clean_text, tool_calls)`."
+    tcs = [tc for m in _toolcall_re.findall(text or '') if (tc := mk_tag_tc(m))]
+    return _toolcall_re.sub('', text or '').strip('\n'), tcs
+
+# %% ../nbs/00_core.ipynb #af678dd6
+def parse_args(a):
+    "Parse OpenAI JSON-string tool arguments to a dict (dicts pass through)."
+    if isinstance(a, dict): return a
+    try: return json.loads(a) if a else {}
+    except json.JSONDecodeError: return {}
+
+def norm_resp(r):
+    "Normalize an OpenAI-style chat completion to a rishi-style `Resp` dict."
+    ch = r['choices'][0]
+    m = ch.get('message') or {}
+    text, th = split_think(m.get('content') or '')
+    text, tag_tcs = parse_tool_tags(text)
+    tcs = [{'id': tc.get('id'), 'type': 'function',
+            'function': {'name': tc.get('function', {}).get('name', ''),
+                         'arguments': parse_args(tc.get('function', {}).get('arguments'))}}
+           for tc in (m.get('tool_calls') or [])] + tag_tcs
+    res = {'role': 'assistant', 'content': text}
+    if th: res['channels'] = {'thought': th}
+    if tcs: res['tool_calls'] = tcs
+    if ch.get('finish_reason') == 'length': res['truncated'] = True
+    if 'usage' in r: res['usage'] = dict(r['usage'])
+    return Resp(res)
+
+def to_oai_msg(m):
+    "Project a history entry to an OpenAI-style wire message: drop rishi-only keys, re-encode tool-call args as JSON."
+    out = {k: m[k] for k in ('role', 'content', 'tool_calls', 'tool_call_id', 'name') if m.get(k) is not None}
+    if 'tool_calls' in out:
+        out['tool_calls'] = [{'id': tc.get('id') or f'call_{i}', 'type': 'function',
+                              'function': {'name': tc['function'].get('name', ''),
+                                           'arguments': a if isinstance((a := tc['function'].get('arguments')), str)
+                                                        else json.dumps(a or {})}}
+                             for i, tc in enumerate(out['tool_calls'])]
+        out.setdefault('content', '')
+    return out
+
+def sum_usage(us):
+    "Sum OpenAI usage dicts (ignoring Nones); None if nothing to sum."
+    us = [u for u in us if u]
+    if not us: return None
+    return {k: sum(u.get(k, 0) for u in us) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens')}
+
+_media_ph = {'image_url': '[image]', 'input_audio': '[audio]'}
+
+def strip_media(m):
+    "Replace media parts with a text placeholder and collapse content to a string, so past-turn media isn't re-encoded."
+    c = m.get('content')
+    if not isinstance(c, list): return m
+    return {**m, 'content': '\n'.join(_media_ph.get(p.get('type'), '[media]') if is_media(p) else p.get('text', '')
+                                      for p in c)}
+
+
+# %% ../nbs/00_core.ipynb #c4059899
+_tags = ('<think>', '</think>', '<tool_call>', '</tool_call>')
+
+class StreamSplit:
+    "Stateful splitter for streamed text: `<think>` -> thought chunks, `<tool_call>` blocks held back and parsed."
+    def __init__(self):
+        self.buf, self.state, self.text, self.thought, self.tool_calls, self._tc_buf, self._strip = '', 'text', '', '', [], '', False
+    def _held(self):
+        "Length of the longest `buf` suffix that could still become a tag."
+        for n in range(min(len(self.buf), max(map(len, _tags)) - 1), 0, -1):
+            if any(t.startswith(self.buf[-n:]) for t in _tags): return n
+        return 0
+    def _emit_text(self, out):
+        if self._strip: out = out.lstrip('\n')
+        if not out: return None
+        self._strip = False; self.text += out
+        return {'content': [{'type': 'text', 'text': out}]}
+    def feed(self, s):
+        "Consume a text delta; yield litert-style chunk dicts."
+        self.buf += s
+        while True:
+            if self.state == 'text':
+                cands = [(k, t, st) for k, t, st in ((self.buf.find('<think>'), '<think>', 'think'),
+                                                     (self.buf.find('<tool_call>'), '<tool_call>', 'tool')) if k >= 0]
+                if not cands:
+                    n = self._held()
+                    out, self.buf = self.buf[:len(self.buf) - n], self.buf[len(self.buf) - n:]
+                    if (c := self._emit_text(out)): yield c
+                    return
+                k, tag, st = min(cands)
+                out, self.buf, self.state = self.buf[:k], self.buf[k + len(tag):], st
+                if (c := self._emit_text(out)): yield c
+            elif self.state == 'think':
+                k = self.buf.find('</think>')
+                if k < 0:
+                    n = self._held()
+                    out, self.buf = self.buf[:len(self.buf) - n], self.buf[len(self.buf) - n:]
+                    if out: self.thought += out; yield {'channels': {'thought': out}}
+                    return
+                out, self.buf, self.state, self._strip = self.buf[:k], self.buf[k + len('</think>'):], 'text', True
+                if out: self.thought += out; yield {'channels': {'thought': out}}
+            else:  # tool
+                k = self.buf.find('</tool_call>')
+                if k < 0:
+                    n = self._held()
+                    self._tc_buf += self.buf[:len(self.buf) - n]; self.buf = self.buf[len(self.buf) - n:]
+                    return
+                self._tc_buf += self.buf[:k]
+                self.buf, self.state, self._strip = self.buf[k + len('</tool_call>'):], 'text', True
+                if (tc := mk_tag_tc(self._tc_buf)): self.tool_calls.append(tc)
+                self._tc_buf = ''
+    def finish(self):
+        "Flush leftovers: unterminated think becomes thought; an unclosed tool block is parsed if possible."
+        s, self.buf = self.buf, ''
+        if self.state == 'think':
+            if s: self.thought += s; yield {'channels': {'thought': s}}
+        elif self.state == 'tool':
+            if (tc := mk_tag_tc(self._tc_buf + s)): self.tool_calls.append(tc)
+            self._tc_buf = ''
+        elif (c := self._emit_text(s)): yield c
+
+def acc_tc(acc, deltas):
+    "Fold streamed OpenAI `tool_calls` deltas into `acc` (a list of partial tool_call dicts)."
+    for d in deltas or []:
+        i = d.get('index', 0)
+        while len(acc) <= i: acc.append({'id': None, 'type': 'function', 'function': {'name': '', 'arguments': ''}})
+        if d.get('id'): acc[i]['id'] = d['id']
+        f = d.get('function') or {}
+        if f.get('name'): acc[i]['function']['name'] += f['name']
+        if f.get('arguments'): acc[i]['function']['arguments'] += f['arguments']
+
+# %% ../nbs/00_core.ipynb #ecdd4161
+class UsageCallback(ChatCallback):
+    "Fold each turn's `usage` block (summed across tool rounds) into `chat.use`."
+    order = 10
+    def after_response(self):
+        u = self.chat.turn_res.get('usage') or {}
+        self.chat.use += UsageStats(u.get('prompt_tokens', 0), u.get('completion_tokens', 0), u.get('total_tokens', 0), 1)
+
+class ToolReminderCallback(ChatCallback):
+    'Inject a tool-summary reminder into the outgoing message when tools are registered.'
+    order = 30
+    def __init__(self, tool_reminder=tool_reminder_): store_attr()
+    def before_send(self):
+        m = self.chat.turn_msg
+        if not self.chat.tools or m is None: return
+        if isinstance(m.get('content'), str): m['content'] += self.tool_reminder
+        elif isinstance(m.get('content'), list): m['content'].append({'type': 'text', 'text': self.tool_reminder})
 
 # %% ../nbs/00_core.ipynb #core_runtime
 runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat')}
