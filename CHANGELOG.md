@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.0.4
+llama cpp support addedadded
+
 ## 0.0.2
 examples added
 
