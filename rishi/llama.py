@@ -191,7 +191,7 @@ class LlamaChat(ToolLoopMixin, Chat):
                  quant='Q4_K_M', n_ctx=8192, n_gpu_layers=0, mmproj=None, eng_kw=None,
                  sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None,
                  max_steps=10, parallel_tools=False, final_prompt=dflt_final_prompt_, think=None,
-                 temp=None, top_k=None, top_p=None, seed=None,
+                 temp=None, top_k=None, top_p=None, seed=None, preserve_cache=False,
                  max_output_tokens=None, comp_kw=None, cbs=None, default_cbs=True):
         model = core.split_runtime(model)[1]
         model_id = None if model is None or core._is_path(model) else model
@@ -204,7 +204,8 @@ class LlamaChat(ToolLoopMixin, Chat):
         self.toolspecs = [mk_toolspec(t) for t in L(tools)]
         self.ns = mk_ns([t for t in L(tools) if callable(t)])
         self._samp = {k:v for k,v in dict(temperature=temp, top_k=top_k, top_p=top_p, seed=seed).items() if v is not None}
-        store_attr('think,max_output_tokens', self)
+        store_attr('think,max_output_tokens,preserve_cache', self)
+        self._cache_dirty = True     # nothing prefilled yet
         self.ctx_limit, self.comp_kw, self._ctx_tokens = ifnone(ctx_limit, engine.n_ctx()), comp_kw or {}, 0
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
                     tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
@@ -220,6 +221,63 @@ class LlamaChat(ToolLoopMixin, Chat):
     def token_count(self):
         "Tokens in the model context after the last turn (prompt + completion)."
         return self._ctx_tokens
+
+    @property
+    def cached_tokens(self):
+        """Prompt tokens llama.cpp's KV cache can reuse on the next call.
+
+        llama.cpp does this itself: `Llama.generate` compares the incoming prompt against the tokens
+        already in the context and evaluates only the divergent tail, so an appended turn reuses the
+        whole conversation. What it can't tell us is *how much* it reused - so rishi tracks the one
+        thing it knows, which is whether it invalidated the prefix itself."""
+        return 0 if self._cache_dirty else getattr(self.engine, 'n_tokens', 0) or 0
+
+    def _recreate_conv(self):
+        "llama re-sends the whole message list, so there is no conversation to rebuild - but a rewritten history (eviction, context recovery) no longer matches the cached prefix."
+        self._cache_dirty = True
+
+    def _note_cache(self, usage, cached):
+        "Record the reuse this turn got, and whether the next turn can expect any."
+        usage = dict(usage or {})
+        usage['cached_tokens'] = min(cached, usage.get('prompt_tokens', 0))
+        # media on this turn becomes an `[image]`/`[audio]` placeholder on the next one, so the
+        # rendered prompt stops being an extension of what the cache holds
+        cont = (self.turn_msg or {}).get('content')
+        self._cache_dirty = bool(isinstance(cont, list) and any(is_media(p) for p in cont))
+        return usage
+
+    def _isolated(self, f):
+        """Run `f` on the shared engine, optionally without losing the conversation's KV cache.
+
+        A `Llama` has one context, so any completion overwrites it: a `classify`/`structured`/`check`
+        call costs the next real turn a full re-prefill. `preserve_cache=True` saves and restores the
+        whole llama state around it instead - a large copy, so it only pays off on big contexts."""
+        if not self.preserve_cache:
+            self._cache_dirty = True
+            return f()
+        st = self.engine.save_state()
+        try: return f()
+        finally: self.engine.load_state(st)
+
+    def save_cache(self, fn):
+        "Persist the llama.cpp context (KV cache plus the tokens it holds) so a later chat can skip re-prefilling it."
+        st = self.engine.save_state()
+        with open(fn, 'wb') as f:
+            np.savez(f, input_ids=st.input_ids, scores=st.scores, n_tokens=st.n_tokens,
+                     seed=st.seed if st.seed is not None else -1,
+                     llama_state=np.frombuffer(st.llama_state, dtype=np.uint8))
+        return self
+
+    def load_cache(self, fn):
+        "Restore a context written by `save_cache` (onto a chat built with the same model)."
+        from llama_cpp.llama import LlamaState
+        with np.load(str(fn)) as d:
+            buf = d['llama_state'].tobytes()
+            st = LlamaState(input_ids=d['input_ids'], scores=d['scores'], n_tokens=int(d['n_tokens']),
+                            llama_state=buf, llama_state_size=len(buf), seed=int(d['seed']))
+        self.engine.load_state(st)
+        self._cache_dirty = False
+        return self
     def count_tokens(self, text):
         "Number of tokens in `text` per the engine tokenizer."
         return len(self.engine.tokenize(text.encode('utf-8'), add_bos=False, special=True))
@@ -239,19 +297,24 @@ class LlamaChat(ToolLoopMixin, Chat):
 
     def _model_step(self, max_output_tokens=None):
         "One completion, normalized to a `Resp` - the single wire call `ToolLoopMixin` drives."
-        return norm_resp(self._step(max_output_tokens))
+        cached = self.cached_tokens          # read before the call: it overwrites the context
+        r = norm_resp(self._step(max_output_tokens))
+        r['usage'] = self._note_cache(r.get('usage'), cached)
+        return r
 
     def _oneshot(self, prompt, sp):
-        "Stateless one-shot completion text."
+        "Stateless one-shot completion text (shares the engine, so see `_isolated` about the KV cache)."
         msgs = ([{'role':'system','content':sp}] if sp else []) + [{'role':'user','content':prompt}]
-        return resp_text(norm_resp(self.engine.create_chat_completion(msgs, **self._samp)))
+        return self._isolated(lambda: resp_text(norm_resp(self.engine.create_chat_completion(msgs, **self._samp))))
     def _structured_call(self, prompt, schema, sp):
         "Grammar-constrained JSON reply; returns the decoded argument dict."
         rf = {'type':'json_object','schema': get_schema(schema)['input_schema']}
         msgs = ([{'role':'system','content':sp}] if sp else []) + [{'role':'user','content':prompt}]
-        return json.loads(resp_text(norm_resp(self.engine.create_chat_completion(msgs, response_format=rf, **self._samp))))
+        return self._isolated(lambda: json.loads(resp_text(norm_resp(
+            self.engine.create_chat_completion(msgs, response_format=rf, **self._samp)))))
     def _stream_step(self, max_output_tokens=None):
         "Stream one completion; yields chunk dicts and leaves the merged `Resp` on `self._step_res`."
+        cached = self.cached_tokens          # read before the call: it overwrites the context
         split, tcs, fin = StreamSplit(), [], None
         for r in self._step(max_output_tokens, stream=True):
             ch = r['choices'][0]
@@ -269,7 +332,8 @@ class LlamaChat(ToolLoopMixin, Chat):
         if fin == 'length': res['truncated'] = True
         out = self.count_tokens(split.text + split.thought) if (split.text or split.thought) else 0
         n = self.engine.n_tokens
-        res['usage'] = {'prompt_tokens': max(n - out, 0), 'completion_tokens': out, 'total_tokens': n}
+        res['usage'] = self._note_cache({'prompt_tokens': max(n - out, 0), 'completion_tokens': out,
+                                         'total_tokens': n}, cached)
         self._step_res = Resp(res)
 
 

@@ -38,6 +38,15 @@ backend that receives tool calls as data (llama, MLX, remote):
   shrunk, backend state is rebuilt, and the model is asked to summarize. Only if that retry also
   fails does it raise the new `ContextWindowExceededError`.
 
+**llama KV-cache visibility and persistence.** llama.cpp already reuses its KV cache across turns
+(`Llama.generate` trims to the longest common prefix), so multi-turn chat never re-prefilled - but
+nothing said so, and several rishi paths silently threw the prefix away. `use.cached_tokens` now
+reports reuse on llama as well as MLX, and is zeroed exactly when rishi invalidates the prefix: a
+one-shot on the shared engine (`classify`/`structured`/`check`, a shared `engine=`, a `judge=` on the
+same engine), a rewritten history (eviction or context recovery), or a turn carrying media. New
+`preserve_cache=True` saves and restores the llama state around one-shots rather than losing it, and
+`save_cache`/`load_cache` persist the context to disk under the same names `rishi.mlx` uses.
+
 **Context-window management.** `SlidingWindowCallback` keeps a long conversation from ever hitting
 the wall: before each turn it checks `pct_full` and, past a threshold, drops whole message groups from
 the middle of `hist` - keeping the earliest turns and the live thread - then has the backend rebuild
