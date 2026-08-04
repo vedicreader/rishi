@@ -18,7 +18,7 @@ classifiers = [
 dependencies = [
     "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",
-    "toolslm>=0.3.0",
+    "toolslm>=0.3.0,<0.3.47",  # 0.3.47 removed `toolslm.funccall`, which core imports at module scope
 ]
 
 # Backends are opt-in: `rishi.core` is backend-agnostic, and a machine that only wants one engine
