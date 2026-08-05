@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.1
+
+
 ## 0.1.0
 
 Two new backends - MLX on Apple silicon and hosted models via fastllm - plus the shared tool loop
