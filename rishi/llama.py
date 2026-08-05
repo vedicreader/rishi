@@ -1,4 +1,4 @@
-"""The same `Chat` API as `rishi.core`, over [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) GGUF models - OpenAI-style message helpers, tool schemas via [toolslm](https://github.com/AnswerDotAI/toolslm), a Python-side tool loop with human-in-the-loop approval, `<think>` channel handling, sync/async streaming, and usage tracking.
+"""The same `Chat` API as `rishi.core`, over [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) GGUF models - OpenAI-style message helpers, tool schemas via `fastcore.funccall`, a Python-side tool loop with human-in-the-loop approval, `<think>` channel handling, sync/async streaming, and usage tracking.
 
 Docs: https://vedicreader.github.io/rishi/llama.html.md"""
 
@@ -14,10 +14,10 @@ __all__ = ['qwen3_06b', 'qwen3_17b', 'qwen3_4b', 'gemma3_1b', 'gemma3_4b', 'qwen
 import json, re, os, io, uuid, ctypes, asyncio
 import numpy as np
 from base64 import b64encode
-from dataclasses import is_dataclass, dataclass
+from dataclasses import is_dataclass, dataclass, fields
 from typing import get_type_hints
 from llama_cpp import Llama
-from toolslm.funccall import get_schema, mk_ns
+from fastcore.funccall import get_schema, mk_ns
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
 from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, AttrDict
 from . import core
@@ -213,6 +213,8 @@ class LlamaChat(ToolLoopMixin, Chat):
 
     def close(self):
         "Release the engine (only if this Chat created it); idempotent."
+        if getattr(self, 'engine', None) is not None and getattr(self.engine, '_rishi_cache_owner', None) is self:
+            self.engine._rishi_cache_owner = None
         if self._own_engine and getattr(self, 'engine', None) is not None:
             if (c := getattr(self.engine, 'close', None)): c()
             self.engine = None
@@ -230,11 +232,13 @@ class LlamaChat(ToolLoopMixin, Chat):
         already in the context and evaluates only the divergent tail, so an appended turn reuses the
         whole conversation. What it can't tell us is *how much* it reused - so rishi tracks the one
         thing it knows, which is whether it invalidated the prefix itself."""
-        return 0 if self._cache_dirty else getattr(self.engine, 'n_tokens', 0) or 0
+        owner = getattr(self.engine, '_rishi_cache_owner', None)
+        return 0 if self._cache_dirty or owner is not self else getattr(self.engine, 'n_tokens', 0) or 0
 
     def _recreate_conv(self):
         "llama re-sends the whole message list, so there is no conversation to rebuild - but a rewritten history (eviction, context recovery) no longer matches the cached prefix."
         self._cache_dirty = True
+        if getattr(self.engine, '_rishi_cache_owner', None) is self: self.engine._rishi_cache_owner = None
 
     def _note_cache(self, usage, cached):
         "Record the reuse this turn got, and whether the next turn can expect any."
@@ -244,6 +248,7 @@ class LlamaChat(ToolLoopMixin, Chat):
         # rendered prompt stops being an extension of what the cache holds
         cont = (self.turn_msg or {}).get('content')
         self._cache_dirty = bool(isinstance(cont, list) and any(is_media(p) for p in cont))
+        self.engine._rishi_cache_owner = None if self._cache_dirty else self
         return usage
 
     def _isolated(self, f):
@@ -254,10 +259,13 @@ class LlamaChat(ToolLoopMixin, Chat):
         whole llama state around it instead - a large copy, so it only pays off on big contexts."""
         if not self.preserve_cache:
             self._cache_dirty = True
+            if getattr(self.engine, '_rishi_cache_owner', None) is self: self.engine._rishi_cache_owner = None
             return f()
-        st = self.engine.save_state()
+        st, owner = self.engine.save_state(), getattr(self.engine, '_rishi_cache_owner', None)
         try: return f()
-        finally: self.engine.load_state(st)
+        finally:
+            self.engine.load_state(st)
+            self.engine._rishi_cache_owner = owner
 
     def save_cache(self, fn):
         "Persist the llama.cpp context (KV cache plus the tokens it holds) so a later chat can skip re-prefilling it."
@@ -277,6 +285,7 @@ class LlamaChat(ToolLoopMixin, Chat):
                             llama_state=buf, llama_state_size=len(buf), seed=int(d['seed']))
         self.engine.load_state(st)
         self._cache_dirty = False
+        self.engine._rishi_cache_owner = self
         return self
     def count_tokens(self, text):
         "Number of tokens in `text` per the engine tokenizer."
@@ -335,13 +344,3 @@ class LlamaChat(ToolLoopMixin, Chat):
         res['usage'] = self._note_cache({'prompt_tokens': max(n - out, 0), 'completion_tokens': out,
                                          'total_tokens': n}, cached)
         self._step_res = Resp(res)
-
-
-# %% ../nbs/01_llama.ipynb #038660da
-def _mk_obj(schema, d):
-    "Build `schema` from json-decoded `d`, rebuilding nested dataclasses; non-dict values pass through."
-    if not isinstance(d, dict): return d
-    if is_dataclass(schema):
-        hints = get_type_hints(schema)
-        return schema(**{k: (_mk_obj(hints[k], v) if k in hints else v) for k, v in d.items()})
-    return schema(**d)

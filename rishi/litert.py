@@ -44,7 +44,7 @@ def _mk_msgs(msgs):
     if not msgs: return []
     return [normalize_message(m if isinstance(m, (Message, dict)) else _mk_msg(m)) for m in listify(msgs)]
 
-# %% ../nbs/02_litert.ipynb #4a2c4afb
+# %% ../nbs/02_litert.ipynb #e2f22e05c7e09016
 def _call_id(): return f"call_{uuid.uuid4().hex[:8]}"
 
 _ph = {'image': '[image]', 'audio': '[audio]'}
@@ -118,7 +118,7 @@ def _to_litert_msg(m):
     return m if isinstance(m, Message) else (_hist2fmt1(m) if isinstance(m, dict) else _mk_msg(m))
 
 
-# %% ../nbs/02_litert.ipynb #172c44f0
+# %% ../nbs/02_litert.ipynb #29afb8197a5161ee
 class _ToolReminderCallback(ChatCallback):
     'Inject a tool-summary reminder into the outgoing message when tools are registered.'
     order = 30
@@ -127,12 +127,14 @@ class _ToolReminderCallback(ChatCallback):
         if self.chat.tools and self.chat.turn_msg is not None: self.chat.turn_msg.contents.contents.append(Text(self.tool_reminder))
 
 
-# %% ../nbs/02_litert.ipynb #a090e557
+# %% ../nbs/02_litert.ipynb #5f80e3d39946d7b
 class _HistoryCallback(ChatCallback):
     'Record the outgoing message and the response into `chat.hist` (canonical form).'
     order = 0
     def before_send(self):
-        if self.chat.turn_msg is not None: self.chat.hist.append(_fmt2hist(self.chat.turn_msg))
+        if self.chat.turn_msg is not None:
+            self.chat.hist.append(_fmt2hist(self.chat.turn_msg))
+            self.chat._turn_msg_recorded = True
     def after_response(self): self.chat.hist.append(_fmt2hist(self.chat.turn_res, 'assistant'))
 
 class _UsageCallback(ChatCallback):
@@ -141,10 +143,12 @@ class _UsageCallback(ChatCallback):
     def after_response(self):
         c = self.chat; delta = c.conv.token_count - c._tc0
         out = len(c.engine.tokenize(resp_text(c.turn_res)))
-        c.use += UsageStats(prompt_tokens=max(delta - out, 0), completion_tokens=out, total_tokens=delta, n=1)
+        new_prompt, cached = max(delta - out, 0), c._tc0
+        c.use += UsageStats(prompt_tokens=cached + new_prompt, completion_tokens=out,
+                            total_tokens=cached + delta, n=1, cached_tokens=cached)
 
 
-# %% ../nbs/02_litert.ipynb #b8dfc247
+# %% ../nbs/02_litert.ipynb #1d26406d13cefa08
 def _tc_name(tc): return tc.get('function', {}).get('name', '')
 
 class ChatToolHandler(ToolEventHandler):
@@ -175,12 +179,12 @@ class ChatToolHandler(ToolEventHandler):
         for _ in run_cbs(self.chat, 'after_tool_calls'): pass
         return tool_response
 
-# %% ../nbs/02_litert.ipynb #f717f851d413e77
+# %% ../nbs/02_litert.ipynb #6aa00146bc49f9c1
 gemma4_e4b='litert-community/gemma-4-E4B-it-litert-lm'
 gemma4_e2b='litert-community/gemma-4-E2B-it-litert-lm'
 gemma4_12b='litert-community/gemma-4-12B-it-litert-lm'
 
-# %% ../nbs/02_litert.ipynb #40fb869354982708
+# %% ../nbs/02_litert.ipynb #335a97782120c273
 def _litertlm(fs):
     "First native `.litertlm` path in `fs` (skips `-web`/other builds)."
     return first(fs, lambda p: p.endswith('.litertlm') and 'web' not in p)
@@ -243,9 +247,12 @@ class LitertChat(core.Chat):
         model_id = None if model is None or core._is_path(model) else model
         model_path = model_path or (model if model and core._is_path(model) else None)
         self._stack, self._conv_stack = ExitStack(), ExitStack()
-        if not engine: engine = self.create_engine(model_id or gemma4_e2b, model_path, backend,
-            multimodal=multimodal, cache_dir=cache_dir, enable_speculative_decoding=enable_speculative_decoding, **(eng_kw or {}))
-        self.engine = self._stack.enter_context(engine)
+        self._own_engine = engine is None
+        if self._own_engine:
+            engine = self.create_engine(model_id or gemma4_e2b, model_path, backend,
+                multimodal=multimodal, cache_dir=cache_dir, enable_speculative_decoding=enable_speculative_decoding, **(eng_kw or {}))
+            self.engine = self._stack.enter_context(engine)
+        else: self.engine = engine
         # the system prompt is kept apart from `hist` and re-applied on every rebuild, so eviction can
         # never drop it - it is the anchor a sliding window is supposed to preserve
         self._sys_pre = [{'role': 'system', 'content': sp}] if sp else []
@@ -282,7 +289,10 @@ class LitertChat(core.Chat):
             raise ContextWindowExceededError(f"context window full and nothing left to evict: {err}") from err
         self.hist[:] = kept
         self.evicted = getattr(self, 'evicted', 0) + len(dropped)
-        self._recreate_conv()
+        # The outgoing message may already be in Python history, but it is about to be
+        # sent again. Do not put that copy in the rebuilt engine preface.
+        prior = self.hist[:-1] if self._turn_msg_recorded else self.hist
+        self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in prior])
         self._tc0 = self.conv.token_count            # the rebuilt cache is a new baseline for usage
         try: return self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens)
         except RuntimeError as e:
@@ -291,6 +301,10 @@ class LitertChat(core.Chat):
 
     @property
     def token_count(self): return self.conv.token_count
+    @property
+    def cached_tokens(self):
+        "Tokens already resident in this conversation's KV cache and reusable by the next turn."
+        return self.conv.token_count
     def cancel(self):
         "Cancel the in-flight generation."
         self.conv.cancel_process()
@@ -303,6 +317,7 @@ class LitertChat(core.Chat):
     def _send(self, msg, max_output_tokens=None):
         'Send one message through the callback pipeline, evicting and retrying once if the context window fills up.'
         self.turn_msg = _mk_msg(msg)
+        self._turn_msg_recorded = False
         for _ in run_cbs(self, 'before_send'): pass
         self._tc0 = self.conv.token_count      # after the callbacks: one of them may have rebuilt `conv`
         try: r = self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens)
@@ -339,9 +354,11 @@ class LitertChat(core.Chat):
         try: return json.loads(extract_fence(resp_text(r), 'json'))
         except (json.JSONDecodeError, TypeError) as e: raise ValueError(f"model neither called the tool nor returned JSON; reply: {resp_text(r)[:200]!r}") from e
     def close(self):
-        "Release the conversation, then the engine (idempotent, and in that order)."
+        "Release this chat's conversation and, only when owned, its engine (idempotent)."
         if getattr(self, '_conv_stack', None) is not None: self._conv_stack.close(); self._conv_stack = None
-        if getattr(self, '_stack', None) is not None: self._stack.close(); self._stack = None
+        if getattr(self, '_own_engine', False) and getattr(self, '_stack', None) is not None:
+            self._stack.close()
+        self._stack = None
         self.conv = None
 
 # %% ../nbs/02_litert.ipynb #bea63711

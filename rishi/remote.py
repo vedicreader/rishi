@@ -14,8 +14,8 @@ import json, os, asyncio
 from base64 import b64encode
 from fastllm.acomplete import acomplete
 from fastllm.types import Completion, Usage
-from aidialog.msg_parts import Msg, Part, PartType, ToolCall as FastToolCall, data_url
-from toolslm.funccall import mk_ns
+from aidialog.msg_parts import Msg, Part, PartType, data_url
+from fastcore.funccall import mk_ns
 from fastcore.all import Path, store_attr, patch, L, ifnone, first, listify
 from . import core
 from .core import *
@@ -134,7 +134,7 @@ class RemoteChat(ToolLoopMixin, Chat):
                  final_prompt=dflt_final_prompt_, tool_choice=None, reasoning_effort=None,
                  temp=None, max_output_tokens=4096, retries=2, comp_kw=None, cbs=None, default_cbs=True):
         model = core.split_runtime(model)[1]
-        self.model_id = model or 'claude-sonnet-4-5'
+        self.model_id = model or 'gpt-5.1'
         self.toolspecs = [mk_toolspec(t) for t in L(tools)]
         self.ns = mk_ns([t for t in L(tools) if callable(t)])
         store_attr('api_key,base_url,vendor_name,api_name,tool_choice,reasoning_effort,temp,'

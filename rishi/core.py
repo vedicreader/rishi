@@ -13,25 +13,28 @@ __all__ = ['tool_reminder_', 'runtimes', 'dflt_runtime', 'budget_msg_', 'dflt_fi
            'ToolReminderCallback', 'common_prefix_len', 'split_runtime', 'infer_runtime', 'resolve_runtime',
            'get_runtime', 'ToolCall', 'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError',
            'is_ctx_error', 'Chat', 'ToolLoopMixin', 'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'AsyncChat',
-           'adisplay_stream', 'hitl_policy', 'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro',
-           'sync_iter', 'task_complete', 'output_matches', 'PyFenceCallback', 'repo_root', 'mv_skill_md']
+           'adisplay_stream', 'browser_approval', 'hitl_policy', 'extract_code', 'extract_fence', 'matches_',
+           'mk_result_fence', 'run_coro', 'sync_iter', 'task_complete', 'output_matches', 'PyFenceCallback',
+           'repo_root', 'mv_skill_md']
 
-# %% ../nbs/00_core.ipynb #acd92ae986b06129
+# %% ../nbs/00_core.ipynb #655b2174ec1d6506
 import json, re, os, asyncio, io, ast, inspect, warnings, uuid
 from html import escape
+from urllib.request import Request, urlopen
 from mimetypes import guess_type
 from contextlib import ExitStack, redirect_stdout
 from concurrent.futures import ThreadPoolExecutor
 from base64 import b64encode
 from importlib import import_module
-from dataclasses import is_dataclass
+from dataclasses import is_dataclass, fields
 from typing import get_type_hints
-from toolslm.funccall import get_schema, mk_ns, call_func
+from fastcore.funccall import get_schema, mk_ns, call_func
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
-from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, img_bytes, AttrDict, in_, SaveReturn, asave_iter
+from fastcore.all import (Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, img_bytes, AttrDict,
+                          in_, SaveReturn, asave_iter)
 from safepyrun import RunPython
 
-# %% ../nbs/00_core.ipynb #a0ee5e44
+# %% ../nbs/00_core.ipynb #9e87cd4881e6b7e2
 # safepyrun (<=0.2.6) execs a fence with separate globals/locals, so a function or class defined
 # in the fence can't see module-level names bound in the same run - `import math` then a `def` that
 # calls `math.sqrt` raises `NameError: name 'math' is not defined`. Run everything in one namespace
@@ -63,19 +66,17 @@ async def _rishi_run_python(code, g=None, ok_dests=None):
 
 setattr(_spc, '__run_python', _rishi_run_python)
 
-# %% ../nbs/00_core.ipynb #142b81b8
+# %% ../nbs/00_core.ipynb #3788433c1dae9bd1
 class UsageStats:
     "Token usage for a chat turn. `cached_tokens` is the part of the prompt served from a KV/prefix cache. `cost`/`model` are always present (`cost` is 0 for local inference) so a harness merging local and hosted usage can carry one type instead of two."
     _sums = ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n', 'cached_tokens', 'cost')
-    def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0, cached_tokens=0,
-                 cost=0.0, model=None): store_attr()
+    def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0, cached_tokens=0, cost=0.0, model=None): store_attr()
     def __add__(self, other):
         if other is None: return self
         return UsageStats(*[getattr(self, k) + getattr(other, k) for k in self._sums], model=self.model or other.model)
     def __radd__(self, other): return self if other in (None, 0) else self.__add__(other)
     def __repr__(self):
-        parts = [f'total={self.total_tokens:,}', f'in={self.prompt_tokens:,}',
-                 f'out={self.completion_tokens:,}', f'turns={self.n}']
+        parts = [f'total={self.total_tokens:,}', f'in={self.prompt_tokens:,}', f'out={self.completion_tokens:,}', f'turns={self.n}']
         if self.cached_tokens: parts.append(f'cached={self.cached_tokens:,}')
         if self.cost: parts.append(f'cost=${self.cost:,.4f}')
         if self.model: parts.append(f'model={self.model}')
@@ -85,7 +86,7 @@ class UsageStats:
         if not self.total_tokens: return ''
         return f"\n\n<details><summary>{self.total_tokens:,} tokens</summary>\n\n`{self!r}`\n\n</details>\n"
 
-# %% ../nbs/00_core.ipynb #99646223
+# %% ../nbs/00_core.ipynb #6903dd339674673f
 class ChatCallback(GetAttr):
     "Base chat callback; reads chat state via `GetAttr` (`self.turn_msg` -> `chat.turn_msg`)."
     order, _default, chat, run = 0, 'chat', None, True
@@ -98,7 +99,7 @@ def run_cbs(chat, event):
             r = getattr(cb, event)()
             if r is not None: yield from r
 
-# %% ../nbs/00_core.ipynb #e7d000a9
+# %% ../nbs/00_core.ipynb #9b819914a474283b
 def resp_text(resp):
     "Join text parts of a litert response/chunk dict."
     c = resp.get('content', []) if isinstance(resp, dict) else ''
@@ -169,10 +170,10 @@ def display_stream(chunks):
         if h is not None: h.update(Markdown(md))
     return md
 
-# %% ../nbs/00_core.ipynb #172c44f0
+# %% ../nbs/00_core.ipynb #1c08c6ca9fb30490
 tool_reminder_ = ('\n<system-reminder>After every tool call result, briefly summarise in prose what you found before continuing or calling another tool.</system-reminder>')
 
-# %% ../nbs/00_core.ipynb #a090e557
+# %% ../nbs/00_core.ipynb #41b4bd7cdb3a56c6
 def truncated(resp):
     "Whether `resp` was flagged as cut off at the token cap."
     return bool(resp.get('truncated')) if isinstance(resp, dict) else False
@@ -184,7 +185,7 @@ class TruncationCallback(ChatCallback):
     def after_response(self):
         if self.chat.use.completion_tokens >= self.max_tokens: self.chat.turn_res['truncated'] = True
 
-# %% ../nbs/00_core.ipynb #08664b43
+# %% ../nbs/00_core.ipynb #f02c8e2c277593eb
 _audio_fmts = {'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3'}
 
 def _audio_fmt(mime):
@@ -219,15 +220,15 @@ def is_media(p):
     return isinstance(p, dict) and p.get('type') in ('image_url', 'input_audio')
 
 
-# %% ../nbs/00_core.ipynb #de644a6c
+# %% ../nbs/00_core.ipynb #3f2b3d4940ad273f
 def mk_toolspec(f):
-    'OpenAI-style tool spec for callable `f` (via toolslm `get_schema`); spec dicts pass through.'
+    'OpenAI-style tool spec for callable `f` (via `fastcore.funccall.get_schema`); spec dicts pass through.'
     if isinstance(f, dict): return f
     sc = get_schema(f, pname='parameters')
     sc.get('parameters', {}).pop('title', None)   # get_schema adds a stray title for classes/dataclasses
     return {'type': 'function', 'function': sc}
 
-# %% ../nbs/00_core.ipynb #fa88990b
+# %% ../nbs/00_core.ipynb #57fc2e6362be9ca1
 _think_re = re.compile(r'<think>(.*?)</think>', re.DOTALL)
 _toolcall_re = re.compile(r'<tool_call>\s*(.*?)\s*</tool_call>', re.DOTALL)
 
@@ -254,7 +255,7 @@ def parse_tool_tags(text):
     tcs = [tc for m in _toolcall_re.findall(text or '') if (tc := mk_tag_tc(m))]
     return _toolcall_re.sub('', text or '').strip('\n'), tcs
 
-# %% ../nbs/00_core.ipynb #af678dd6
+# %% ../nbs/00_core.ipynb #1a1bd3f698b5e98e
 def parse_args(a):
     "Parse OpenAI JSON-string tool arguments to a dict (dicts pass through)."
     if isinstance(a, dict): return a
@@ -308,7 +309,7 @@ def strip_media(m):
                                       for p in c)}
 
 
-# %% ../nbs/00_core.ipynb #c4059899
+# %% ../nbs/00_core.ipynb #8543932c7569294c
 _tags = ('<think>', '</think>', '<tool_call>', '</tool_call>')
 
 class StreamSplit:
@@ -379,7 +380,7 @@ def acc_tc(acc, deltas):
         if f.get('name'): acc[i]['function']['name'] += f['name']
         if f.get('arguments'): acc[i]['function']['arguments'] += f['arguments']
 
-# %% ../nbs/00_core.ipynb #ecdd4161
+# %% ../nbs/00_core.ipynb #717da0aa4c7f4e74
 class UsageCallback(ChatCallback):
     "Fold each turn's `usage` block (summed across tool rounds) into `chat.use`."
     order = 10
@@ -398,7 +399,7 @@ class ToolReminderCallback(ChatCallback):
         if isinstance(m.get('content'), str): m['content'] += self.tool_reminder
         elif isinstance(m.get('content'), list): m['content'].append({'type': 'text', 'text': self.tool_reminder})
 
-# %% ../nbs/00_core.ipynb #core_prefix
+# %% ../nbs/00_core.ipynb #99a0fa1c3cda8026
 def common_prefix_len(a, b):
     "Length of the longest common prefix of sequences `a` and `b`."
     n = 0
@@ -407,7 +408,7 @@ def common_prefix_len(a, b):
         n += 1
     return n
 
-# %% ../nbs/00_core.ipynb #core_runtime
+# %% ../nbs/00_core.ipynb #2e94a7d34fc04994
 runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat'),
             'mlx': ('rishi.mlx','MlxChat'), 'remote': ('rishi.remote','RemoteChat')}
 dflt_runtime = 'litert'
@@ -460,10 +461,11 @@ def _mk_obj(schema, d):
     if not isinstance(d, dict): return d
     if is_dataclass(schema):
         hints = get_type_hints(schema)
-        return schema(**{k: (_mk_obj(hints[k], v) if k in hints else v) for k, v in d.items()})
+        names = {f.name for f in fields(schema) if f.init}
+        return schema(**{k: (_mk_obj(hints[k], v) if k in hints else v) for k, v in d.items() if k in names})
     return schema(**d)
 
-# %% ../nbs/00_core.ipynb #core_toolcall
+# %% ../nbs/00_core.ipynb #6c3276481c342ac
 class ToolCall(dict):
     "One tool call in canonical form. A `dict` subclass, so anything that indexes it keeps working."
     def __init__(self, name='', arguments=None, id=None, server=False):
@@ -492,7 +494,7 @@ def mk_tool_res_msgs(tcs, results):
     "Canonical tool-result messages for several calls at once."
     return [mk_tool_res_msg(tc, r) for tc, r in zip(tcs, results)]
 
-# %% ../nbs/00_core.ipynb #core_budget
+# %% ../nbs/00_core.ipynb #11c2627de6f9c1d8
 budget_msg_ = 'Tool-call budget exceeded; no more tools will run this turn.'
 dflt_final_prompt_ = ("You've reached the tool-call budget for this turn. Stop calling tools and "
                       "answer with what you already have.")
@@ -510,7 +512,7 @@ def is_ctx_error(chat, e):
     try: return bool(chat.ctx_limit) and chat.pct_full >= 1
     except Exception: return False
 
-# %% ../nbs/00_core.ipynb #core_chat
+# %% ../nbs/00_core.ipynb #7757316ddbeb90fa
 class Chat:
     "Backend-agnostic chat: `Chat(model)` dispatches to the litert/llama/mlx subclass by `runtime`/model shape."
     _dflt_cbs = []
@@ -607,7 +609,7 @@ class Chat:
         try: from IPython.display import Markdown, display; display(Markdown(md))
         except Exception: print(md)
 
-# %% ../nbs/00_core.ipynb #core_toolloop
+# %% ../nbs/00_core.ipynb #8bc4370e76e1985e
 class ToolLoopMixin:
     """The Python-side tool loop, for backends that get tool calls back as data (llama, mlx).
 
@@ -665,7 +667,7 @@ class ToolLoopMixin:
         self._recreate_conv()
         self.hist.append(mk_oai_msg(self.final_prompt))
         try: return self._model_step(max_output_tokens)
-        except Exception as e:
+        except Exception:
             raise ContextWindowExceededError(f"could not recover after truncating tool results: {err}") from err
 
     def _finish_turn(self, res, us):
@@ -726,7 +728,7 @@ class ToolLoopMixin:
             return self.turn_res   # stream's final Resp, captured by SaveReturn / AsyncChat `.value`
         finally: self._streaming = prev; self.remove_cbs(added)
 
-# %% ../nbs/00_core.ipynb #core_window
+# %% ../nbs/00_core.ipynb #71eab7d9589c570c
 def msg_groups(hist):
     "Split `hist` into atomic groups: an assistant message with `tool_calls` stays with the `tool` results that answer it."
     groups, cur = [], []
@@ -784,7 +786,7 @@ class SlidingWindowCallback(ChatCallback):
         c.evicted = getattr(c, 'evicted', 0) + len(dropped)
         c._recreate_conv()
 
-# %% ../nbs/00_core.ipynb #core_async
+# %% ../nbs/00_core.ipynb #f0b4a3ddc90fc502
 class AsyncChat(GetAttr):
     "Async twin of `Chat` for either backend; blocking calls run in a worker thread."
     _default = 'chat'
@@ -815,20 +817,34 @@ async def adisplay_stream(chunks):
         if h is not None: h.update(Markdown(md))
     return md
 
-# %% ../nbs/00_core.ipynb #eb2eebb0
+# %% ../nbs/00_core.ipynb #88e48ab286521824
 def _ask_console(tc):
     'Console y/N approval prompt for a tool call.'
     a = tc['function'].get('arguments', {})
     return input(f"Authorize {tc['function']['name']}({a})? [y/N] ").strip().lower() in ('y', 'yes')
 
-def hitl_policy(modes, ask=_ask_console):
-    'Build an `approve(tool_call)` from per-tool modes: \'approved\' | \'check\' | \'dont_run\'.'
+def browser_approval(url=None, timeout=300):
+    "An approval callback that asks through a running Leela web IDE."
+    endpoint = (url or os.environ.get('LEELA_URL') or 'http://127.0.0.1:5001').rstrip('/') + '/agent/approval/request'
+    def ask(tc):
+        body = json.dumps({'tool_call': tc, 'timeout': timeout}).encode()
+        req = Request(endpoint, data=body, headers={'Content-Type': 'application/json'}, method='POST')
+        try:
+            with urlopen(req, timeout=timeout + 5) as res: reply = json.load(res)
+        except Exception as e:
+            raise RuntimeError(f'Leela browser approval failed at {endpoint}: {e}') from e
+        return bool(reply.get('answer', {}).get('answer'))
+    return ask
+
+def hitl_policy(modes, ask=None, browser=False):
+    'Build an `approve(tool_call)` from per-tool modes; optionally ask in the Leela browser.'
+    ask = browser_approval(browser if isinstance(browser, str) else None) if browser else (ask or _ask_console)
     def approve(tc):
         mode = modes.get(tc['function']['name'], 'check') if modes else 'check'
         return True if mode == 'approved' else False if mode == 'dont_run' else ask(tc)
     return approve
 
-# %% ../nbs/00_core.ipynb #e7c554d7
+# %% ../nbs/00_core.ipynb #34fd85ba0d9cbe51
 _pyfence_re = re.compile(r'^```(?:python|py)[ \t]*\n(.*?)\n```', re.DOTALL | re.MULTILINE)
 
 def extract_code(text):
@@ -944,7 +960,7 @@ class PyFenceCallback(ChatCallback):
             yield from self.chat._stream(rf)
         finally: self._depth -= 1
 
-# %% ../nbs/00_core.ipynb #bea63711
+# %% ../nbs/00_core.ipynb #8321aba616e651d1
 @patch
 def classify(self:Chat, text, labels, sp='Reply with only the single best label and nothing else.'):
     "One-shot label for `text`, run stateless (isolated from the conversation)."
@@ -956,7 +972,7 @@ def structured(self:Chat, prompt, schema, sp='Reply with only a JSON object matc
     "One-shot structured output; returns `schema(...)`, rebuilding nested dataclasses."
     return _mk_obj(schema, self._structured_call(prompt, schema, sp))
 
-# %% ../nbs/00_core.ipynb #gradeqacode
+# %% ../nbs/00_core.ipynb #b7e7d57fc1af5337
 qa_sp_ = "Answer the question, then put your final answer inside a ```answer fence."
 
 @patch
@@ -973,7 +989,7 @@ def check(self:Chat, question, expected, grade_fn=matches_, llm_judge=False, jud
     ok = (judge or self).grades(question, expected, a) if (llm_judge or judge) else grade_fn(a, expected)
     return AttrDict(question=question, expected=expected, answer=a, ok=ok)
 
-# %% ../nbs/00_core.ipynb #installskillcode
+# %% ../nbs/00_core.ipynb #ec73015d6da67033
 def repo_root() -> Path:
     'Root of the current git repository, or None if not in one.'
     return first((Path.cwd(), *Path.cwd().parents), lambda p: (p/'.git').exists())
