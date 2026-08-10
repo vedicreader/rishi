@@ -114,7 +114,7 @@ def norm_completion(comp):
 class RemoteChat(ToolLoopMixin, Chat):
     "Chat against a hosted model through fastllm - the same `rishi.core.Chat` API as the local backends."
     _runtime = 'remote'
-    _dflt_cbs = [UsageCallback, ToolReminderCallback]
+    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(mk_oai_content), staticmethod(mk_oai_msg), staticmethod(mk_oai_msgs)
 
     @staticmethod
@@ -131,7 +131,7 @@ class RemoteChat(ToolLoopMixin, Chat):
     def __init__(self, model=None, *, runtime=None, model_path=None, api_key=None, base_url=None,
                  vendor_name=None, api_name=None, sp='', messages=None, tools=None, ctx_limit=None,
                  approve=None, tool_max_len=None, max_steps=10, parallel_tools=False,
-                 final_prompt=dflt_final_prompt_, tool_choice=None, reasoning_effort=None,
+                 max_parallel_tools=None, final_prompt=dflt_final_prompt_, tool_choice=None, reasoning_effort=None,
                  temp=None, max_output_tokens=4096, retries=2, comp_kw=None, cbs=None, default_cbs=True):
         model = core.split_runtime(model)[1]
         self.model_id = model or 'gpt-5.1'
@@ -143,7 +143,7 @@ class RemoteChat(ToolLoopMixin, Chat):
         self.ctx_limit = ctx_limit
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
                     tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
-                    final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
+                    max_parallel_tools=max_parallel_tools, final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
 
     @property
     def token_count(self):

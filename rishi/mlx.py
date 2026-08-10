@@ -89,7 +89,7 @@ class MlxEngine:
 class MlxChat(ToolLoopMixin, Chat):
     "Sync chat over a local MLX model - the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
     _runtime = 'mlx'
-    _dflt_cbs = [UsageCallback, ToolReminderCallback]
+    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     _media_ok = False    # text-only; `MlxVlmChat` flips this
     mk_content, mk_msg, mk_msgs = staticmethod(mk_oai_content), staticmethod(mk_oai_msg), staticmethod(mk_oai_msgs)
 
@@ -121,7 +121,7 @@ class MlxChat(ToolLoopMixin, Chat):
     def __init__(self, model=None, *, runtime=None, model_path=None, vlm=None, engine=None,
                  adapter_path=None, draft_model=None, eng_kw=None,
                  sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None,
-                 max_steps=10, parallel_tools=False, final_prompt=dflt_final_prompt_,
+                 max_steps=10, parallel_tools=False, max_parallel_tools=None, final_prompt=dflt_final_prompt_,
                  think=None, temp=None, top_k=None, top_p=None, min_p=None, seed=None,
                  max_output_tokens=1024, prompt_cache=True, max_kv_size=None, kv_bits=None,
                  kv_group_size=64, quantized_kv_start=0, tmpl_kw=None, gen_kw=None,
@@ -146,7 +146,7 @@ class MlxChat(ToolLoopMixin, Chat):
         if prompt_cache: self._reset_cache()
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
                     tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
-                    final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
+                    max_parallel_tools=max_parallel_tools, final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
 
     @property
     def tokenizer(self): return self.engine.tokenizer

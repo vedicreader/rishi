@@ -29,7 +29,6 @@ from importlib import import_module
 from dataclasses import is_dataclass, fields
 from typing import get_type_hints
 from fastcore.funccall import get_schema, mk_ns, call_func
-from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
 from fastcore.all import (Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, img_bytes, AttrDict,
                           in_, SaveReturn, asave_iter)
 from safepyrun import RunPython
@@ -534,12 +533,14 @@ class Chat:
         return self.mk_msgs(msgs)
 
     def _setup(self, model=None, sp='', messages=None, tools=None, approve=None, tool_max_len=None,
-               max_steps=10, parallel_tools=False, final_prompt=dflt_final_prompt_, cbs=None, default_cbs=True):
+               max_steps=10, parallel_tools=False, max_parallel_tools=None, final_prompt=dflt_final_prompt_, cbs=None, default_cbs=True):
         "Shared init tail: strip runtime prefix, store shared fields, build canonical history, register callbacks."
         _, model = split_runtime(model)
+        if max_parallel_tools is not None and max_parallel_tools < 1:
+            raise ValueError('max_parallel_tools must be at least 1')
         self.tools = L(tools)
         self.hist = self.fmt2hist(messages)
-        store_attr('sp,approve,tool_max_len,max_steps,parallel_tools,final_prompt', self)
+        store_attr('sp,approve,tool_max_len,max_steps,parallel_tools,max_parallel_tools,final_prompt', self)
         self.use, self.cbs, self.turn_msg, self.turn_res = UsageStats(), L(), None, None
         self._steps, self._budget_exceeded, self._final_sent = 0, False, False
         if default_cbs: self.add_cbs(self._dflt_cbs)
@@ -571,7 +572,10 @@ class Chat:
 
         `stream=True` yields markdown strings, ready to print or hand to `display_stream`.
         `stream='raw'` yields the underlying chunk dicts instead, for programmatic consumers that
-        want the text/thinking/tool-call structure rather than rendered markdown.'''
+        want the text/thinking/tool-call structure rather than rendered markdown.
+
+        One `Chat` is one conversation: `hist`, the turn state and the backend cache are all shared
+        mutable state, so a single instance is not safe to drive from two threads at once.'''
         self.use, self._steps, self._budget_exceeded, self._final_sent = UsageStats(), 0, False, False
         self._stream_raw = stream == 'raw'
         if stream: return self._stream_turn(msg, max_output_tokens, cbs)
@@ -595,6 +599,10 @@ class Chat:
     def _recreate_conv(self):
         "Rebuild whatever conversation state the backend holds from `self.hist`. A no-op for backends that re-send the whole message list every call (llama, remote); mlx drops its KV cache, litert recreates its `Conversation`."
         pass
+
+    def recover_context(self, error, max_output_tokens=None):
+        "Backend contract for recovering from a full context window; backends override this."
+        raise ContextWindowExceededError(f'context recovery is not implemented for {type(self).__name__}') from error
 
     def close(self):
         "Release backend resources (overridden per backend)."
@@ -645,18 +653,22 @@ class ToolLoopMixin:
         for _ in run_cbs(self, 'after_tool_calls'): pass
 
     def _run_tools(self, res):
-        "Record `res`, approve its calls in order, run the approved ones, then record results in call order."
+        """Approve calls sequentially, then optionally run an explicitly safe subset in parallel."""
         self.hist.append(res)
         tcs = res.get('tool_calls') or []
-        oks = [self._approve1(tc) for tc in tcs]     # sequential: HITL stays ordered, budget counts each call once
+        oks = [self._approve1(tc) for tc in tcs]
         todo = [tc for tc, (ok, _) in zip(tcs, oks) if ok]
-        if self.parallel_tools and len(todo) > 1:
-            with ThreadPoolExecutor(max_workers=len(todo)) as ex: outs = list(ex.map(self.call_tool, todo))
+        allowed = self.parallel_tools
+        if not isinstance(allowed, bool): allowed = set(allowed or ())
+        can_parallel = len(todo) > 1 and bool(allowed) and all(allowed is True or tc_name(tc) in allowed for tc in todo)
+        if can_parallel:
+            n = min(len(todo), self.max_parallel_tools if self.max_parallel_tools is not None else len(todo))
+            with ThreadPoolExecutor(max_workers=n, thread_name_prefix='rishi-tool') as ex: outs = list(ex.map(self.call_tool, todo))
         else: outs = [self.call_tool(tc) for tc in todo]
         outs = iter(outs)
         for tc, (ok, denial) in zip(tcs, oks): self._record_tool(tc, next(outs) if ok else denial)
 
-    def _recover_context(self, err, max_output_tokens=None, keep_last=4, mx=500):
+    def recover_context(self, err, max_output_tokens=None, keep_last=4, mx=500):
         "Context window full mid-turn: shrink the oldest tool results, rebuild backend state, and ask for a summary rather than raising."
         idxs = [i for i, m in enumerate(self.hist) if m.get('role') == 'tool']
         for i in (idxs[:-keep_last] if keep_last else idxs):
@@ -687,7 +699,7 @@ class ToolLoopMixin:
             try: res = self._model_step(max_output_tokens)
             except Exception as e:
                 if not is_ctx_error(self, e): raise
-                res = self._recover_context(e, max_output_tokens)
+                res = self.recover_context(e, max_output_tokens)
             us.append(res.get('usage'))
             if not res.get('tool_calls') or self._budget_exceeded: break
             self._run_tools(res)
@@ -710,7 +722,7 @@ class ToolLoopMixin:
                         if (s := self._emit(o, fmt)): yield s
                 except Exception as e:
                     if not is_ctx_error(self, e): raise
-                    res = self._recover_context(e, max_output_tokens)
+                    res = self.recover_context(e, max_output_tokens)
                     yield self._emit(res, StreamFormatter())
                     us.append(res.get('usage')); break
                 if fmt._inthink and not self._stream_raw: fmt._inthink = False; yield '\n\n'

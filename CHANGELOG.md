@@ -2,8 +2,11 @@
 
 <!-- do not remove -->
 
-## 0.1.1
+## 0.1.2
+release
 
+## 0.1.1
+backends are split in pyproject. new ScalingWindowCallbck to autocompress. RLock and max parallel tool calls
 
 ## 0.1.0
 

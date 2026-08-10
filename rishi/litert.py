@@ -209,7 +209,7 @@ def _merge_chunks(chunks):
     if th: r['channels'] = {'thought': th}
     return Resp(r)
 
-_dflt_cbs = [_HistoryCallback, _UsageCallback, _ToolReminderCallback]
+_dflt_cbs = [_HistoryCallback, _UsageCallback, _ToolReminderCallback, SlidingWindowCallback]
 
 class LitertChat(core.Chat):
     "Sync chat over a local litert_lm engine."
@@ -237,7 +237,7 @@ class LitertChat(core.Chat):
     def __init__(self, model=None, *, runtime=None, model_path=None, engine=None, backend=Backend.CPU(),
                  multimodal=True, cache_dir=None, enable_speculative_decoding=None, eng_kw=None,
                  sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None,
-                 max_steps=10, final_prompt=dflt_final_prompt_, parallel_tools=False,
+                 max_steps=10, final_prompt=dflt_final_prompt_, parallel_tools=False, max_parallel_tools=None,
                  think=False, filter_think=True, temp=None, top_k=None, top_p=None,
                  seed=None, sampler_config=None, max_output_tokens=None, conv_kw=None, cbs=None, default_cbs=True):
         if parallel_tools: raise NotImplementedError(
@@ -266,8 +266,8 @@ class LitertChat(core.Chat):
         self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in listify(messages)])
         self.ctx_limit = ctx_limit
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
-                    tool_max_len=tool_max_len, max_steps=max_steps, final_prompt=final_prompt,
-                    cbs=cbs, default_cbs=default_cbs)
+                    tool_max_len=tool_max_len, max_steps=max_steps, max_parallel_tools=max_parallel_tools,
+                    final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
 
     def _mk_conv(self, messages=None):
         "Build the conversation from `messages`, releasing any current one first."
@@ -281,6 +281,10 @@ class LitertChat(core.Chat):
     def _recreate_conv(self):
         "Rebuild the `Conversation` from the current (possibly evicted) `hist`, re-applying the system prompt."
         self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in self.hist])
+
+    def recover_context(self, err, max_output_tokens=None):
+        "Recover a full context by evicting the middle of history and retrying the current message."
+        return self._retry_evicted(err, max_output_tokens)
 
     def _retry_evicted(self, err, max_output_tokens=None, keep_first=2, keep_last=6):
         "The window filled up mid-turn: evict the middle of `hist`, rebuild, and send the same turn again."
@@ -323,7 +327,7 @@ class LitertChat(core.Chat):
         try: r = self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens)
         except RuntimeError as e:
             if not is_ctx_error(self, e): raise
-            r = self._retry_evicted(e, max_output_tokens)
+            r = self.recover_context(e, max_output_tokens)
         self.turn_res = Resp(r)
         for _ in run_cbs(self, 'after_response'): pass
         return self.turn_res

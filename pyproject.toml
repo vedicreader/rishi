@@ -15,24 +15,30 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
 ]
-# A plain install is useful out of the box: LiteRT and fastllm everywhere, plus the native MLX
-# text and vision/audio stack on Apple Silicon. Markers keep MLX off unsupported platforms.
+# Keep the core install small. Backend runtimes are optional because their native wheels are
+# large, platform-specific, and most users only need one of them.
 dependencies = [
+    "fastcore>=2.0.0",
     "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",
-    "litert-lm-api>=0.14.0",
-    "mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'",
-    "python-fastllm==0.0.36",
-    "aidialog==0.0.7"
 ]
 
-# llama.cpp is the only opt-in runtime: its native wheel can be substantial and platform-specific.
 [project.optional-dependencies]
+# LiteRT and hosted inference are intentionally separate: local-only users should not need either.
+litert = ["litert-lm-api>=0.14.0"]
+remote = ["python-fastllm==0.0.36", "aidialog==0.0.7"]
+mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
+mlx-vlm = [
+    "mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'",
+]
+# llama.cpp's native wheel can be substantial and platform-specific.
 llama = [
     "llama-cpp-python==0.3.30",  # pinned: abetlen's 0.3.33/0.3.34 metal wheels are corrupt upstream (bad internal CRCs)
     "soundfile>=0.14.0",
     "numpy",
+]
+all = [
+    "rishi[litert,remote,mlx,mlx-vlm,llama]",
 ]
 
 [project.urls]
@@ -71,9 +77,10 @@ llama-cpp-python = [
 
 [dependency-groups]
 dev = [
-    "rishi[llama]",
+    "rishi[all]",
     "dhrishti>=0.0.5",
     "koshas>=0.0.31",
+    "diskcache>=5.6.3",
     "nbdev>=3.1.0",
     "notebook>=7.6.0",
     "pyskills>=0.0.21",

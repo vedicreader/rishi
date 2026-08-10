@@ -101,7 +101,8 @@ def read_audio(o, sr=16000):
     "Decode audio `bytes`/`Path` (any libsndfile format) to contiguous mono float32 samples at `sr` Hz, ready for mtmd."
     if isinstance(o, os.PathLike): o = Path(o).read_bytes()
     try: a, src = sf.read(io.BytesIO(o), dtype='float32', always_2d=False)
-    except sf.LibsndfileError as e: raise ValueError(f"could not decode audio ({detect_mime(o)}): {e}") from None
+    except (sf.LibsndfileError, RuntimeError, ValueError) as e:
+        raise ValueError(f"could not decode audio ({detect_mime(o)}): {e}") from None
     if a.ndim > 1: a = a.mean(axis=1)   # downmix to mono
     return np.ascontiguousarray(_resample(a, src, sr), dtype=np.float32)
 
@@ -164,7 +165,7 @@ def _create_bitmap_from_bytes(self:MTMDChatHandler, image_bytes):
 class LlamaChat(ToolLoopMixin, Chat):
     "Sync chat over a local llama.cpp model - the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
     _runtime = 'llama'
-    _dflt_cbs = [UsageCallback, ToolReminderCallback]
+    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(_mk_content), staticmethod(_mk_msg), staticmethod(_mk_msgs)
 
     @staticmethod
@@ -190,7 +191,7 @@ class LlamaChat(ToolLoopMixin, Chat):
     def __init__(self, model=None, *, runtime=None, model_path=None, engine=None,
                  quant='Q4_K_M', n_ctx=8192, n_gpu_layers=0, mmproj=None, eng_kw=None,
                  sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None,
-                 max_steps=10, parallel_tools=False, final_prompt=dflt_final_prompt_, think=None,
+                 max_steps=10, parallel_tools=False, max_parallel_tools=None, final_prompt=dflt_final_prompt_, think=None,
                  temp=None, top_k=None, top_p=None, seed=None, preserve_cache=False,
                  max_output_tokens=None, comp_kw=None, cbs=None, default_cbs=True):
         model = core.split_runtime(model)[1]
@@ -209,7 +210,7 @@ class LlamaChat(ToolLoopMixin, Chat):
         self.ctx_limit, self.comp_kw, self._ctx_tokens = ifnone(ctx_limit, engine.n_ctx()), comp_kw or {}, 0
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
                     tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
-                    final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
+                    max_parallel_tools=max_parallel_tools, final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
 
     def close(self):
         "Release the engine (only if this Chat created it); idempotent."

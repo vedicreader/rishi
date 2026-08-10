@@ -9,18 +9,22 @@ It keeps the conversation history where you can read it, streams tokens into a n
 
 ## Install
 
-A plain install is ready to chat: it includes Google LiteRT and fastllm on every platform, and on
-Apple Silicon it also includes MLX plus MLX-VLM for local text, image, and audio models. Platform
-markers keep the MLX packages off unsupported machines.
+The core install is small: the shared [`Chat`](https://vedicreader.github.io/rishi/core.html#chat) layer and nothing else. Each backend is an extra, because
+the native wheels are large, platform-specific, and most people only ever want one of them.
 
 ``` sh
-pip install rishi              # LiteRT + fastllm everywhere; MLX + MLX-VLM too on Apple Silicon
-pip install 'rishi[llama]'     # add llama.cpp for any GGUF model
+pip install 'rishi[litert]'    # Google LiteRT, for .litertlm Gemma builds
+pip install 'rishi[llama]'     # llama.cpp, for any GGUF model
+pip install 'rishi[mlx]'       # MLX on Apple Silicon (add mlx-vlm for vision and audio models)
+pip install 'rishi[remote]'    # hosted models through fastllm
+pip install 'rishi[all]'       # every backend the platform supports
 ```
 
-So `uv add rishi` (or `pip install rishi`) installs the full default experience without an extra:
-local LiteRT, hosted models through fastllm, and the MLX stack where it is supported. Backend modules
-are still imported lazily, and asking for llama.cpp without its optional extra tells you how to add it.
+Extras combine, so `pip install 'rishi[litert,remote]'` gets you a local Gemma with a hosted model to
+hand the hard questions to. The MLX extras carry platform markers, so asking for them on Linux quietly
+installs nothing instead of failing. Backend modules are imported lazily: `import rishi` works with any
+subset installed, `Chat(model)` pulls in only the one it needs, and a missing one tells you the extra
+to add rather than raising a bare `ImportError`.
 
 To work on rishi, clone the repo and use nbdev, whose notebooks in `nbs/` are the source:
 
@@ -97,6 +101,8 @@ print(resolve_runtime('my-org/private-build', runtime='llama'))       # force it
 
     ('litert', 'litert-community/gemma-4-E2B-it-litert-lm')
     ('llama', 'Qwen/Qwen3-4B-GGUF')
+    ('mlx', 'mlx-community/Qwen3-4B-4bit')
+    ('remote', 'claude-sonnet-4-5')
     ('llama', '/models/mine.gguf')
     ('llama', 'my-org/private-build')
 
@@ -185,35 +191,37 @@ print(resp_text(r))     # the answer; thought(r) has the reasoning
 The default Gemma build is multimodal, so images and audio can ride alongside text in one call. Mix them into the message list as a `PIL.Image` wrapped with `img_bytes`, raw `bytes`, or a `Path`. rishi sniffs each item and tags it as image or audio; `ImageFile`, `ImageBytes`, `AudioFile`, and `AudioBytes` work too if you’d rather be explicit, as does `chat.mk_content(bytes)`.
 
 ``` python
-from fastcore.all import img_bytes, Path
-from PIL import Image
+im = Image.open('images.jpeg');im
+```
 
-im = Image.open('images.jpeg')
+![](index_files/figure-commonmark/cell-7-output-1.png)
+
+``` python
 print(resp_text(chat(['Explain this image.', img_bytes(im)])))          # or ImageFile('images.jpeg')
 ```
 
-    This image is a photograph of a **German Shepherd dog**.
+    This image is a photograph of a **German Shepherd dog** outdoors.
 
-    Here's a breakdown of what the image shows:
+    Here are some details about the image:
 
-    * **Subject:** The main focus is a medium-to-large-sized dog with the characteristic features of a German Shepherd, including its tan and black coat, erect ears, and intelligent expression.
-    * **Action/Pose:** The dog appears to be walking or running along a dirt or gravel path. Its mouth is open, and its tongue is hanging out, suggesting it might be happy, excited, or panting slightly from activity.
-    * **Setting:** The background is soft and slightly blurred (shallow depth of field), indicating an outdoor, natural setting, likely a park, trail, or wooded area with green foliage and soft lighting.
-    * **Mood:** The overall mood of the photo is positive, energetic, and friendly, capturing the dog's alertness and joy.
+    * **Subject:** The main subject is a medium-to-large German Shepherd dog with rich, reddish-brown fur.
+    * **Appearance:** The dog has erect, pointed ears, dark eyes, and its mouth is open, showing its tongue, suggesting it might be panting slightly or happy.
+    * **Setting:** The dog is standing on a dirt or gravel path, which appears to be in a natural, somewhat rustic outdoor environment, possibly a park, field, or wooded area. The background is soft and slightly blurred (shallow depth of field), indicating the focus is sharply on the dog.
+    * **Mood:** The dog appears alert, happy, and engaged, looking slightly off-camera.
+
+    In summary, it's a portrait of a beautiful, energetic German Shepherd enjoying time outdoors.
 
 ``` python
-print(resp_text(chat(['Transcribe this clip.', Path('speech.wav')])))   # WAV/MP3/FLAC via soundfile
+print(resp_text(chat(['Transcribe this clip.', Path(repo_root()/'nbs/speech.wav')])))   # WAV/MP3/FLAC via soundfile
 ```
 
-    Here is the transcription of the clip you provided:
-
-    "Dancing in the masquerade, idle truth in plain sight jaded. Pop, roll, click. Who will I be today or not? But such a tide as moving seems a sleep, too full for sound and foam. When that drew from out the boundless deep turns again home, twilight and evening bell and after that."
+    Dancing in the masquerade, idle truth in plain sight jaded, pop, roll, click, dot. Who will I be today or not? But such a tide as moving seems a sleep, too full for sound and foam, when that drew from out the boundless deep turns again home, twilight and evening bell and after that.
 
 ## Tools and approval
 
 Pass plain Python functions as tools. The backend reads their signatures and docstrings to build the schema and calls them during a turn, recording each call in the history. Give it an `approve` function and it checks before running each one. [`hitl_policy`](https://vedicreader.github.io/rishi/core.html#hitl_policy) builds one from a per-tool rule: `approved` runs the tool, `dont_run` blocks it, `check` asks you on the console. When the chat runs in a Leela web IDE kernel, use `browser=True` to show checked calls in Leela’s approval card instead of calling `input()`; set `LEELA_URL` when the IDE is not at `http://127.0.0.1:5001`.
 
-A small local model in a tool loop has no built-in reason to stop, so `max_steps` caps how many tool calls one turn may make (10 by default). Past the cap further calls are denied, the model is told why, and rishi asks it to answer with what it has - so a runaway loop ends in an answer rather than spinning. On llama and MLX, `parallel_tools=True` runs independent calls from the same turn concurrently; approval stays sequential, so the approval order and the budget are unaffected.
+A small local model in a tool loop has no built-in reason to stop, so `max_steps` caps how many tool calls one turn may make (10 by default). Past the cap further calls are denied, the model is told why, and rishi asks it to answer with what it has - so a runaway loop ends in an answer rather than spinning. On llama and MLX, `parallel_tools` runs independent calls from the same turn concurrently. `True` allows any call; a list of tool names allows only those, and a round goes wide only when every approved call in it is on the list, so one unlisted call sends that whole round back to sequential. `max_parallel_tools` caps the pool width. Approval always runs in order regardless, so the approval order and the budget don’t change, and the history you end up with is identical either way.
 
 ``` python
 def add(a: int, b: int) -> int:
@@ -268,6 +276,18 @@ I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete the sp
 
 🔧 delete_files({‘path’: ‘/tmp/data.<system-reminder>’})
 
+``` python
+# llama and MLX only: name the tools that are safe to run side by side, and cap the pool
+chat = Chat(qwen3_4b, tools=[add, delete_files], approve=approve,
+            parallel_tools=['add'], max_parallel_tools=2)
+print(resp_text(chat("Add 2 and 3, and add 10 and 20.")))    # both adds run at once
+chat.close()
+```
+
+    llama_context: n_ctx_seq (8192) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
+
+    The result of adding 2 and 3 is **5**, and the result of adding 10 and 20 is **30**. Both operations were successfully completed.
+
 A blocked call never runs. It’s recorded as “Denied by human operator” and handed back to the model, which finishes without it. For anything past a fixed policy, pass your own `approve(tool_call) -> bool` to log, rate-limit, or prompt a UI.
 
 ## MLX and the prompt cache
@@ -303,9 +323,14 @@ print(mchat.use)                     # second turn: cached_tokens > 0, only the 
 mchat.close()
 ```
 
+    Octopuses have three hearts: two pump blood to the gills, and one pumps it to the rest of the body.
+    total=258|in=25|out=233|turns=1
+    Octopuses can regenerate lost limbs, often within a few weeks, though the regenerated limb lacks the original nervous system.
+    total=279|in=65|out=214|turns=1|cached=25
+
 ## Hosted models, same API
 
-[fastllm](https://github.com/AnswerDotAI/fastllm) is installed by default. With a vendor key in
+[fastllm](https://github.com/AnswerDotAI/fastllm) comes with the `remote` extra. With a vendor key in
 the environment the same [`Chat`](https://vedicreader.github.io/rishi/core.html#chat) reaches Anthropic, OpenAI, Gemini, DeepSeek, Moonshot, OpenRouter and
 the rest. Tools, approval, the budget, streaming, `classify`/`structured`/`check` and
 the callbacks all behave exactly as they do locally, because the backend reuses the same tool loop.
@@ -319,11 +344,14 @@ Two things only a hosted API really offers are passed straight through: `tool_ch
 # start on a small local model, hand the whole conversation to a big hosted one
 local = Chat(qwen3_4b, n_ctx=4096)
 local('My name is Karthik and my favourite number is 17. Remember both.')
-
-remote = Chat('claude-sonnet-4-5', messages=local.hist)   # same hist, different engine
+remote = Chat('gpt-4.1-nano', messages=local.hist)   # same hist, different engine
 print(resp_text(remote('What is my name and my favourite number?')))
 local.close()
 ```
+
+    llama_context: n_ctx_seq (4096) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
+
+    Your name is Karthik, and your favorite number is 17.
 
 ## Porting history between backends
 
@@ -464,19 +492,9 @@ def solved(chat):
     return judge.classify(convo, ['complete', 'needs_more_work']) == 'complete'
 
 worker("Compute the 20th Fibonacci number, then double-check it.", cbs=[PyFenceCallback(done=solved)])
-worker.print_hist()
-worker.close(); judge.close()
 ```
 
     llama_context: n_ctx_seq (8192) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
-
-**user**
-
-Compute the 20th Fibonacci number, then double-check it.
-
-------------------------------------------------------------------------
-
-**assistant**
 
 > **🧠 Thinking**
 >
@@ -694,71 +712,9 @@ $$
 \boxed{6765}
 $$
 
-------------------------------------------------------------------------
-
-**user**
-
-6765
-
-## Knowing when to compress
-
-litert doesn’t report token counts per reply, so rishi reads the KV-cache size straight from the engine. After each turn `chat.use` holds that turn’s input and output tokens, `chat.token_count` is the live context size, and `chat.pct_full` is that size over `ctx_limit`.
-
-If the window does fill up mid-turn, rishi doesn’t let the turn die with a backend traceback: it shrinks the oldest tool results still in the history, rebuilds whatever state the backend holds, and asks the model to summarize with what’s left. [`ContextWindowExceededError`](https://vedicreader.github.io/rishi/core.html#contextwindowexceedederror) is raised only if that retry fails too.
-
-For a long conversation, the cheaper move is to not reach the limit at all. [`SlidingWindowCallback`](https://vedicreader.github.io/rishi/core.html#slidingwindowcallback)
-checks `pct_full` before each turn and, past a threshold, drops whole message groups from the middle
-of the history - keeping the earliest turns and the recent thread - then has the backend rebuild from
-what is left. Your system prompt is never evicted, and a tool call is never separated from its result.
-It is opt-in, because dropping turns is lossy; `summarize=True` spends one model call to keep the gist.
-
-This matters most on litert, whose KV cache has no automatic recycling upstream: filling it OOMs on
-GPU/NPU and makes the CPU path repeat itself indefinitely, rather than failing cleanly.
-
 ``` python
-chat = Chat(gemma4_e2b, ctx_limit=4096, cbs=[SlidingWindowCallback(threshold=0.9, keep_first=2, keep_last=8)])
-for i in range(50): chat(f"Tell me fact number {i} about the sea.")
-print(chat.pct_full, 'full;', getattr(chat, 'evicted', 0), 'messages evicted')
+worker.close(); judge.close()
 ```
-
-``` python
-chat = Chat(gemma4_e2b, ctx_limit=10000)
-print(resp_text(chat('Count the fibonacci numbers up to 20')))
-print('tokens:', chat.use, '| context:', chat.token_count, '| full:', chat.pct_full)
-# once pct_full climbs past ~0.8, summarise the history and start a fresh Chat
-```
-
-    Here are the Fibonacci numbers up to 20, and the count:
-
-    **Fibonacci Sequence:**
-
-    The Fibonacci sequence starts with 0 and 1, and each subsequent number is the sum of the two preceding ones.
-
-    1. **0**
-    2. **1**
-    3. $0 + 1 = \mathbf{1}$
-    4. $1 + 1 = \mathbf{2}$
-    5. $1 + 2 = \mathbf{3}$
-    6. $2 + 3 = \mathbf{5}$
-    7. $3 + 5 = \mathbf{8}$
-    8. $5 + 8 = \mathbf{13}$
-    9. $8 + 13 = \mathbf{21}$ (This is greater than 20, so we stop here)
-
-    **The Fibonacci numbers that are less than or equal to 20 are:**
-
-    0, 1, 1, 2, 3, 5, 8, 13
-
-    **Counting the unique Fibonacci numbers up to 20:**
-
-    If you are counting the *terms* in the sequence that are $\le 20$:
-    There are **8** such numbers.
-
-    If you are counting the *unique values* in the sequence that are $\le 20$:
-    The unique values are: 0, 1, 2, 3, 5, 8, 13.
-    There are **7** unique Fibonacci numbers up to 20.
-
-    **Assuming you mean the number of terms in the sequence that are $\le 20$, the answer is 8.**
-    tokens: total=366|in=20|out=346|turns=1 | context: 366 | full: 0.0366
 
 ## Custom callbacks
 
@@ -779,6 +735,55 @@ chat.remove_cb(Logger)              # by class or instance
 
     <rishi.litert.LitertChat>
 
+## Knowing when to compress
+
+litert doesn’t report token counts per reply, so rishi reads the KV-cache size straight from the engine. After each turn `chat.use` holds that turn’s input and output tokens, `chat.token_count` is the live context size, and `chat.pct_full` is that size over `ctx_limit`.
+
+If the window does fill up mid-turn, rishi doesn’t let the turn die with a backend traceback: it shrinks the oldest tool results still in the history, rebuilds whatever state the backend holds, and asks the model to summarize with what’s left. [`ContextWindowExceededError`](https://vedicreader.github.io/rishi/core.html#contextwindowexceedederror) is raised only if that retry fails too. `recover_context` is the method a backend overrides to do this its own way, and litert does: it evicts the middle of the conversation and replays the turn.
+
+For a long conversation, the cheaper move is to not reach the limit at all. [`SlidingWindowCallback`](https://vedicreader.github.io/rishi/core.html#slidingwindowcallback)
+checks `pct_full` before each turn and, past a threshold, drops whole message groups from the middle
+of the history - keeping the earliest turns and the recent thread - then has the backend rebuild from
+what is left. Your system prompt is never evicted, and a tool call is never separated from its result.
+Every backend registers it by default now, so a long conversation degrades instead of dying. It only
+acts once `ctx_limit` is set, and it is deliberately conservative. Dropping turns is still lossy, so
+`summarize=True` spends one model call to keep the gist of what went. To retune it, drop the default
+instance and add your own; `default_cbs=False` clears it along with the rest of the defaults.
+
+This matters most on litert, whose KV cache has no automatic recycling upstream: filling it OOMs on
+GPU/NPU and makes the CPU path repeat itself indefinitely, rather than failing cleanly.
+
+``` python
+chat = Chat(gemma4_e2b, ctx_limit=4096)
+chat.remove_cb(SlidingWindowCallback)                  # the default one, at threshold=0.9
+chat.add_cb(SlidingWindowCallback(threshold=0.8, keep_first=2, keep_last=4, summarize=True))
+for i in range(50): chat(f"Tell me fact number {i} about the sea.")
+print(chat.pct_full, 'full;', getattr(chat, 'evicted', 0), 'messages evicted')
+```
+
+    0.5927734375 full; 55 messages evicted
+
+``` python
+chat('give me a summary of the conversation so far')
+```
+
+Here is a summary of our conversation so far:
+
+The conversation has been a structured exchange where the user repeatedly requested a specific “Fact Number” about the sea. The assistant responded by providing a distinct, fundamental scientific or factual statement for each requested number, sequentially numbering them from 1 up to 49.
+
+**Key Themes Covered:**
+
+The facts covered a wide range of aspects of the sea, including:
+
+- **Physical Characteristics:** Surface coverage, composition (saltwater), and physical forces (waves, tides).
+- **Ecology & Biology:** Biodiversity, marine life webs, nutrient cycling, and habitat diversity.
+- **Climate & Chemistry:** Role in the global carbon cycle, heat distribution, and water regulation.
+- **Geology & History:** Influence on geological processes and recording ancient history.
+- **Human Impact:** Role in food security, resource provision, and economic activity.
+- **Extreme Environments:** Deep trenches and the limits of exploration.
+
+The conversation successfully followed the pattern of providing a unique, foundational fact for each sequential number requested.
+
 ## Installing the skill
 
 rishi bundles `skill.md`, an agent skill describing the API. A harness can install it into the standard skill directories (a dry run by default prints where it would write):
@@ -792,7 +797,14 @@ mv_skill_md(dry_run=False)   # writes SKILL.md under .claude/skills/rishi/ and .
 
 ## Sharing a model and benchmarks
 
-Loading a model costs a few seconds and a couple of gigabytes of RAM. To run several conversations off one load, build the engine once and hand it to each chat. A [`Chat`](https://vedicreader.github.io/rishi/core.html#chat) you build owns its engine and frees it on `close()`; a [`Chat`](https://vedicreader.github.io/rishi/core.html#chat) you hand an engine to leaves it alone, so the others keep working.
+Loading a model costs a few seconds and a couple of gigabytes of RAM. To run several conversations off
+one load, build the engine once and hand it to each chat. A [`Chat`](https://vedicreader.github.io/rishi/core.html#chat) you build owns its engine and frees
+it on `close()`; a [`Chat`](https://vedicreader.github.io/rishi/core.html#chat) you hand an engine to leaves it alone, so the others keep working.
+
+Each chat keeps its own history and its own conversation state, so they never see each other’s turns.
+The engine underneath is the one thing they do share, so drive them one at a time. A single [`Chat`](https://vedicreader.github.io/rishi/core.html#chat) is a
+single conversation - `hist`, the turn counters and the backend’s KV cache are all live state - and
+neither one chat nor a shared engine is built to be called from two threads at once.
 
 ``` python
 eng = LitertChat.create_engine(cache_dir='.cache/litertlm')

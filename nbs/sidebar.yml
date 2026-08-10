@@ -1,0 +1,12 @@
+website:
+  sidebar:
+    contents:
+      - index.ipynb
+      - 00_core.ipynb
+      - 01_llama.ipynb
+      - 02_litert.ipynb
+      - 03_mlx.ipynb
+      - 04_remote.ipynb
+      - section: dhristi_sessions
+        contents:
+          - dhristi_sessions/agent_20260731-144623.ipynb
