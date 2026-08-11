@@ -2,6 +2,31 @@
 
 <!-- do not remove -->
 
+## Unreleased
+
+Two public doors onto things every harness was already doing through private attributes.
+
+**`Chat.oneshot(prompt, sp, think=, max_tokens=)`.** The stateless one-shot the cheap jobs around
+a chat are made of - a label, a summary, a completion to insert. The public surface stopped at
+`classify` and `structured`, so every other caller reached for `_oneshot`, and `_oneshot` took
+neither a token cap nor a way to ask the model not to deliberate.
+
+`think=False` is the part that matters. A cheap job's whole budget can be 32 tokens, and a
+reasoning model will spend all of them thinking - leaving no answer to strip the thinking off of.
+Each backend now has a way to ask: `/no_think` in the system prompt (llama), `enable_thinking=False`
+in the chat template (mlx), a conversation built without a thinking channel (litert), and the
+lowest `reasoning_effort` the API takes (remote, `NO_THINK_EFFORT`, retried without it if the
+provider spells it differently). `think=True` insists, `None` leaves the model's default alone.
+`classify`, `grades` and the summarizing callback ask for `think=False` themselves now.
+
+**`Chat.reconfigure(sp=, tools=)`.** Change the system prompt and the tool list on a live
+conversation, keeping its history - what a harness needs when a skill is discovered, a folder is
+opened, or an extension loads mid-session. There was no way to say it, so callers set `_sys_pre`,
+`toolspecs` and `ns` by hand and then called `_recreate_conv`: four private names, three of which
+only some backends have, each behind a `hasattr` because of it. Backends supply the two halves
+through `_set_sp` and `_set_tools`, so a backend that grows new state stays Rishi's business
+rather than a silent no-op in somebody else's harness.
+
 ## 0.1.2
 release
 

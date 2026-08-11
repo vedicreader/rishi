@@ -600,6 +600,56 @@ class Chat:
         "Rebuild whatever conversation state the backend holds from `self.hist`. A no-op for backends that re-send the whole message list every call (llama, remote); mlx drops its KV cache, litert recreates its `Conversation`."
         pass
 
+    def _set_sp(self, sp):
+        "Note a new system prompt wherever the backend keeps one of its own. `_recreate_conv` applies it."
+        pass
+
+    def _set_tools(self, tools):
+        "Rebuild whatever tool state the backend holds -- schemas, a call namespace. Overridden where there is any."
+        pass
+
+    def reconfigure(self, sp=None, tools=None):
+        """Change the system prompt and/or the tool list on a live conversation, keeping the history.
+
+        A harness that discovers a skill, opens a folder or loads an extension mid-session has
+        a new briefing and a new tool list for a conversation nobody wants to restart. There
+        was no public way to say so, so callers reached in and set `_sys_pre`, `toolspecs`,
+        `ns` and then called `_recreate_conv` -- four private names, three of which only some
+        backends have, guarded by `hasattr` because of it. That is a copy of this method in
+        every harness, and it breaks silently whenever a backend changes shape.
+
+        `None` leaves that half alone; passing `tools=()` really does remove every tool.
+        """
+        if sp is not None:
+            self.sp = sp
+            self._set_sp(sp)
+        if tools is not None:
+            self.tools = L(tools)
+            self._set_tools(self.tools)
+        self._recreate_conv()
+        return self
+
+    def oneshot(self, prompt, sp='', think=None, max_tokens=None):
+        """One stateless reply, outside the conversation: no history, no tools, nothing kept.
+
+        This is what the cheap jobs around a chat are made of -- a label, a summary, a
+        completion to insert -- and every one of them was reaching for `_oneshot`, because
+        the public surface stopped at `classify` and `structured`.
+
+        `think=False` asks a reasoning model not to deliberate, in whatever way this runtime
+        has of asking: a `/no_think` line, `enable_thinking=False` in the chat template, no
+        thinking channel on the conversation, the lowest reasoning effort the API takes. It
+        matters more than it sounds. A cheap job's whole budget can be 32 tokens and a
+        reasoning model will spend all of them thinking, leaving no answer to strip the
+        thinking off of; stripping it afterwards cleans up, asking not to think is the fix.
+        `think=True` insists on it, and `None` leaves the model's own default alone.
+        """
+        return self._oneshot(prompt, sp, think=think, max_tokens=max_tokens)
+
+    def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
+        "One stateless completion's text. Every backend implements this; `oneshot` is the public door."
+        raise NotImplementedError
+
     def recover_context(self, error, max_output_tokens=None):
         "Backend contract for recovering from a full context window; backends override this."
         raise ContextWindowExceededError(f'context recovery is not implemented for {type(self).__name__}') from error
@@ -626,6 +676,11 @@ class ToolLoopMixin:
     `self._step_res` - plus a `ns` tool namespace. Backends holding conversation state of their own
     also override `_recreate_conv`."""
     _ctx_tokens = 0
+
+    def _set_tools(self, tools):
+        "Rebuild the wire schemas and the call namespace. Shared by every backend that gets tool calls back as data."
+        self.toolspecs = [mk_toolspec(t) for t in L(tools)]
+        self.ns = mk_ns([t for t in L(tools) if callable(t)])
 
     def call_tool(self, tc):
         "Run one approved tool call against `self.ns`; an exception comes back as an error string."
@@ -781,7 +836,7 @@ class SlidingWindowCallback(ChatCallback):
     def _summary(self, dropped):
         "One-line stand-in for the dropped middle, or None if the model can't produce one."
         convo = '\n'.join(f"{m.get('role','?')}: {resp_text(m)}" for m in dropped)[:self.mx]
-        try: return self.chat._oneshot(f"Summarize this earlier part of a conversation:\n\n{convo}", _sum_sp)
+        try: return self.chat.oneshot(f"Summarize this earlier part of a conversation:\n\n{convo}", _sum_sp, think=False)
         except Exception: return None
 
     def before_send(self):
@@ -976,7 +1031,7 @@ class PyFenceCallback(ChatCallback):
 @patch
 def classify(self:Chat, text, labels, sp='Reply with only the single best label and nothing else.'):
     "One-shot label for `text`, run stateless (isolated from the conversation)."
-    out = self._oneshot(f"{text}\n\nChoose exactly one label from: {', '.join(labels)}.", sp).lower()
+    out = self.oneshot(f"{text}\n\nChoose exactly one label from: {', '.join(labels)}.", sp, think=False).lower()
     return first(labels, lambda l: l.lower() in out) or out.strip()
 
 @patch
@@ -997,7 +1052,7 @@ def grades(self:Chat, question, expected, actual):
 @patch
 def check(self:Chat, question, expected, grade_fn=matches_, llm_judge=False, judge=None, tag='answer', sp=qa_sp_):
     'Ask `question` stateless, extract the ```<tag> answer, and grade it against `expected`.'
-    a = extract_fence(self._oneshot(question, sp), tag)
+    a = extract_fence(self.oneshot(question, sp), tag)
     ok = (judge or self).grades(question, expected, a) if (llm_judge or judge) else grade_fn(a, expected)
     return AttrDict(question=question, expected=expected, answer=a, ok=ok)
 

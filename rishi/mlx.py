@@ -274,22 +274,28 @@ class MlxChat(ToolLoopMixin, Chat):
         self._cache, self._cache_ids = cache, json.loads(md.get('ids', '[]'))
         return self
 
-    def _raw(self, msgs, max_output_tokens=None):
+    def _raw(self, msgs, max_output_tokens=None, think=None):
         "Stateless completion text for `msgs` - no history, no prompt cache."
-        ids = list(self.tokenizer.apply_chat_template(msgs, add_generation_prompt=True))
+        tkw = {} if think is None else dict(enable_thinking=think)
+        ids = list(self.tokenizer.apply_chat_template(msgs, add_generation_prompt=True, **tkw))
         kw = dict(max_tokens=ifnone(max_output_tokens, self.max_output_tokens))
         if self.sampler is not None: kw['sampler'] = self.sampler
         return ''.join(r.text for r in stream_generate(self.engine.model, self.tokenizer, ids, **kw))
 
-    def _oneshot(self, prompt, sp):
-        "Stateless one-shot completion text, with any thinking stripped."
+    def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
+        """Stateless one-shot completion text, with any thinking stripped.
+
+        `think` reaches the chat template as `enable_thinking`, which closes the thinking
+        block in the *prompt* rather than leaving the model to close it. `split_think` still
+        runs, for a model that thinks anyway.
+        """
         msgs = ([{'role': 'system', 'content': sp}] if sp else []) + [{'role': 'user', 'content': prompt}]
-        return split_think(self._raw(msgs))[0]
+        return split_think(self._raw(msgs, max_output_tokens=max_tokens, think=think))[0]
 
     def _structured_call(self, prompt, schema, sp):
         "JSON reply for `schema`, parsed out of the model's text - mlx-lm has no grammar constraint built in, so this asks and then parses."
         p = f"{prompt}\n\nReply with only a JSON object matching this schema:\n{json.dumps(get_schema(schema)['input_schema'])}"
-        txt = self._oneshot(p, sp)
+        txt = self._oneshot(p, sp, think=False)
         try: return json.loads(extract_fence(txt, 'json'))
         except (json.JSONDecodeError, TypeError): pass
         try: return json.loads(txt[txt.index('{'):txt.rindex('}') + 1])   # last resort: the outermost braces

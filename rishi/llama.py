@@ -292,9 +292,15 @@ class LlamaChat(ToolLoopMixin, Chat):
         "Number of tokens in `text` per the engine tokenizer."
         return len(self.engine.tokenize(text.encode('utf-8'), add_bos=False, special=True))
 
+    @staticmethod
+    def _think_sp(sp, think):
+        "Qwen's own switch, written into the system prompt: `/think` or `/no_think`, or nothing said."
+        sp = sp or ''
+        if think is None: return sp
+        return f"{sp}\n{'/think' if think else '/no_think'}".strip()
+
     def _sys_msgs(self):
-        sp = self.sp or ''
-        if self.think is not None: sp = f"{sp}\n{'/think' if self.think else '/no_think'}".strip()
+        sp = self._think_sp(self.sp, self.think)
         return [{'role': 'system', 'content': sp}] if sp else []
 
     def _msgs(self):
@@ -312,10 +318,13 @@ class LlamaChat(ToolLoopMixin, Chat):
         r['usage'] = self._note_cache(r.get('usage'), cached)
         return r
 
-    def _oneshot(self, prompt, sp):
+    def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
         "Stateless one-shot completion text (shares the engine, so see `_isolated` about the KV cache)."
+        sp = self._think_sp(sp, think)
         msgs = ([{'role':'system','content':sp}] if sp else []) + [{'role':'user','content':prompt}]
-        return self._isolated(lambda: resp_text(norm_resp(self.engine.create_chat_completion(msgs, **self._samp))))
+        kw = dict(self._samp)
+        if max_tokens is not None: kw['max_tokens'] = int(max_tokens)
+        return self._isolated(lambda: resp_text(norm_resp(self.engine.create_chat_completion(msgs, **kw))))
     def _structured_call(self, prompt, schema, sp):
         "Grammar-constrained JSON reply; returns the decoded argument dict."
         rf = {'type':'json_object','schema': get_schema(schema)['input_schema']}

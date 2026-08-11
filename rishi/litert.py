@@ -278,6 +278,10 @@ class LitertChat(core.Chat):
             tool_event_handler=self.tool_handler, **self._conv_kw))
         return self.conv
 
+    def _set_sp(self, sp):
+        "The system prompt lives outside `hist` here, so `reconfigure` has to replace it explicitly."
+        self._sys_pre = [{'role': 'system', 'content': sp}] if sp else []
+
     def _recreate_conv(self):
         "Rebuild the `Conversation` from the current (possibly evicted) `hist`, re-applying the system prompt."
         self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in self.hist])
@@ -345,9 +349,17 @@ class LitertChat(core.Chat):
             yield from run_cbs(self, 'after_response')
             return self.turn_res   # stream's final Resp, captured by SaveReturn / AsyncChat `.value`
         finally: self._streaming = prev; self.remove_cbs(added)
-    def _oneshot(self, prompt, sp):
-        "Stateless one-shot completion text via a throwaway conversation."
-        with self.engine.create_conversation(messages=[{'role': 'system', 'content': sp}] if sp else None) as conv:
+    def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
+        """Stateless one-shot completion text via a throwaway conversation.
+
+        Thinking is a property of the conversation here, so `think` is answered by building
+        one that has it or does not, rather than by anything said in the prompt. The
+        engine's own default is off, which is what `think=None` and `think=False` both get.
+        """
+        kw = {'extra_context': {'enable_thinking': True}} if think else {}
+        if max_tokens is not None: kw['max_output_tokens'] = int(max_tokens)
+        pre = [{'role': 'system', 'content': sp}] if sp else None
+        with self.engine.create_conversation(messages=pre, **kw) as conv:
             return resp_text(conv.send_message(prompt))
     def _structured_call(self, prompt, schema, sp):
         "Forced tool call; falls back to parsing a JSON reply when the model answers in prose."
