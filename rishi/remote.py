@@ -100,12 +100,23 @@ def norm_usage(u, model=None):
             'cached_tokens': u.cached_tokens, 'model': model}
 
 def norm_completion(comp):
-    "fastllm `Completion` -> rishi `Resp`."
+    """fastllm `Completion` -> rishi `Resp`.
+
+    Tag calls are read out of the text as well as native ones, exactly as `core.norm_resp`
+    does for the OpenAI-shaped path. A hosted model asked to use the tag protocol -- because
+    its transport has no tool field, or policy forbids the one it has -- would otherwise emit
+    a perfectly good `<tool_call>` block and have it rendered as prose.
+    """
     res = to_hist(comp.message)[0]
     res.setdefault('role', 'assistant')
-    if comp.tool_calls:
+    if isinstance(res.get('content'), str):
+        res['content'], tag_tcs = parse_tool_tags(res['content'])
+    else: tag_tcs = []
+    if comp.tool_calls or tag_tcs:
         res['tool_calls'] = [ToolCall(name=tc.name, arguments=tc.arguments, id=tc.id, server=tc.server)
-                             for tc in comp.tool_calls]
+                             for tc in (comp.tool_calls or [])] + [
+                            ToolCall(name=tc['function']['name'], arguments=tc['function']['arguments'],
+                                     id=tc['id']) for tc in tag_tcs]
     if comp.finish_reason == 'length': res['truncated'] = True
     res['usage'] = norm_usage(comp.usage, comp.model)
     return Resp(res)
@@ -138,8 +149,10 @@ class RemoteChat(ToolLoopMixin, Chat):
                  vendor_name=None, api_name=None, sp='', messages=None, tools=None, ctx_limit=None,
                  approve=None, tool_max_len=None, max_steps=10, parallel_tools=False,
                  max_parallel_tools=None, final_prompt=dflt_final_prompt_, tool_choice=None, reasoning_effort=None,
-                 temp=None, max_output_tokens=4096, retries=2, comp_kw=None, cbs=None, default_cbs=True):
+                 temp=None, max_output_tokens=4096, retries=2, comp_kw=None, cbs=None, default_cbs=True,
+                 tool_mode='native'):   # 'native' sends schemas on the wire; 'tags' puts them in the system prompt
         model = core.split_runtime(model)[1]
+        self.tool_mode = tool_mode
         self.model_id = model or 'gpt-5.1'
         self.toolspecs = [mk_toolspec(t) for t in L(tools)]
         self.ns = mk_ns([t for t in L(tools) if callable(t)])
@@ -161,9 +174,13 @@ class RemoteChat(ToolLoopMixin, Chat):
         kw = dict(stream=stream, api_key=self.api_key, base_url=self.base_url, retries=self.retries,
                   vendor_name=self.vendor_name, api_name=self.api_name,
                   max_tokens=ifnone(max_output_tokens, self.max_output_tokens))
-        if self.sp: kw['system'] = self.sp
-        if self.toolspecs: kw['tools'] = self.toolspecs
-        if self.tool_choice is not None: kw['tool_choice'] = self.tool_choice
+        tags = self.tool_mode == 'tags'
+        sp = tag_tools_sp(self.toolspecs, self.sp) if tags else self.sp
+        if sp: kw['system'] = sp
+        # In tag mode the schemas have already gone out in the system prompt, and putting them
+        # on the wire as well is the thing the transport cannot do.
+        if self.toolspecs and not tags: kw['tools'] = self.toolspecs
+        if self.tool_choice is not None and not tags: kw['tool_choice'] = self.tool_choice
         if self.reasoning_effort is not None: kw['reasoning_effort'] = self.reasoning_effort
         if self.temp is not None: kw['temperature'] = self.temp
         return {**kw, **self.comp_kw}
@@ -181,7 +198,7 @@ class RemoteChat(ToolLoopMixin, Chat):
         async def _agen():
             agen = await self._acomplete(self.hist, True, max_output_tokens)
             async for o in agen: yield o
-        comp = None
+        comp, split = None, StreamSplit() if self.tool_mode == 'tags' else None
         for o in sync_iter(_agen):
             if isinstance(o, Completion): comp = o
             elif isinstance(o, Part):
@@ -189,8 +206,13 @@ class RemoteChat(ToolLoopMixin, Chat):
                     yield {'content': [{'type': 'tool_call', 'name': o.data.get('name', ''),
                                         'arguments': o.data.get('arguments') or {}}]}
             elif isinstance(o, dict):
-                if (t := o.get('text')): yield {'content': [{'type': 'text', 'text': t}]}
+                # In tag mode the calls arrive as text, so the text is split on the way past --
+                # otherwise a `<tool_call>` block renders in the transcript as prose before the
+                # final `Resp` quietly turns it into a call.
+                if (t := o.get('text')): yield from (split.feed(t) if split else
+                                                     [{'content': [{'type': 'text', 'text': t}]}])
                 if (th := o.get('thinking')): yield {'channels': {'thought': th}}
+        if split is not None: yield from split.finish()
         if comp is None: raise RuntimeError('stream ended without a final Completion')
         self._step_res = norm_completion(comp)
 

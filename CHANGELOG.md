@@ -27,6 +27,19 @@ only some backends have, each behind a `hasattr` because of it. Backends supply 
 through `_set_sp` and `_set_tools`, so a backend that grows new state stays Rishi's business
 rather than a silent no-op in somebody else's harness.
 
+**Tag-protocol tools on hosted models.** `RemoteChat(tool_mode='tags')` puts the tool schemas
+in the system prompt via the new `tag_tools_sp`, sends nothing in the wire's tool field, and
+reads the calls back out of the reply text. `norm_completion` now parses `<tool_call>` blocks
+exactly as `core.norm_resp` already did for the OpenAI-shaped path, and the stream splits them
+out through `StreamSplit` so a call never renders as prose on its way to becoming a call.
+
+This is for a transport whose tool channel is closed rather than absent. Claude Code declares
+tools as an in-process MCP server, and an enterprise-managed configuration forbids every
+dynamic MCP server there is -- so a policy about MCP silently became a model with no tools.
+The system prompt is the one channel no such policy can close. `tool_mode='native'` is still
+the default and still better wherever it works: validated schemas, structured calls back, and
+no dependence on the model minding its punctuation.
+
 ## 0.1.2
 release
 
