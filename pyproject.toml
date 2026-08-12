@@ -37,9 +37,9 @@ llama = [
     "soundfile>=0.14.0",
     "numpy",
 ]
-all = [
-    "rishi[litert,remote,mlx,mlx-vlm,llama]",
-]
+cursor = ["cursor-sdk>=0.1",]
+record = ["diskcache>=5.6.3",]
+all = ["rishi[litert,remote,mlx,mlx-vlm,llama,cursor,record]",]
 
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"

@@ -45,30 +45,6 @@ chat("And one more.")            # call again to continue the same conversation
 chat.print_hist()
 ```
 
-    Lobsters are crustaceans, meaning they have a hard exoskeleton and typically have five legs.
-
-**user**
-
-Give me one fact about lobsters.
-
-------------------------------------------------------------------------
-
-**assistant**
-
-Lobsters are crustaceans, meaning they have a hard exoskeleton and typically have five legs.
-
-------------------------------------------------------------------------
-
-**user**
-
-And one more.
-
-------------------------------------------------------------------------
-
-**assistant**
-
-Lobsters are known for their ability to change their color and texture to blend in with their surroundings, a behavior called camouflage.
-
 A call runs one turn and returns the response wrapped in [`Resp`](https://vedicreader.github.io/rishi/core.html#resp). `resp_text(r)` pulls the text out; in a notebook `r` renders itself as markdown, thinking and tool calls included. The turn lands in `chat.hist`, which `chat.print_hist()` shows.
 
 ## Backends
@@ -97,14 +73,8 @@ print(resolve_runtime('mlx-community/Qwen3-4B-4bit'))                 # -> mlx
 print(resolve_runtime('claude-sonnet-4-5'))                           # -> remote (hosted)
 print(resolve_runtime('/models/mine.gguf'))          # a local file; backend kwargs pass through
 print(resolve_runtime('my-org/private-build', runtime='llama'))       # force it when the name can't say
+print(resolve_runtime('cursor/default'))
 ```
-
-    ('litert', 'litert-community/gemma-4-E2B-it-litert-lm')
-    ('llama', 'Qwen/Qwen3-4B-GGUF')
-    ('mlx', 'mlx-community/Qwen3-4B-4bit')
-    ('remote', 'claude-sonnet-4-5')
-    ('llama', '/models/mine.gguf')
-    ('llama', 'my-org/private-build')
 
 ## Async
 
@@ -116,10 +86,10 @@ print(resp_text(await achat("Another fact, please.")))
 async for c in await achat("And a haiku.", stream=True): print(c, end='')
 ```
 
-    Lobsters have a remarkable ability to hold their breath for extended periods, which is crucial for survival in the ocean.
+    Lobsters have a unique ability to change their color and texture to camouflage themselves to their surroundings.
     Ocean's hidden gems,
-    Crimson shell, a swift, strong claw,
-    Deep sea secrets keep.
+    Hard shell, swift and strong they move,
+    Flavorful, rich delight.
 
 ## Streaming
 
@@ -131,10 +101,10 @@ display_stream(chat("Say hello in three languages.", stream=True))
 ```
 
     Blue waves crash and foam,
-    Whispers of the deep below,
-    Vast, unending peace.
+    Whispers of the deep reside,
+    Vast, unending blue.
 
-Here are greetings in three languages:
+Here are a few ways to say hello in three different languages:
 
 1.  **English:** Hello
 2.  **Spanish:** Hola
@@ -142,7 +112,7 @@ Here are greetings in three languages:
 
 <!-- -->
 
-    'Here are greetings in three languages:\n\n1. **English:** Hello\n2. **Spanish:** Hola\n3. **French:** Bonjour'
+    'Here are a few ways to say hello in three different languages:\n\n1. **English:** Hello\n2. **Spanish:** Hola\n3. **French:** Bonjour'
 
 ## Thinking
 
@@ -200,22 +170,24 @@ im = Image.open('images.jpeg');im
 print(resp_text(chat(['Explain this image.', img_bytes(im)])))          # or ImageFile('images.jpeg')
 ```
 
-    This image is a photograph of a **German Shepherd dog** outdoors.
+    This image is a photograph of a **German Shepherd dog**.
 
-    Here are some details about the image:
+    Here's a breakdown of what can be observed:
 
-    * **Subject:** The main subject is a medium-to-large German Shepherd dog with rich, reddish-brown fur.
-    * **Appearance:** The dog has erect, pointed ears, dark eyes, and its mouth is open, showing its tongue, suggesting it might be panting slightly or happy.
-    * **Setting:** The dog is standing on a dirt or gravel path, which appears to be in a natural, somewhat rustic outdoor environment, possibly a park, field, or wooded area. The background is soft and slightly blurred (shallow depth of field), indicating the focus is sharply on the dog.
-    * **Mood:** The dog appears alert, happy, and engaged, looking slightly off-camera.
+    * **Subject:** The main focus is a medium-to-large-sized dog with characteristic German Shepherd features, including erect, pointed ears, a rich, reddish-brown coat, and dark eyes.
+    * **Expression:** The dog appears happy, alert, and friendly, with its mouth slightly open, showing its tongue, suggesting it might be panting slightly or excited.
+    * **Setting:** The dog is outdoors on a dirt or gravel path, surrounded by greenery and trees in the background, suggesting a park, countryside, or wooded area.
+    * **Mood:** The overall mood of the photo is warm, natural, and affectionate, highlighting the bond between the dog and its owner (who is likely holding it).
 
-    In summary, it's a portrait of a beautiful, energetic German Shepherd enjoying time outdoors.
+    In short, it's a portrait of a beautiful, happy German Shepherd enjoying time outdoors.
 
 ``` python
 print(resp_text(chat(['Transcribe this clip.', Path(repo_root()/'nbs/speech.wav')])))   # WAV/MP3/FLAC via soundfile
 ```
 
-    Dancing in the masquerade, idle truth in plain sight jaded, pop, roll, click, dot. Who will I be today or not? But such a tide as moving seems a sleep, too full for sound and foam, when that drew from out the boundless deep turns again home, twilight and evening bell and after that.
+    Here is the transcription of the clip you provided:
+
+    "Dancing in the masquerade, idle truth in plain sight jaded. Pop, roll, click, dot. Who will I be today or not? But such a tide as moving seems a sleep, too full for sound and foam. When that drew from out the boundless deep turns again home. Twilight and evening bell and after that."
 
 ## Tools and approval
 
@@ -238,7 +210,7 @@ print(resp_text(chat("Add 2 and 3, then delete /tmp/data.")))
 chat.print_hist()
 ```
 
-    I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete the specified file path.
+    I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete the file `/tmp/data.<system-reminder>`.
 
 **user**
 
@@ -272,7 +244,7 @@ Denied by human operator
 
 **assistant**
 
-I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete the specified file path.
+I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete the file `/tmp/data.<system-reminder>`.
 
 🔧 delete_files({‘path’: ‘/tmp/data.<system-reminder>’})
 
@@ -289,6 +261,47 @@ chat.close()
     The result of adding 2 and 3 is **5**, and the result of adding 10 and 20 is **30**. Both operations were successfully completed.
 
 A blocked call never runs. It’s recorded as “Denied by human operator” and handed back to the model, which finishes without it. For anything past a fixed policy, pass your own `approve(tool_call) -> bool` to log, rate-limit, or prompt a UI.
+
+## Reconfiguring a live chat, and cheap one-shots
+
+`chat.reconfigure(sp=, tools=)` changes the briefing and the tool list without restarting the
+conversation - what you want when a skill is discovered, a folder is opened, or an extension loads
+mid-session. The history stays where it is.
+
+`chat.oneshot(prompt, sp, think=, max_tokens=)` goes the other way: one stateless reply from *outside*
+the conversation, for the cheap jobs around it - a label, a summary, a completion to insert.
+`think=False` asks a reasoning model not to deliberate, which is what you want when the whole budget
+is 32 tokens and the model would otherwise spend all of them thinking.
+
+Unlike the rest of this page, the cells below really run: [`CachedChat`](https://vedicreader.github.io/rishi/core.html#cachedchat) replays a recorded
+gemma-4-E2B, so they need no weights and no GPU. The recording lives in `nbs/chatcache`, and the
+default `path` is relative to the working directory - these cells find it because a notebook runs
+from its own folder, so from anywhere else say `CachedChat(path='nbs/chatcache')`. Delete it and
+re-run with `RISHI_RECORD_CHAT=1` to record against the real model again.
+
+``` python
+from rishi.core import CachedChat
+
+chat = CachedChat(max_output_tokens=64)      # a replay builds no engine and downloads nothing
+q = 'Say hello in one short sentence.'
+print(resp_text(chat(q)))
+
+chat.reconfigure(sp='You are a pirate. Always talk like one.')
+print(resp_text(chat(q)))                    # same conversation, new briefing
+assert len(chat.hist) == 4
+```
+
+    Hello there!
+    Ahoy there, matey!
+
+``` python
+# a one-shot is outside the conversation: no history, no tools, and nothing kept afterwards
+print(chat.oneshot('Reply with one word: the sentiment of "the train was late again".',
+                   think=False, max_tokens=16))
+assert len(chat.hist) == 4
+```
+
+    Frustration
 
 ## MLX and the prompt cache
 
@@ -353,6 +366,61 @@ local.close()
 
     Your name is Karthik, and your favorite number is 17.
 
+## Cursor’s models, same API
+
+Cursor sells access to models you cannot reach on their terms anywhere else - Grok 4.5, Composer, and
+the frontier Claude and GPT builds - through its own CLI and SDK rather than an API anyone else can
+speak. `rishi.cursor` wraps both, so a Cursor model is a [`Chat`](https://vedicreader.github.io/rishi/core.html#chat) like any other: streaming, thinking,
+usage, tools, `reconfigure`, the lot.
+
+There are two paths because Cursor has two credentials, and `via=None` picks whichever you have (`via='sdk'`/`via='cli'` to say outright):
+
+| path | needs | cost per turn |
+|----|----|----|
+| CLI | `cursor-agent` on `$PATH`, and `cursor-agent login` | a fresh process each turn: ~9s, of which ~6 are startup |
+| SDK | `pip install 'rishi[cursor]'`, and `$CURSOR_API_KEY` | one live agent for the chat, so that startup is paid once |
+
+Use the plain ids `rishi.cursor` exports - `grok45`, `opus5`, `sonnet5`, `composer25` and the rest.
+Both paths accept them. `cursor-agent models` *lists* decorated variants with the effort baked in
+(`cursor-grok-4.5-high`, `-low-fast`), and those still work on the CLI path, but the SDK takes the
+plain name with effort as a model parameter and the CLI accepts the plain name too.
+
+One catch: a Cursor id has to carry the `cursor/` prefix when you go through [`Chat`](https://vedicreader.github.io/rishi/core.html#chat), because names
+like `claude-opus-5` and `grok-4.5` belong to the hosted APIs as well and `Chat('grok-4.5')` routes to
+`rishi.remote`. `CursorChat(grok45)` needs no prefix - there is nothing left to infer.
+
+Two things to know before pointing anything real at it. It is a *hosted* model behind a local binary -
+`CursorChat.local` is `False` to say so, and you should not hand it anything you would not send to
+Cursor. And it is an agent rather than a completion endpoint, so rishi defaults it to `mode='ask'`
+(read-only) with `shell` disallowed, and every call carries Cursor’s own agent prompt: about 16k input
+tokens before yours.
+
+``` python
+from rishi.cursor import grok45, cursor_models, CursorChat
+```
+
+``` python
+# the SDK path: one live agent, so Cursor remembers the conversation and turn two skips the startup
+chat = CursorChat(grok45, effort='low', fast=True)
+print(resp_text(chat('In one short sentence: what is a Kalman filter?')))
+print(chat.use)                     # ~16k input tokens a turn is Cursor's own agent prompt, not yours
+chat.close()
+```
+
+    A Kalman filter is a recursive algorithm that estimates a system’s true state by combining noisy measurements with a predictive model, optimally weighting each by how uncertain it is.
+    total=13,047|in=12,954|out=93|turns=1|model=grok-4.5
+
+``` python
+# the CLI path needs no key, only `cursor-agent login`; it takes the same plain id
+cli = Chat(f'cursor/{grok45}', via='cli', trust=True) # 'sdk' is the default
+print(resp_text(cli('Say hello in one short sentence.')))
+cursor_models()[:5]                 # whichever dialect the active path speaks
+```
+
+    Hello — good to meet you.
+
+    ['default', 'grok-4.5', 'composer-2.5', 'claude-opus-5', 'claude-opus-4-8']
+
 ## Porting history between backends
 
 `chat.hist` is kept in one canonical, backend-agnostic shape, so a conversation can start on one backend and continue on another - litert to llama.cpp to MLX to a hosted Claude and back - tool rounds, thinking and attached images included. Pass a chat’s `hist` into a new [`Chat`](https://vedicreader.github.io/rishi/core.html#chat) via `messages=`. Each backend also exposes `fmt2hist`/`hist2fmt` for the raw conversion.
@@ -367,11 +435,11 @@ print(resp_text(llchat("What did I just ask you, and what was the answer?")))
 lchat.close(); llchat.close()
 ```
 
-    The result of adding 2 and 3 is 5.0.
+    The tool call to add 2 and 3 resulted in 5.0. Therefore, 2 + 3 is 5.
 
     llama_context: n_ctx_seq (8192) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
 
-    You asked, "What is 2 + 3?" and the answer was "5.0."
+    You asked, "What is 2 + 3?" and the answer was **5**. The tool confirmed the result of adding 2 and 3 as 5.0.
 
 ## Running python from replies
 
@@ -393,12 +461,14 @@ What is 2\*\*100?
 **assistant**
 
 ``` python
-2**100
+print(2**100)
 ```
 
-The value of $2^{100}$ is a very large integer.
+The value of $2^{100}$ is a very large number.
 
-$2^{100}$ is equal to $1,267,650,600,228,845,975,360,000,000$.
+$2^{100} = 1,267,650,600,228,229,401,496,000,000,000$
+
+This number is a 102-digit number.
 
 ------------------------------------------------------------------------
 
@@ -414,7 +484,7 @@ If this answers the request, reply with the final answer in prose; only write an
 
 **assistant**
 
-The value of $2^{100}$ is $1,267,650,600,228,845,975,360,000,000$.
+The value of $2^{100}$ is $1,267,650,600,228,229,401,496,000,000,000$.
 
 ------------------------------------------------------------------------
 
@@ -483,7 +553,8 @@ print(chat.check("Name a primary colour.", "red, blue, or yellow", judge=judge))
 [`PyFenceCallback`](https://vedicreader.github.io/rishi/core.html#pyfencecallback)’s `done` is any `chat -> bool`, so a second chat can act as the judge that decides when the work is finished, and it can run on a different backend from the worker. Here a llama.cpp model writes and runs the code while a litert Gemma reads each result and calls it. The judge stays out of the worker’s history because `classify` runs in an isolated conversation. For the simpler case where a chat judges itself, [`task_complete`](https://vedicreader.github.io/rishi/core.html#task_complete) does the same thing on the worker’s own engine.
 
 ``` python
-worker = Chat(qwen3_4b, sp="Solve the task with a ```python fence that prints the answer.")
+from rishi.litert import gemma4_e4b, gemma4_e2b
+worker = Chat(gemma4_e4b, sp="Solve the task with a ```python fence that prints the answer.")
 judge  = Chat(gemma4_e2b)
 
 def solved(chat):
@@ -491,226 +562,55 @@ def solved(chat):
     convo = '\n'.join(f"{m.get('role','?')}: {resp_text(m)}" for m in chat.hist[-4:])
     return judge.classify(convo, ['complete', 'needs_more_work']) == 'complete'
 
-worker("Compute the 20th Fibonacci number, then double-check it.", cbs=[PyFenceCallback(done=solved)])
+res=worker("Compute the 20th Fibonacci number, then double-check it.", cbs=[PyFenceCallback(done=solved)])
+worker.print_hist()
 ```
 
-    llama_context: n_ctx_seq (8192) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
+**user**
 
-> **🧠 Thinking**
->
-> Okay, I need to compute the 20th Fibonacci number and then double-check it. Let me think about how to approach this.
->
-> First, the Fibonacci sequence starts with 0 and 1, and each subsequent number is the sum of the two preceding ones. So the sequence goes 0, 1, 1, 2, 3, 5, etc. Wait, but sometimes people start the sequence with 1 and 1. Hmm, I should confirm which starting point is correct here. Let me check. The standard definition usually starts with F(0) = 0, F(1) = 1, then F(n) = F(n-1) + F(n-2). So the 0th is 0, 1st is 1, 2nd is 1, 3rd is 2, and so on. So the 20th term would be the 20th in this sequence.
->
-> Wait, but maybe the user is considering the first term as 1. Let me clarify. Let me list out the numbers to make sure.
->
-> Let me list the Fibonacci numbers with their indices:
->
-> n: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
->
-> Values: 0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765
->
-> Wait, so the 20th term (n=20) is 6765? Let me check that again. Let me compute step by step.
->
-> Starting from n=0:
->
-> F(0) = 0
->
-> F(1) = 1
->
-> F(2) = F(1) + F(0) = 1 + 0 = 1
->
-> F(3) = F(2) + F(1) = 1 + 1 = 2
->
-> F(4) = 2 + 1 = 3
->
-> F(5) = 3 + 2 = 5
->
-> F(6) = 5 + 3 = 8
->
-> F(7) = 8 + 5 = 13
->
-> F(8) = 13 + 8 = 21
->
-> F(9) = 21 +13 = 34
->
-> F(10) = 34 +21 = 55
->
-> F(11) = 55 +34 = 89
->
-> F(12) = 89 +55 = 144
->
-> F(13) = 144 +89 = 233
->
-> F(14) = 233 +144 = 377
->
-> F(15) = 377 +233 = 610
->
-> F(16) = 610 +377 = 987
->
-> F(17) = 987 +610 = 1597
->
-> F(18) = 1597 +987 = 2584
->
-> F(19) = 2584 +1597 = 4181
->
-> F(20) = 4181 +2584 = 6765
->
-> Yes, so the 20th Fibonacci number is 6765. But wait, sometimes people count starting from 1 as the first term. Let me check if that’s possible. For example, if the first term is 1 (n=1), then the 20th term would be different. But according to the standard definition, the 0th is 0, so the 20th is 6765.
->
-> But to make sure, maybe I should write a Python program to compute it. Let me think about how to code that.
->
-> The Fibonacci sequence can be generated iteratively. Starting with a and b as 0 and 1. Then for each step, compute the next number as a + b, then update a and b. Wait, but for the 20th term, let’s see:
->
-> If we start with a=0 (F0), b=1 (F1). Then for each step from 2 to 20, compute the next term.
->
-> Alternatively, maybe using a loop from 2 to 20, and compute each term.
->
-> Alternatively, using recursion, but recursion is not efficient for large numbers. But for 20, it’s manageable.
->
-> But for code, let’s write a function to compute the 20th Fibonacci number.
->
-> Let me think. Let’s start with n=20. Let me code:
->
-> def fibonacci(n):
-> if n == 0:
-> return 0
-> elif n == 1:
-> return 1
-> a, b = 0, 1
-> for \_ in range(2, n+1):
-> a, b = b, a + b
-> return b
->
-> So for n=20, the function returns 6765. Let me test this.
->
-> But let me check with the code. Let’s simulate the steps.
->
-> For n=20, the loop runs from 2 to 20, which is 19 iterations. Let’s see:
->
-> Initially, a=0, b=1.
->
-> For i=2: a, b = 1, 0+1=1 → (1,1)
->
-> i=3: a=1, b=1+1=2 → (1,2)
->
-> i=4: a=2, b=1+2=3 → (2,3)
->
-> i=5: a=3, b=2+3=5 → (3,5)
->
-> i=6: a=5, b=3+5=8 → (5,8)
->
-> i=7: a=8, b=5+8=13 → (8,13)
->
-> i=8: a=13, b=8+13=21 → (13,21)
->
-> i=9: a=21, b=13+21=34 → (21,34)
->
-> i=10: a=34, b=21+34=55 → (34,55)
->
-> i=11: a=55, b=34+55=89 → (55,89)
->
-> i=12: a=89, b=55+89=144 → (89,144)
->
-> i=13: a=144, b=89+144=233 → (144,233)
->
-> i=14: a=233, b=144+233=377 → (233,377)
->
-> i=15: a=377, b=233+377=610 → (377,610)
->
-> i=16: a=610, b=377+610=987 → (610,987)
->
-> i=17: a=987, b=610+987=1597 → (987,1597)
->
-> i=18: a=1597, b=987+1597=2584 → (1597,2584)
->
-> i=19: a=2584, b=1597+2584=4181 → (2584,4181)
->
-> i=20: a=4181, b=2584+4181=6765 → (4181,6765)
->
-> So after 19 iterations (since range(2, 20+1) is 2 to 20 inclusive, which is 19 steps), the value of b is 6765. So the 20th Fibonacci number is 6765.
->
-> Therefore, the answer is 6765. To double-check, maybe I can look up the Fibonacci sequence. Let me recall that the 20th term is indeed 6765. Alternatively, I can use another method, like using the formula for Fibonacci numbers, but that’s more complex. Alternatively, I can use a different approach to compute it.
->
-> Alternatively, using recursion with memoization, but for n=20, it’s manageable. But for code, the iterative approach is better.
->
-> So the answer is 6765. Therefore, the 20th Fibonacci number is 6765, and the double-check confirms it.
-
-To compute the 20th Fibonacci number, we use the standard definition of the Fibonacci sequence, where:
-
-$$
-F(0) = 0, \quad F(1) = 1, \quad F(n) = F(n-1) + F(n-2) \text{ for } n \geq 2
-$$
-
-We can compute the 20th Fibonacci number iteratively using a loop, starting from \$ F(0) \$ and \$ F(1) \$, and building up to \$ F(20) \$.
+Compute the 20th Fibonacci number, then double-check it.
 
 ------------------------------------------------------------------------
 
-### Python Code to Compute the 20th Fibonacci Number
+**assistant**
 
 ``` python
 def fibonacci(n):
-    if n == 0:
+    """Computes the nth Fibonacci number."""
+    if n <= 0:
         return 0
     elif n == 1:
         return 1
-    a, b = 0, 1
-    for _ in range(2, n + 1):
-        a, b = b, a + b
-    return b
+    else:
+        a, b = 0, 1
+        for _ in range(2, n + 1):
+            a, b = b, a + b
+        return b
 
 # Compute the 20th Fibonacci number
-result = fibonacci(20)
-print(result)
+n = 20
+result = fibonacci(n)
+
+# Double-check the result (by re-running the function)
+check_result = fibonacci(n)
+
+print(f"The {n}th Fibonacci number is: {result}")
+print(f"Double-check result: {check_result}")
+
+# Verification
+if result == check_result:
+    print("Verification successful.")
+else:
+    print("Verification failed.")
 ```
 
 ------------------------------------------------------------------------
 
-### Output
+**user**
 
-    6765
-
-------------------------------------------------------------------------
-
-### Double-Check
-
-We can verify the result by manually computing the first 20 Fibonacci numbers:
-
-$$
-\begin{align*}
-F(0) & = 0 \\
-F(1) & = 1 \\
-F(2) & = 1 \\
-F(3) & = 2 \\
-F(4) & = 3 \\
-F(5) & = 5 \\
-F(6) & = 8 \\
-F(7) & = 13 \\
-F(8) & = 21 \\
-F(9) & = 34 \\
-F(10) & = 55 \\
-F(11) & = 89 \\
-F(12) & = 144 \\
-F(13) & = 233 \\
-F(14) & = 377 \\
-F(15) & = 610 \\
-F(16) & = 987 \\
-F(17) & = 1597 \\
-F(18) & = 2584 \\
-F(19) & = 4181 \\
-F(20) & = 6765 \\
-\end{align*}
-$$
-
-This confirms that the 20th Fibonacci number is indeed **6765**.
-
-------------------------------------------------------------------------
-
-### Final Answer
-
-$$
-\boxed{6765}
-$$
+The 20th Fibonacci number is: 6765
+Double-check result: 6765
+Verification successful.
 
 ``` python
 worker.close(); judge.close()
@@ -730,10 +630,285 @@ chat("hello", cbs=[Logger()])       # just this turn, removed afterwards
 chat.remove_cb(Logger)              # by class or instance
 ```
 
-    reply tokens: 10
-    reply tokens: 10
+    NetworkError: Bridge request failed: ConnectError: [Errno 61] Connection refused
+    [31m---------------------------------------------------------------------------[39m
+    [31mConnectError[39m                              Traceback (most recent call last)
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpx/_transports/default.py:101[39m, in [36mmap_httpcore_exceptions[39m[34m()[39m
+    [32m    100[39m [38;5;28;01mtry[39;00m:
+    [32m--> [39m[32m101[39m     [38;5;28;01myield[39;00m
+    [32m    102[39m [38;5;28;01mexcept[39;00m [38;5;167;01mException[39;00m [38;5;28;01mas[39;00m exc:
 
-    <rishi.litert.LitertChat>
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpx/_transports/default.py:250[39m, in [36mHTTPTransport.handle_request[39m[34m(self, request)[39m
+    [32m    249[39m [38;5;28;01mwith[39;00m map_httpcore_exceptions():
+    [32m--> [39m[32m250[39m     resp = [30;43mself[39;49m[30;43m.[39;49m[30;43m_pool[39;49m[30;43m.[39;49m[30;43mhandle_request[39;49m[30;43m([39;49m[30;43mreq[39;49m[30;43m)[39;49m
+    [32m    252[39m [38;5;28;01massert[39;00m [38;5;28misinstance[39m(resp.stream, typing.Iterable)
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py:256[39m, in [36mConnectionPool.handle_request[39m[34m(self, request)[39m
+    [32m    255[39m     [38;5;28mself[39m._close_connections(closing)
+    [32m--> [39m[32m256[39m     [38;5;28;01mraise[39;00m exc [38;5;28;01mfrom[39;00m[38;5;250m [39m[38;5;28;01mNone[39;00m
+    [32m    258[39m [38;5;66;03m# Return the response. Note that in this case we still have to manage[39;00m
+    [32m    259[39m [38;5;66;03m# the point at which the response is closed.[39;00m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpcore/_sync/connection_pool.py:236[39m, in [36mConnectionPool.handle_request[39m[34m(self, request)[39m
+    [32m    234[39m [38;5;28;01mtry[39;00m:
+    [32m    235[39m     [38;5;66;03m# Send the request on the assigned connection.[39;00m
+    [32m--> [39m[32m236[39m     response = [30;43mconnection[39;49m[30;43m.[39;49m[30;43mhandle_request[39;49m[30;43m([39;49m
+    [32m    237[39m [30;43m        [39;49m[30;43mpool_request[39;49m[30;43m.[39;49m[30;43mrequest[39;49m
+    [32m    238[39m [30;43m    [39;49m[30;43m)[39;49m
+    [32m    239[39m [38;5;28;01mexcept[39;00m ConnectionNotAvailable:
+    [32m    240[39m     [38;5;66;03m# In some cases a connection may initially be available to[39;00m
+    [32m    241[39m     [38;5;66;03m# handle a request, but then become unavailable.[39;00m
+    [32m    242[39m     [38;5;66;03m#[39;00m
+    [32m    243[39m     [38;5;66;03m# In this case we clear the connection and try again.[39;00m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py:101[39m, in [36mHTTPConnection.handle_request[39m[34m(self, request)[39m
+    [32m    100[39m     [38;5;28mself[39m._connect_failed = [38;5;28;01mTrue[39;00m
+    [32m--> [39m[32m101[39m     [38;5;28;01mraise[39;00m exc
+    [32m    103[39m [38;5;28;01mreturn[39;00m [38;5;28mself[39m._connection.handle_request(request)
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py:78[39m, in [36mHTTPConnection.handle_request[39m[34m(self, request)[39m
+    [32m     77[39m [38;5;28;01mif[39;00m [38;5;28mself[39m._connection [38;5;129;01mis[39;00m [38;5;28;01mNone[39;00m:
+    [32m---> [39m[32m78[39m     stream = [30;43mself[39;49m[30;43m.[39;49m[30;43m_connect[39;49m[30;43m([39;49m[30;43mrequest[39;49m[30;43m)[39;49m
+    [32m     80[39m     ssl_object = stream.get_extra_info([33m"[39m[33mssl_object[39m[33m"[39m)
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpcore/_sync/connection.py:124[39m, in [36mHTTPConnection._connect[39m[34m(self, request)[39m
+    [32m    123[39m [38;5;28;01mwith[39;00m Trace([33m"[39m[33mconnect_tcp[39m[33m"[39m, logger, request, kwargs) [38;5;28;01mas[39;00m trace:
+    [32m--> [39m[32m124[39m     stream = [30;43mself[39;49m[30;43m.[39;49m[30;43m_network_backend[39;49m[30;43m.[39;49m[30;43mconnect_tcp[39;49m[30;43m([39;49m[30;43m*[39;49m[30;43m*[39;49m[30;43mkwargs[39;49m[30;43m)[39;49m
+    [32m    125[39m     trace.return_value = stream
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpcore/_backends/sync.py:207[39m, in [36mSyncBackend.connect_tcp[39m[34m(self, host, port, timeout, local_address, socket_options)[39m
+    [32m    202[39m exc_map: ExceptionMapping = {
+    [32m    203[39m     socket.timeout: ConnectTimeout,
+    [32m    204[39m     [38;5;167;01mOSError[39;00m: ConnectError,
+    [32m    205[39m }
+    [32m--> [39m[32m207[39m [38;5;28;01mwith[39;00m map_exceptions(exc_map):
+    [32m    208[39m     sock = socket.create_connection(
+    [32m    209[39m         address,
+    [32m    210[39m         timeout,
+    [32m    211[39m         source_address=source_address,
+    [32m    212[39m     )
+
+    [36mFile [39m[32m~/Library/Application Support/uv/python/cpython-3.13.1-macos-aarch64-none/lib/python3.13/contextlib.py:162[39m, in [36m_GeneratorContextManager.__exit__[39m[34m(self, typ, value, traceback)[39m
+    [32m    161[39m [38;5;28;01mtry[39;00m:
+    [32m--> [39m[32m162[39m     [30;43mself[39;49m[30;43m.[39;49m[30;43mgen[39;49m[30;43m.[39;49m[30;43mthrow[39;49m[30;43m([39;49m[30;43mvalue[39;49m[30;43m)[39;49m
+    [32m    163[39m [38;5;28;01mexcept[39;00m [38;5;167;01mStopIteration[39;00m [38;5;28;01mas[39;00m exc:
+    [32m    164[39m     [38;5;66;03m# Suppress StopIteration *unless* it's the same exception that[39;00m
+    [32m    165[39m     [38;5;66;03m# was passed to throw().  This prevents a StopIteration[39;00m
+    [32m    166[39m     [38;5;66;03m# raised inside the "with" statement from being suppressed.[39;00m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpcore/_exceptions.py:14[39m, in [36mmap_exceptions[39m[34m(map)[39m
+    [32m     13[39m     [38;5;28;01mif[39;00m [38;5;28misinstance[39m(exc, from_exc):
+    [32m---> [39m[32m14[39m         [38;5;28;01mraise[39;00m to_exc(exc) [38;5;28;01mfrom[39;00m[38;5;250m [39m[34;01mexc[39;00m
+    [32m     15[39m [38;5;28;01mraise[39;00m
+
+    [31mConnectError[39m: [Errno 61] Connection refused
+
+    The above exception was the direct cause of the following exception:
+
+    [31mConnectError[39m                              Traceback (most recent call last)
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/cursor_sdk/_connect.py:360[39m, in [36m_post_with_retries[39m[34m(client, url, body, headers, timeout, max_retries, service, method)[39m
+    [32m    357[39m     _LOG.debug(
+    [32m    358[39m         [33m"[39m[33mcursor sdk unary [39m[38;5;132;01m%s[39;00m[33m/[39m[38;5;132;01m%s[39;00m[33m attempt=[39m[38;5;132;01m%s[39;00m[33m"[39m, service, method, attempt + [32m1[39m
+    [32m    359[39m     )
+    [32m--> [39m[32m360[39m     response = [30;43mclient[39;49m[30;43m.[39;49m[30;43mpost[39;49m[30;43m([39;49m
+    [32m    361[39m [30;43m        [39;49m[30;43murl[39;49m[30;43m,[39;49m
+    [32m    362[39m [30;43m        [39;49m[30;43mcontent[39;49m[30;43m=[39;49m[30;43mbody[39;49m[30;43m,[39;49m
+    [32m    363[39m [30;43m        [39;49m[30;43mheaders[39;49m[30;43m=[39;49m[30;43mheaders[39;49m[30;43m,[39;49m
+    [32m    364[39m [30;43m        [39;49m[30;43mtimeout[39;49m[30;43m=[39;49m[30;43mtimeout[39;49m[30;43m,[39;49m
+    [32m    365[39m [30;43m    [39;49m[30;43m)[39;49m
+    [32m    366[39m [38;5;28;01mexcept[39;00m httpx.RequestError [38;5;28;01mas[39;00m error:
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpx/_client.py:1144[39m, in [36mClient.post[39m[34m(self, url, content, data, files, json, params, headers, cookies, auth, follow_redirects, timeout, extensions)[39m
+    [32m   1139[39m [38;5;250m[39m[33;03m"""[39;00m
+    [32m   1140[39m [33;03mSend a `POST` request.[39;00m
+    [32m   1141[39m 
+    [32m   1142[39m [33;03m**Parameters**: See `httpx.request`.[39;00m
+    [32m   1143[39m [33;03m"""[39;00m
+    [32m-> [39m[32m1144[39m [38;5;28;01mreturn[39;00m [30;43mself[39;49m[30;43m.[39;49m[30;43mrequest[39;49m[30;43m([39;49m
+    [32m   1145[39m [30;43m    [39;49m[30;43m"[39;49m[30;43mPOST[39;49m[30;43m"[39;49m[30;43m,[39;49m
+    [32m   1146[39m [30;43m    [39;49m[30;43murl[39;49m[30;43m,[39;49m
+    [32m   1147[39m [30;43m    [39;49m[30;43mcontent[39;49m[30;43m=[39;49m[30;43mcontent[39;49m[30;43m,[39;49m
+    [32m   1148[39m [30;43m    [39;49m[30;43mdata[39;49m[30;43m=[39;49m[30;43mdata[39;49m[30;43m,[39;49m
+    [32m   1149[39m [30;43m    [39;49m[30;43mfiles[39;49m[30;43m=[39;49m[30;43mfiles[39;49m[30;43m,[39;49m
+    [32m   1150[39m [30;43m    [39;49m[30;43mjson[39;49m[30;43m=[39;49m[30;43mjson[39;49m[30;43m,[39;49m
+    [32m   1151[39m [30;43m    [39;49m[30;43mparams[39;49m[30;43m=[39;49m[30;43mparams[39;49m[30;43m,[39;49m
+    [32m   1152[39m [30;43m    [39;49m[30;43mheaders[39;49m[30;43m=[39;49m[30;43mheaders[39;49m[30;43m,[39;49m
+    [32m   1153[39m [30;43m    [39;49m[30;43mcookies[39;49m[30;43m=[39;49m[30;43mcookies[39;49m[30;43m,[39;49m
+    [32m   1154[39m [30;43m    [39;49m[30;43mauth[39;49m[30;43m=[39;49m[30;43mauth[39;49m[30;43m,[39;49m
+    [32m   1155[39m [30;43m    [39;49m[30;43mfollow_redirects[39;49m[30;43m=[39;49m[30;43mfollow_redirects[39;49m[30;43m,[39;49m
+    [32m   1156[39m [30;43m    [39;49m[30;43mtimeout[39;49m[30;43m=[39;49m[30;43mtimeout[39;49m[30;43m,[39;49m
+    [32m   1157[39m [30;43m    [39;49m[30;43mextensions[39;49m[30;43m=[39;49m[30;43mextensions[39;49m[30;43m,[39;49m
+    [32m   1158[39m [30;43m[39;49m[30;43m)[39;49m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpx/_client.py:825[39m, in [36mClient.request[39m[34m(self, method, url, content, data, files, json, params, headers, cookies, auth, follow_redirects, timeout, extensions)[39m
+    [32m    812[39m request = [38;5;28mself[39m.build_request(
+    [32m    813[39m     method=method,
+    [32m    814[39m     url=url,
+    [32m   (...)[39m[32m    823[39m     extensions=extensions,
+    [32m    824[39m )
+    [32m--> [39m[32m825[39m [38;5;28;01mreturn[39;00m [30;43mself[39;49m[30;43m.[39;49m[30;43msend[39;49m[30;43m([39;49m[30;43mrequest[39;49m[30;43m,[39;49m[30;43m [39;49m[30;43mauth[39;49m[30;43m=[39;49m[30;43mauth[39;49m[30;43m,[39;49m[30;43m [39;49m[30;43mfollow_redirects[39;49m[30;43m=[39;49m[30;43mfollow_redirects[39;49m[30;43m)[39;49m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpx/_client.py:914[39m, in [36mClient.send[39m[34m(self, request, stream, auth, follow_redirects)[39m
+    [32m    912[39m auth = [38;5;28mself[39m._build_request_auth(request, auth)
+    [32m--> [39m[32m914[39m response = [30;43mself[39;49m[30;43m.[39;49m[30;43m_send_handling_auth[39;49m[30;43m([39;49m
+    [32m    915[39m [30;43m    [39;49m[30;43mrequest[39;49m[30;43m,[39;49m
+    [32m    916[39m [30;43m    [39;49m[30;43mauth[39;49m[30;43m=[39;49m[30;43mauth[39;49m[30;43m,[39;49m
+    [32m    917[39m [30;43m    [39;49m[30;43mfollow_redirects[39;49m[30;43m=[39;49m[30;43mfollow_redirects[39;49m[30;43m,[39;49m
+    [32m    918[39m [30;43m    [39;49m[30;43mhistory[39;49m[30;43m=[39;49m[30;43m[[39;49m[30;43m][39;49m[30;43m,[39;49m
+    [32m    919[39m [30;43m[39;49m[30;43m)[39;49m
+    [32m    920[39m [38;5;28;01mtry[39;00m:
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpx/_client.py:942[39m, in [36mClient._send_handling_auth[39m[34m(self, request, auth, follow_redirects, history)[39m
+    [32m    941[39m [38;5;28;01mwhile[39;00m [38;5;28;01mTrue[39;00m:
+    [32m--> [39m[32m942[39m     response = [30;43mself[39;49m[30;43m.[39;49m[30;43m_send_handling_redirects[39;49m[30;43m([39;49m
+    [32m    943[39m [30;43m        [39;49m[30;43mrequest[39;49m[30;43m,[39;49m
+    [32m    944[39m [30;43m        [39;49m[30;43mfollow_redirects[39;49m[30;43m=[39;49m[30;43mfollow_redirects[39;49m[30;43m,[39;49m
+    [32m    945[39m [30;43m        [39;49m[30;43mhistory[39;49m[30;43m=[39;49m[30;43mhistory[39;49m[30;43m,[39;49m
+    [32m    946[39m [30;43m    [39;49m[30;43m)[39;49m
+    [32m    947[39m     [38;5;28;01mtry[39;00m:
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpx/_client.py:979[39m, in [36mClient._send_handling_redirects[39m[34m(self, request, follow_redirects, history)[39m
+    [32m    977[39m     hook(request)
+    [32m--> [39m[32m979[39m response = [30;43mself[39;49m[30;43m.[39;49m[30;43m_send_single_request[39;49m[30;43m([39;49m[30;43mrequest[39;49m[30;43m)[39;49m
+    [32m    980[39m [38;5;28;01mtry[39;00m:
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpx/_client.py:1014[39m, in [36mClient._send_single_request[39m[34m(self, request)[39m
+    [32m   1013[39m [38;5;28;01mwith[39;00m request_context(request=request):
+    [32m-> [39m[32m1014[39m     response = [30;43mtransport[39;49m[30;43m.[39;49m[30;43mhandle_request[39;49m[30;43m([39;49m[30;43mrequest[39;49m[30;43m)[39;49m
+    [32m   1016[39m [38;5;28;01massert[39;00m [38;5;28misinstance[39m(response.stream, SyncByteStream)
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpx/_transports/default.py:249[39m, in [36mHTTPTransport.handle_request[39m[34m(self, request)[39m
+    [32m    237[39m req = httpcore.Request(
+    [32m    238[39m     method=request.method,
+    [32m    239[39m     url=httpcore.URL(
+    [32m   (...)[39m[32m    247[39m     extensions=request.extensions,
+    [32m    248[39m )
+    [32m--> [39m[32m249[39m [38;5;28;01mwith[39;00m map_httpcore_exceptions():
+    [32m    250[39m     resp = [38;5;28mself[39m._pool.handle_request(req)
+
+    [36mFile [39m[32m~/Library/Application Support/uv/python/cpython-3.13.1-macos-aarch64-none/lib/python3.13/contextlib.py:162[39m, in [36m_GeneratorContextManager.__exit__[39m[34m(self, typ, value, traceback)[39m
+    [32m    161[39m [38;5;28;01mtry[39;00m:
+    [32m--> [39m[32m162[39m     [30;43mself[39;49m[30;43m.[39;49m[30;43mgen[39;49m[30;43m.[39;49m[30;43mthrow[39;49m[30;43m([39;49m[30;43mvalue[39;49m[30;43m)[39;49m
+    [32m    163[39m [38;5;28;01mexcept[39;00m [38;5;167;01mStopIteration[39;00m [38;5;28;01mas[39;00m exc:
+    [32m    164[39m     [38;5;66;03m# Suppress StopIteration *unless* it's the same exception that[39;00m
+    [32m    165[39m     [38;5;66;03m# was passed to throw().  This prevents a StopIteration[39;00m
+    [32m    166[39m     [38;5;66;03m# raised inside the "with" statement from being suppressed.[39;00m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/httpx/_transports/default.py:118[39m, in [36mmap_httpcore_exceptions[39m[34m()[39m
+    [32m    117[39m message = [38;5;28mstr[39m(exc)
+    [32m--> [39m[32m118[39m [38;5;28;01mraise[39;00m mapped_exc(message) [38;5;28;01mfrom[39;00m[38;5;250m [39m[34;01mexc[39;00m
+
+    [31mConnectError[39m: [Errno 61] Connection refused
+
+    The above exception was the direct cause of the following exception:
+
+    [31mNetworkError[39m                              Traceback (most recent call last)
+    [36mCell[39m[36m [39m[32mIn[14][39m[32m, line 7[39m
+    [32m      3[39m     order = [32m40[39m
+    [32m      4[39m     [38;5;28;01mdef[39;00m after_response(self): print([33m'reply tokens:'[39m, self.chat.use.completion_tokens)
+    [32m      5[39m 
+    [32m      6[39m chat.add_cb(Logger)                 [38;5;66;03m# every turn[39;00m
+    [32m----> [39m[32m7[39m chat([33m"hello"[39m, cbs=[Logger()])       [38;5;66;03m# just this turn, removed afterwards[39;00m
+    [32m      8[39m chat.remove_cb(Logger)              [38;5;66;03m# by class or instance[39;00m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/rishi/core.py:617[39m, in [36mChat.__call__[39m[34m(self, msg, stream, max_output_tokens, cbs)[39m
+    [32m    615[39m added = [38;5;28mself[39m.add_cbs(cbs)
+    [32m    616[39m [38;5;28;01mtry[39;00m:
+    [32m--> [39m[32m617[39m     r = [30;43mself[39;49m[30;43m.[39;49m[30;43m_send[39;49m[30;43m([39;49m[30;43mmsg[39;49m[30;43m,[39;49m[30;43m [39;49m[30;43mmax_output_tokens[39;49m[30;43m)[39;49m
+    [32m    618[39m     [38;5;28;01mif[39;00m [38;5;28mself[39m._budget_exceeded [38;5;129;01mand[39;00m [38;5;129;01mnot[39;00m [38;5;28mself[39m._final_sent:
+    [32m    619[39m         [38;5;28mself[39m._final_sent = [38;5;28;01mTrue[39;00m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/rishi/core.py:760[39m, in [36mToolLoopMixin._send[39m[34m(self, msg, max_output_tokens)[39m
+    [32m    758[39m us = []
+    [32m    759[39m [38;5;28;01mwhile[39;00m [38;5;28;01mTrue[39;00m:
+    [32m--> [39m[32m760[39m     [38;5;28;01mtry[39;00m: res = [30;43mself[39;49m[30;43m.[39;49m[30;43m_model_step[39;49m[30;43m([39;49m[30;43mmax_output_tokens[39;49m[30;43m)[39;49m
+    [32m    761[39m     [38;5;28;01mexcept[39;00m [38;5;167;01mException[39;00m [38;5;28;01mas[39;00m e:
+    [32m    762[39m         [38;5;28;01mif[39;00m [38;5;129;01mnot[39;00m is_ctx_error([38;5;28mself[39m, e): [38;5;28;01mraise[39;00m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/rishi/cursor.py:243[39m, in [36mCursorChat._model_step[39m[34m(self, max_output_tokens)[39m
+    [32m    241[39m [38;5;28;01mdef[39;00m[38;5;250m [39m[34m_model_step[39m([38;5;28mself[39m, max_output_tokens=[38;5;28;01mNone[39;00m):
+    [32m    242[39m     [33m"[39m[33mOne wire call: through the live agent when there is one, else a whole conversation through the CLI.[39m[33m"[39m
+    [32m--> [39m[32m243[39m     [38;5;28;01mif[39;00m [38;5;28mself[39m.use_sdk: [38;5;28;01mreturn[39;00m [30;43mself[39;49m[30;43m.[39;49m[30;43m_sdk_step[39;49m[30;43m([39;49m[30;43mmax_output_tokens[39;49m[30;43m)[39;49m
+    [32m    244[39m     [38;5;28;01mreturn[39;00m [38;5;28mself[39m._note_usage(norm_cursor(json.loads([38;5;28mself[39m._run([33m'[39m[33mjson[39m[33m'[39m).stdout), [38;5;28mself[39m.model_id))
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/rishi/cursor.py:334[39m, in [36m_sdk_step[39m[34m(self, max_output_tokens)[39m
+    [32m    332[39m [33m"[39m[33mOne turn through the live agent: only what it has not already been told goes out.[39m[33m"[39m
+    [32m    333[39m msg, n = [38;5;28mself[39m._tail()
+    [32m--> [39m[32m334[39m run = [30;43mself[39;49m[30;43m.[39;49m[30;43magent[39;49m.send(msg)
+    [32m    335[39m [38;5;28mself[39m._sent = n
+    [32m    336[39m [38;5;28;01mreturn[39;00m [38;5;28mself[39m._note_usage([38;5;28mself[39m._sdk_resp(run))
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/rishi/cursor.py:301[39m, in [36magent[39m[34m(self)[39m
+    [32m    298[39m [38;5;129m@patch[39m(as_prop=[38;5;28;01mTrue[39;00m)
+    [32m    299[39m [38;5;28;01mdef[39;00m[38;5;250m [39m[34magent[39m([38;5;28mself[39m:CursorChat):
+    [32m    300[39m     [33m"[39m[33mThe live agent, built on first use and kept until something invalidates the conversation.[39m[33m"[39m
+    [32m--> [39m[32m301[39m     [38;5;28;01mif[39;00m [38;5;28mself[39m._agent [38;5;129;01mis[39;00m [38;5;28;01mNone[39;00m: [38;5;28mself[39m._agent, [38;5;28mself[39m._sent = [30;43mself[39;49m[30;43m.[39;49m[30;43m_mk_agent[39;49m[30;43m([39;49m[30;43m)[39;49m, [32m0[39m
+    [32m    302[39m     [38;5;28;01mreturn[39;00m [38;5;28mself[39m._agent
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/rishi/cursor.py:296[39m, in [36m_mk_agent[39m[34m(self)[39m
+    [32m    290[39m local = LocalAgentOptions(cwd=[38;5;28mstr[39m([38;5;28mself[39m.workspace [38;5;129;01mor[39;00m Path.cwd()),
+    [32m    291[39m                           sandbox_options=[38;5;28;01mNone[39;00m [38;5;28;01mif[39;00m [38;5;28mself[39m.sandbox [38;5;129;01mis[39;00m [38;5;28;01mNone[39;00m [38;5;28;01melse[39;00m
+    [32m    292[39m                           SandboxOptions(enabled=[38;5;28mself[39m.sandbox [38;5;129;01mnot[39;00m [38;5;129;01min[39;00m ([38;5;28;01mFalse[39;00m, [33m'[39m[33mdisabled[39m[33m'[39m)))
+    [32m    293[39m opts = AgentOptions(model=cursor_model([38;5;28mself[39m.model_id, [38;5;28mself[39m.effort, [38;5;28mself[39m.fast, via=[33m'[39m[33msdk[39m[33m'[39m),
+    [32m    294[39m                     api_key=[38;5;28mself[39m.api_key, mode=sdk_mode([38;5;28mself[39m.mode),
+    [32m    295[39m                     tools=[38;5;28mself[39m.cursor_tools, disallowed_tools=[38;5;28mself[39m.cursor_disallowed, local=local)
+    [32m--> [39m[32m296[39m [38;5;28;01mreturn[39;00m [30;43mAgent[39;49m[30;43m.[39;49m[30;43mcreate[39;49m[30;43m([39;49m[30;43mopts[39;49m[30;43m)[39;49m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/cursor_sdk/_agent.py:119[39m, in [36mAgent.create[39m[34m(cls, options, client, model, api_key, name, local, cloud, idempotency_key)[39m
+    [32m    105[39m [38;5;129m@classmethod[39m
+    [32m    106[39m [38;5;28;01mdef[39;00m[38;5;250m [39m[34mcreate[39m(
+    [32m    107[39m     [38;5;28mcls[39m,
+    [32m   (...)[39m[32m    116[39m     idempotency_key: [38;5;28mstr[39m | [38;5;28;01mNone[39;00m = [38;5;28;01mNone[39;00m,
+    [32m    117[39m ) -> [33m"[39m[33mAgent[39m[33m"[39m:
+    [32m    118[39m     client = client [38;5;129;01mor[39;00m _default_client()
+    [32m--> [39m[32m119[39m     [38;5;28;01mreturn[39;00m [30;43mclient[39;49m[30;43m.[39;49m[30;43mcreate_agent[39;49m[30;43m([39;49m
+    [32m    120[39m [30;43m        [39;49m[30;43moptions[39;49m[30;43m,[39;49m
+    [32m    121[39m [30;43m        [39;49m[30;43mmodel[39;49m[30;43m=[39;49m[30;43mmodel[39;49m[30;43m,[39;49m
+    [32m    122[39m [30;43m        [39;49m[30;43mapi_key[39;49m[30;43m=[39;49m[30;43mapi_key[39;49m[30;43m,[39;49m
+    [32m    123[39m [30;43m        [39;49m[30;43mname[39;49m[30;43m=[39;49m[30;43mname[39;49m[30;43m,[39;49m
+    [32m    124[39m [30;43m        [39;49m[30;43mlocal[39;49m[30;43m=[39;49m[30;43mlocal[39;49m[30;43m,[39;49m
+    [32m    125[39m [30;43m        [39;49m[30;43mcloud[39;49m[30;43m=[39;49m[30;43mcloud[39;49m[30;43m,[39;49m
+    [32m    126[39m [30;43m        [39;49m[30;43midempotency_key[39;49m[30;43m=[39;49m[30;43midempotency_key[39;49m[30;43m,[39;49m
+    [32m    127[39m [30;43m    [39;49m[30;43m)[39;49m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/cursor_sdk/_client.py:428[39m, in [36mClient.create_agent[39m[34m(self, options, model, api_key, name, local, cloud, idempotency_key)[39m
+    [32m    426[39m     request[[33m"[39m[33midempotencyKey[39m[33m"[39m] = idempotency_key
+    [32m    427[39m [38;5;28;01mtry[39;00m:
+    [32m--> [39m[32m428[39m     response = [30;43mself[39;49m[30;43m.[39;49m[30;43m_agent_unary[39;49m[30;43m([39;49m[30;43m"[39;49m[30;43mCreateAgent[39;49m[30;43m"[39;49m[30;43m,[39;49m[30;43m [39;49m[30;43mrequest[39;49m[30;43m)[39;49m
+    [32m    429[39m [38;5;28;01mexcept[39;00m [38;5;167;01mException[39;00m:
+    [32m    430[39m     [38;5;28;01mif[39;00m registered_agent_id [38;5;129;01mand[39;00m unregister_custom_tools [38;5;129;01mis[39;00m [38;5;129;01mnot[39;00m [38;5;28;01mNone[39;00m:
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/cursor_sdk/_client.py:675[39m, in [36mClient._agent_unary[39m[34m(self, method, message, skip_remote_cloud_guard)[39m
+    [32m    673[39m [38;5;28;01mif[39;00m [38;5;129;01mnot[39;00m skip_remote_cloud_guard:
+    [32m    674[39m     [38;5;28mself[39m._require_explicit_api_key_for_remote_cloud_agent_rpc(method, message)
+    [32m--> [39m[32m675[39m [38;5;28;01mreturn[39;00m [30;43mself[39;49m[30;43m.[39;49m[30;43m_transport[39;49m[30;43m.[39;49m[30;43munary[39;49m[30;43m([39;49m[30;43mAGENT_SERVICE[39;49m[30;43m,[39;49m[30;43m [39;49m[30;43mmethod[39;49m[30;43m,[39;49m[30;43m [39;49m[30;43mstrip_empty[39;49m[30;43m([39;49m[30;43mmessage[39;49m[30;43m)[39;49m[30;43m)[39;49m
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/cursor_sdk/_connect.py:307[39m, in [36mConnectTransport.unary[39m[34m(self, service, method, message)[39m
+    [32m    303[39m headers = [38;5;28mself[39m._headers(
+    [32m    304[39m     accept=[33m"[39m[33mapplication/json[39m[33m"[39m, content_type=[33m"[39m[33mapplication/json[39m[33m"[39m
+    [32m    305[39m )
+    [32m    306[39m url = urljoin([38;5;28mself[39m.base_url, [33mf[39m[33m"[39m[38;5;132;01m{[39;00mservice[38;5;132;01m}[39;00m[33m/[39m[38;5;132;01m{[39;00mmethod[38;5;132;01m}[39;00m[33m"[39m)
+    [32m--> [39m[32m307[39m response = [30;43m_post_with_retries[39;49m[30;43m([39;49m
+    [32m    308[39m [30;43m    [39;49m[30;43mself[39;49m[30;43m.[39;49m[30;43m_client[39;49m[30;43m,[39;49m
+    [32m    309[39m [30;43m    [39;49m[30;43murl[39;49m[30;43m,[39;49m
+    [32m    310[39m [30;43m    [39;49m[30;43mbody[39;49m[30;43m,[39;49m
+    [32m    311[39m [30;43m    [39;49m[30;43mheaders[39;49m[30;43m,[39;49m
+    [32m    312[39m [30;43m    [39;49m[30;43mself[39;49m[30;43m.[39;49m[30;43m_httpx_timeout[39;49m[30;43m([39;49m[30;43mself[39;49m[30;43m.[39;49m[30;43munary_timeout[39;49m[30;43m)[39;49m[30;43m,[39;49m
+    [32m    313[39m [30;43m    [39;49m[30;43mmax_retries[39;49m[30;43m=[39;49m[30;43mself[39;49m[30;43m.[39;49m[30;43mmax_retries[39;49m[30;43m,[39;49m
+    [32m    314[39m [30;43m    [39;49m[30;43mservice[39;49m[30;43m=[39;49m[30;43mservice[39;49m[30;43m,[39;49m
+    [32m    315[39m [30;43m    [39;49m[30;43mmethod[39;49m[30;43m=[39;49m[30;43mmethod[39;49m[30;43m,[39;49m
+    [32m    316[39m [30;43m[39;49m[30;43m)[39;49m
+    [32m    317[39m body_bytes = response.content
+    [32m    318[39m [38;5;28;01mif[39;00m [38;5;129;01mnot[39;00m body_bytes:
+
+    [36mFile [39m[32m~/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/cursor_sdk/_connect.py:370[39m, in [36m_post_with_retries[39m[34m(client, url, body, headers, timeout, max_retries, service, method)[39m
+    [32m    368[39m         _sleep_before_retry(attempt)
+    [32m    369[39m         [38;5;28;01mcontinue[39;00m
+    [32m--> [39m[32m370[39m     [38;5;28;01mraise[39;00m _network_error(error) [38;5;28;01mfrom[39;00m[38;5;250m [39m[34;01merror[39;00m
+    [32m    371[39m [38;5;28;01mif[39;00m response.status_code < [32m400[39m:
+    [32m    372[39m     [38;5;28;01mreturn[39;00m response
+
+    [31mNetworkError[39m: Bridge request failed: ConnectError: [Errno 61] Connection refused
 
 ## Knowing when to compress
 

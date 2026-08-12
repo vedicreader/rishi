@@ -6,16 +6,17 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['tool_reminder_', 'TAG_TOOLS_SP', 'runtimes', 'dflt_runtime', 'budget_msg_', 'dflt_final_prompt_', 'qa_sp_',
-           'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'quote_', 'Resp', 'tc_summary_',
-           'mk_tr_details', 'StreamFormatter', 'display_stream', 'truncated', 'TruncationCallback', 'mk_oai_content',
-           'mk_oai_msg', 'mk_oai_msgs', 'is_media', 'mk_toolspec', 'split_think', 'mk_tag_tc', 'parse_tool_tags',
-           'tag_tools_sp', 'parse_args', 'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc',
-           'UsageCallback', 'ToolReminderCallback', 'common_prefix_len', 'split_runtime', 'infer_runtime',
-           'resolve_runtime', 'get_runtime', 'ToolCall', 'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs',
-           'ContextWindowExceededError', 'is_ctx_error', 'Chat', 'ToolLoopMixin', 'msg_groups', 'evict_middle',
-           'SlidingWindowCallback', 'AsyncChat', 'adisplay_stream', 'browser_approval', 'hitl_policy', 'extract_code',
-           'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'sync_iter', 'task_complete', 'output_matches',
-           'PyFenceCallback', 'repo_root', 'mv_skill_md']
+           'CHAT_CACHE', 'KEY_VERSION', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'quote_',
+           'Resp', 'tc_summary_', 'mk_tr_details', 'StreamFormatter', 'display_stream', 'truncated',
+           'TruncationCallback', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs', 'is_media', 'mk_toolspec',
+           'split_think', 'mk_tag_tc', 'parse_tool_tags', 'tag_tools_sp', 'parse_args', 'norm_resp', 'to_oai_msg',
+           'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback', 'ToolReminderCallback',
+           'common_prefix_len', 'split_runtime', 'infer_runtime', 'resolve_runtime', 'get_runtime', 'ToolCall',
+           'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError', 'is_ctx_error', 'Chat',
+           'ToolLoopMixin', 'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'AsyncChat', 'adisplay_stream',
+           'browser_approval', 'hitl_policy', 'extract_code', 'extract_fence', 'matches_', 'mk_result_fence',
+           'run_coro', 'sync_iter', 'task_complete', 'output_matches', 'PyFenceCallback', 'is_transient', 'RecordCache',
+           'CachedChat', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #655b2174ec1d6506
 import json, re, os, asyncio, io, ast, inspect, warnings, uuid
@@ -25,11 +26,12 @@ from mimetypes import guess_type
 from contextlib import ExitStack, redirect_stdout
 from concurrent.futures import ThreadPoolExecutor
 from base64 import b64encode
+from hashlib import sha256
 from importlib import import_module
 from dataclasses import is_dataclass, fields
 from typing import get_type_hints
 from fastcore.funccall import get_schema, mk_ns, call_func
-from fastcore.all import (Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, img_bytes, AttrDict,
+from fastcore.all import (Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, img_bytes, AttrDict, str2bool,
                           in_, SaveReturn, asave_iter)
 from safepyrun import RunPython
 
@@ -277,14 +279,7 @@ never invent a result -- the real one comes back in the next message."""
 
 
 def tag_tools_sp(toolspecs, sp='', template=TAG_TOOLS_SP):
-    """A system prompt that teaches the tag protocol, for a transport that cannot carry tools.
-
-    Some transports have no tool field to put a schema in, or have one that policy forbids
-    using -- an enterprise Claude Code configuration refuses every dynamic MCP server, which
-    is how its tools are declared. The model is not the problem there; the channel is. So the
-    schemas go where there is always room for them, and `parse_tool_tags` reads the calls back
-    out of the reply text.
-    """
+    "`sp` plus the tag protocol and `toolspecs` as JSON, for a transport that can't carry tools."
     if not toolspecs: return sp
     block = '\n'.join(json.dumps(t, ensure_ascii=False) for t in toolspecs)
     return (sp or '') + template.format(tools=block)
@@ -444,11 +439,14 @@ def common_prefix_len(a, b):
 
 # %% ../nbs/00_core.ipynb #2e94a7d34fc04994
 runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat'),
-            'mlx': ('rishi.mlx','MlxChat'), 'remote': ('rishi.remote','RemoteChat')}
+            'mlx': ('rishi.mlx','MlxChat'), 'remote': ('rishi.remote','RemoteChat'),
+            'cursor': ('rishi.cursor','CursorChat')}
 dflt_runtime = 'litert'
 # checked in order, so the local file/repo shapes win over the hosted model-name patterns
 _pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'), 'llama': ('.gguf','gguf'),
          'mlx': ('mlx-community','mlx_lm','-mlx','mlx-'),
+         # cursor before remote: a `cursor-grok-...` is Cursor's, not xAI's, and `grok-` would claim it
+         'cursor': ('cursor-',),
          'remote': ('claude-','gpt-','gemini-','kimi-','deepseek-','grok-','sonnet','opus','haiku','fable')}
 
 def split_runtime(model):
@@ -636,53 +634,26 @@ class Chat:
         pass
 
     def _set_sp(self, sp):
-        "Note a new system prompt wherever the backend keeps one of its own. `_recreate_conv` applies it."
+        "Note a new system prompt wherever the backend keeps one of its own; `_recreate_conv` applies it."
         pass
 
     def _set_tools(self, tools):
-        "Rebuild whatever tool state the backend holds -- schemas, a call namespace. Overridden where there is any."
+        "Rebuild whatever tool state the backend holds - wire schemas, a call namespace."
         pass
 
     def reconfigure(self, sp=None, tools=None):
-        """Change the system prompt and/or the tool list on a live conversation, keeping the history.
-
-        A harness that discovers a skill, opens a folder or loads an extension mid-session has
-        a new briefing and a new tool list for a conversation nobody wants to restart. There
-        was no public way to say so, so callers reached in and set `_sys_pre`, `toolspecs`,
-        `ns` and then called `_recreate_conv` -- four private names, three of which only some
-        backends have, guarded by `hasattr` because of it. That is a copy of this method in
-        every harness, and it breaks silently whenever a backend changes shape.
-
-        `None` leaves that half alone; passing `tools=()` really does remove every tool.
-        """
-        if sp is not None:
-            self.sp = sp
-            self._set_sp(sp)
-        if tools is not None:
-            self.tools = L(tools)
-            self._set_tools(self.tools)
+        "Change `sp` and/or `tools` on a live conversation, keeping `hist`; `None` leaves that half alone, `tools=()` removes every tool."
+        if sp is not None: self.sp = sp; self._set_sp(sp)
+        if tools is not None: self.tools = L(tools); self._set_tools(self.tools)
         self._recreate_conv()
         return self
 
     def oneshot(self, prompt, sp='', think=None, max_tokens=None):
-        """One stateless reply, outside the conversation: no history, no tools, nothing kept.
-
-        This is what the cheap jobs around a chat are made of -- a label, a summary, a
-        completion to insert -- and every one of them was reaching for `_oneshot`, because
-        the public surface stopped at `classify` and `structured`.
-
-        `think=False` asks a reasoning model not to deliberate, in whatever way this runtime
-        has of asking: a `/no_think` line, `enable_thinking=False` in the chat template, no
-        thinking channel on the conversation, the lowest reasoning effort the API takes. It
-        matters more than it sounds. A cheap job's whole budget can be 32 tokens and a
-        reasoning model will spend all of them thinking, leaving no answer to strip the
-        thinking off of; stripping it afterwards cleans up, asking not to think is the fix.
-        `think=True` insists on it, and `None` leaves the model's own default alone.
-        """
+        "One stateless reply: no history, no tools, nothing kept. `think=False` asks the model not to deliberate."
         return self._oneshot(prompt, sp, think=think, max_tokens=max_tokens)
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
-        "One stateless completion's text. Every backend implements this; `oneshot` is the public door."
+        "One stateless completion's text; every backend implements it, `oneshot` is the public door."
         raise NotImplementedError
 
     def recover_context(self, error, max_output_tokens=None):
@@ -1090,6 +1061,139 @@ def check(self:Chat, question, expected, grade_fn=matches_, llm_judge=False, jud
     a = extract_fence(self.oneshot(question, sp), tag)
     ok = (judge or self).grades(question, expected, a) if (llm_judge or judge) else grade_fn(a, expected)
     return AttrDict(question=question, expected=expected, answer=a, ok=ok)
+
+# %% ../nbs/00_core.ipynb #cachedchat
+CHAT_CACHE = 'chatcache'   # a diskcache directory; the one under `nbs/` is committed, for CI
+KEY_VERSION = 3            # bump to invalidate every recording everywhere - see the note above
+
+#: Failures that say nothing about the ask - a socket, a timeout, a rate limit. Recording one would
+#: replay a bad afternoon forever, so they are raised and forgotten instead.
+_transient_re = re.compile(r'rate.?limit|timed? ?out|timeout|temporarily|try again|överbelast|50[234]\b|429', re.I)
+
+def is_transient(e):
+    "Is `e` a failure of the moment rather than of the ask? Those are not worth remembering."
+    return isinstance(e, (ConnectionError, TimeoutError, OSError)) or bool(_transient_re.search(str(e)))
+
+class RecordCache:
+    "Record what a call returned the first time and replay it every time after; the primitive under `CachedChat`."
+    def __init__(self,
+                 path=None,      # the diskcache directory; None -> `CHAT_CACHE`
+                 record=None,    # let a miss run for real; None -> the environment
+                 env='RISHI_RECORD_CHAT',  # what says a miss may run
+                 version=None):  # part of every key; None -> `KEY_VERSION`
+        try: from diskcache import Cache
+        except ImportError as e: raise ImportError(
+            "RecordCache needs diskcache, which rishi does not install by default: "
+            "pip install 'rishi[record]'") from e
+        self.cache, self.env, self.version = Cache(str(path or CHAT_CACHE)), env, ifnone(version, KEY_VERSION)
+        # `RISHI_RECORD_CHAT=0` has to mean no, or a job setting it to forbid live calls invites them
+        self.record = str2bool(os.getenv(env) or '') if record is None else record
+
+    def key(self, *parts):
+        "Stable hash of `parts`, with the cache version in it."
+        return sha256(json.dumps([self.version, *parts], sort_keys=True, default=str).encode()).hexdigest()
+
+    def __call__(self, key, f, what=''):
+        "Replay `key`, else run `f()` and record what it did - including how it failed."
+        if key in self.cache:
+            got, val = self.cache[key]
+            if got == 'exc': raise RuntimeError(val)
+            return val
+        if not self.record: raise KeyError(
+            f'no recording for {what or key[:16]} - set {self.env}=1 and re-run to record it')
+        try: val = f()
+        except Exception as e:
+            # a backend that rejects its own tool call is worth remembering; a rate limit is not
+            if not is_transient(e): self.cache[key] = ('exc', f'{type(e).__name__}: {e}')
+            raise
+        self.cache[key] = ('ok', val)
+        return val
+
+    def forget(self, key):
+        "Drop one recording, for when what it captured was never the truth. Returns whether there was one."
+        return self.cache.pop(key, None) is not None
+
+def _canon_msg(m):
+    "What a reply depends on in one history entry: who spoke, what was said, what was attached, what was called."
+    media = [sha256(str(p).encode()).hexdigest()[:16] for p in listify(m.get('content')) if is_media(p)]
+    tcs = [(tc_name(tc), (tc.get('function') or {}).get('arguments')) for tc in (m.get('tool_calls') or [])]
+    return [m.get('role', ''), resp_text(m), media, tcs]
+
+class CachedChat:
+    "A `Chat` whose replies are recorded to disk and replayed on a second ask; a replay builds no engine."
+    def __init__(self,
+                 model=None,    # anything `Chat` takes; part of the key
+                 path=None,     # the diskcache directory; None -> `CHAT_CACHE`
+                 record=None,   # let a miss reach a real model; None -> $RISHI_RECORD_CHAT
+                 sp='',         # system prompt, part of the key
+                 tools=None,    # tool names are part of the key; the real chat gets the tools themselves
+                 **kw):         # forwarded to `Chat` on a miss
+        store_attr('model,sp,kw')
+        self.tools, self.rec, self._chat, self.hist = L(tools), RecordCache(path, record), None, []
+
+    @property
+    def cache(self): return self.rec.cache
+    @property
+    def chat(self):
+        "The real `Chat`, built only when something actually has to be asked."
+        if self._chat is None:
+            self._chat = Chat(self.model, sp=self.sp, tools=list(self.tools), messages=self.hist, **self.kw)
+        return self._chat
+
+    def _key(self, kind, *args, hist=True):
+        """What a reply is recorded under: the model, how it was built, the briefing, the tools, the conversation.
+
+        `hist=False` is for the asks that are stateless by definition - a one-shot, a label - which
+        would otherwise miss every time the conversation around them grew by a turn.
+        """
+        return self.rec.key(self.model, kind, self.sp, self.kw,
+                            [getattr(t, '__name__', str(t)) for t in self.tools],
+                            [_canon_msg(m) for m in self.hist] if hist else [], *args)
+
+    def _ask(self, kind, args, f, hist=True):
+        "Replay this ask if it is recorded, else run `f()` and record it."
+        what = f'{kind} for {self.model} after {len(self.hist) if hist else 0} messages: {str(args[0])[:80]}'
+        return self.rec(self._key(kind, *args, hist=hist), f, what)
+
+    def __call__(self, prompt, **kw):
+        """One turn, replayed if it has been asked before; `hist` ends up as the real turn left it.
+
+        What gets recorded is the whole slice of history the turn produced, not just the reply -
+        a tool-using turn is a call, a result and an answer, and a recording that kept only the
+        answer would replay a conversation the model was never in. Since that same `hist` is what
+        the *next* key is built from, keeping only the answer also made two different tool
+        conversations with the same prompt collide on one key.
+        """
+        key = self._key('call', prompt, kw)
+        hit, what = key in self.rec.cache, f'call for {self.model} after {len(self.hist)} messages: {str(prompt)[:80]}'
+        def _live():
+            n = len(self.chat.hist)
+            r = self.chat(prompt, **kw)
+            return {'resp': dict(r), 'hist': [dict(m) for m in self.chat.hist[n:]]}
+        rec = self.rec(key, _live, what)
+        self.hist += [dict(m) for m in rec['hist']]
+        # a replayed turn never reached the live chat, so hand it the history it missed
+        if hit and self._chat is not None:
+            self._chat.hist = list(self.hist)
+            self._chat._recreate_conv()
+        return Resp(rec['resp'])
+
+    def oneshot(self, prompt, sp='', think=None, max_tokens=None):
+        return self._ask('oneshot', [prompt, sp, think, max_tokens], hist=False,
+                         f=lambda: self.chat.oneshot(prompt, sp, think=think, max_tokens=max_tokens))
+    def classify(self, text, labels, **kw):
+        return self._ask('classify', [text, list(labels), kw], hist=False,
+                         f=lambda: self.chat.classify(text, labels, **kw))
+
+    def reconfigure(self, sp=None, tools=None):
+        "Change `sp`/`tools` for the asks that follow; both are part of the key, so a replay stays honest."
+        if sp is not None: self.sp = sp
+        if tools is not None: self.tools = L(tools)
+        if self._chat is not None: self._chat.reconfigure(sp=sp, tools=tools)
+        return self
+
+    def close(self):
+        if self._chat is not None: self._chat.close(); self._chat = None
 
 # %% ../nbs/00_core.ipynb #ec73015d6da67033
 def repo_root() -> Path:

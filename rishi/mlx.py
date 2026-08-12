@@ -283,12 +283,7 @@ class MlxChat(ToolLoopMixin, Chat):
         return ''.join(r.text for r in stream_generate(self.engine.model, self.tokenizer, ids, **kw))
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
-        """Stateless one-shot completion text, with any thinking stripped.
-
-        `think` reaches the chat template as `enable_thinking`, which closes the thinking
-        block in the *prompt* rather than leaving the model to close it. `split_think` still
-        runs, for a model that thinks anyway.
-        """
+        """Stateless one-shot completion text, with any thinking stripped."""
         msgs = ([{'role': 'system', 'content': sp}] if sp else []) + [{'role': 'user', 'content': prompt}]
         return split_think(self._raw(msgs, max_output_tokens=max_tokens, think=think))[0]
 

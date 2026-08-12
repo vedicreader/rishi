@@ -100,34 +100,22 @@ def norm_usage(u, model=None):
             'cached_tokens': u.cached_tokens, 'model': model}
 
 def norm_completion(comp):
-    """fastllm `Completion` -> rishi `Resp`.
-
-    Tag calls are read out of the text as well as native ones, exactly as `core.norm_resp`
-    does for the OpenAI-shaped path. A hosted model asked to use the tag protocol -- because
-    its transport has no tool field, or policy forbids the one it has -- would otherwise emit
-    a perfectly good `<tool_call>` block and have it rendered as prose.
-    """
+    "fastllm `Completion` -> rishi `Resp`, with `<tool_call>` tags read out of the text as `core.norm_resp` does."
     res = to_hist(comp.message)[0]
     res.setdefault('role', 'assistant')
-    if isinstance(res.get('content'), str):
-        res['content'], tag_tcs = parse_tool_tags(res['content'])
-    else: tag_tcs = []
-    if comp.tool_calls or tag_tcs:
-        res['tool_calls'] = [ToolCall(name=tc.name, arguments=tc.arguments, id=tc.id, server=tc.server)
-                             for tc in (comp.tool_calls or [])] + [
-                            ToolCall(name=tc['function']['name'], arguments=tc['function']['arguments'],
-                                     id=tc['id']) for tc in tag_tcs]
+    tag_tcs = []
+    if isinstance(res.get('content'), str): res['content'], tag_tcs = parse_tool_tags(res['content'])
+    tcs = [ToolCall(name=tc.name, arguments=tc.arguments, id=tc.id, server=tc.server) for tc in (comp.tool_calls or [])]
+    tcs += [ToolCall(name=tc['function']['name'], arguments=tc['function']['arguments'], id=tc['id']) for tc in tag_tcs]
+    if tcs: res['tool_calls'] = tcs
     if comp.finish_reason == 'length': res['truncated'] = True
     res['usage'] = norm_usage(comp.usage, comp.model)
     return Resp(res)
 
 # %% ../nbs/04_remote.ipynb #rm_chat
-#: What `think=False` asks a hosted model for. There is no cross-provider "do not think" --
-#: the local backends have a chat-template switch and hosted ones have `reasoning_effort` --
-#: so it is spelled as the lowest effort the current APIs understand, and it is a name here
-#: rather than a literal so a deployment whose provider spells it otherwise can say so.
+#: What `think=False` asks a hosted model for - a name, not a literal, so a deployment whose
+#: provider spells the lowest reasoning effort differently can say so.
 NO_THINK_EFFORT = 'minimal'
-
 class RemoteChat(ToolLoopMixin, Chat):
     "Chat against a hosted model through fastllm - the same `rishi.core.Chat` API as the local backends."
     _runtime = 'remote'
@@ -154,8 +142,7 @@ class RemoteChat(ToolLoopMixin, Chat):
         model = core.split_runtime(model)[1]
         self.tool_mode = tool_mode
         self.model_id = model or 'gpt-5.1'
-        self.toolspecs = [mk_toolspec(t) for t in L(tools)]
-        self.ns = mk_ns([t for t in L(tools) if callable(t)])
+        self._set_tools(tools)
         store_attr('api_key,base_url,vendor_name,api_name,tool_choice,reasoning_effort,temp,'
                    'max_output_tokens,retries', self)
         self.comp_kw, self._ctx_tokens = comp_kw or {}, 0
@@ -217,22 +204,13 @@ class RemoteChat(ToolLoopMixin, Chat):
         self._step_res = norm_completion(comp)
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
-        """Stateless one-shot completion text (no history, no tools).
-
-        A hosted reasoning model has no `/no_think` and no chat template to reach; the lever
-        is `reasoning_effort`, and the vocabulary for it is the provider's. So `think=False`
-        asks for `NO_THINK_EFFORT` and, if the API refuses the word, asks again without it --
-        one wasted round trip on a provider that spells it differently, rather than a cheap
-        job that fails outright on a model whose only fault is being hosted.
-        """
-        msgs = [{'role': 'user', 'content': prompt}]
+        "Stateless one-shot completion text (no history, no tools); `think=False` asks for `NO_THINK_EFFORT`."
+        msgs = [to_msg({'role': 'user', 'content': prompt})]
         kw = {**self._kw(max_output_tokens=max_tokens), 'system': sp or None, 'tools': None, 'tool_choice': None}
-        if think is not None: kw['reasoning_effort'] = NO_THINK_EFFORT if think is False else self.reasoning_effort
-        send = lambda k: resp_text(norm_completion(run_coro(acomplete([to_msg(m) for m in msgs], self.model_id, **k))))
-        try: return send(kw)
-        except Exception:
-            if think is None: raise
-            return send({**kw, 'reasoning_effort': self.reasoning_effort})
+        send = lambda k: resp_text(norm_completion(run_coro(acomplete(msgs, self.model_id, **k))))
+        if think is not False: return send(kw)
+        try: return send({**kw, 'reasoning_effort': NO_THINK_EFFORT})
+        except Exception: return send(kw)   # a provider that spells the effort differently
 
     def _structured_call(self, prompt, schema, sp):
         "Force the tool call for `schema` and return its arguments; falls back to parsing JSON from prose."

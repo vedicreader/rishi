@@ -15,9 +15,11 @@ neither a token cap nor a way to ask the model not to deliberate.
 reasoning model will spend all of them thinking - leaving no answer to strip the thinking off of.
 Each backend now has a way to ask: `/no_think` in the system prompt (llama), `enable_thinking=False`
 in the chat template (mlx), a conversation built without a thinking channel (litert), and the
-lowest `reasoning_effort` the API takes (remote, `NO_THINK_EFFORT`, retried without it if the
-provider spells it differently). `think=True` insists, `None` leaves the model's default alone.
-`classify`, `grades` and the summarizing callback ask for `think=False` themselves now.
+lowest `reasoning_effort` the API takes (remote, `NO_THINK_EFFORT`, asked again without it if the
+provider spells it differently). `think=True` insists wherever a backend has a switch to insist
+with; a hosted model has none, so it keeps whatever `reasoning_effort` the chat was built with.
+`None` leaves the model's default alone. `classify`, `grades` and the summarizing callback ask for
+`think=False` themselves now.
 
 **`Chat.reconfigure(sp=, tools=)`.** Change the system prompt and the tool list on a live
 conversation, keeping its history - what a harness needs when a skill is discovered, a folder is
@@ -26,6 +28,48 @@ opened, or an extension loads mid-session. There was no way to say it, so caller
 only some backends have, each behind a `hasattr` because of it. Backends supply the two halves
 through `_set_sp` and `_set_tools`, so a backend that grows new state stays Rishi's business
 rather than a silent no-op in somebody else's harness.
+
+**`rishi.cursor`: Cursor's models through the CLI.** `CursorChat` drives `cursor-agent` headless, so
+`Chat('cursor/cursor-grok-4.5-high')` is a chat like any other - streaming, thinking, usage, and tools
+through the tag protocol, since the CLI hands back text and never a structured call. It cannot be a
+`RemoteChat`: `cursor-agent` has an endpoint, but it is Cursor's own wire and there is nothing for
+fastllm to bind to.
+
+There are two paths to Cursor, because there are two credentials. The CLI path shells out per turn and
+needs only `cursor-agent login`; it costs about nine seconds a turn, of which six are the CLI starting
+up - measured, and identical in a large repo and an empty directory, so it is init and not scanning.
+The SDK path (`pip install 'rishi[cursor]'`, `$CURSOR_API_KEY` from the Cursor dashboard) holds one
+`cursor_sdk` agent for the life of the chat and pays that startup once instead of once per turn.
+`sdk=None` picks the SDK when there is a key and the package, and the CLI otherwise.
+
+A live agent has its own memory of the conversation, so only the unsent tail goes out - the question
+and any tool result, never the agent's own replies, which it already knows. That memory is a lie the
+moment rishi's history moves underneath it, so `_recreate_conv` - the hook eviction and `reconfigure`
+already call - closes the agent, and the next turn builds a fresh one and re-sends the history as it
+now stands. Drift is not managed, it is made impossible.
+
+Two defaults are deliberate. `mode='ask'` and `sandbox='enabled'`, because `-p` on its own gives
+cursor-agent write and shell access to the working directory, and a second agent loose inside rishi's
+tool loop is not what asking a model a question should mean. And `CursorChat.local` is `False`: the
+binary is local, the model is not, and anything deciding what is safe to send on the strength of
+"the runtime is not `remote`" needs to be told otherwise about this one.
+
+**`RecordCache` and `CachedChat`, and a recording CI can replay.** `RecordCache` records what an
+expensive call returned to a diskcache directory on the first run and replays it on every run after -
+`cache(key, f)`, a `key(*parts)` that hashes, and nothing else, so another package can wrap its own
+backend in it without inheriting any of `Chat`'s assumptions. `CachedChat` is that primitive wrapped
+around a `Chat`. A replay builds no engine, so it costs
+nothing, needs no GPU, and can never start a download - which is what lets the examples in the README
+actually run in CI rather than sitting behind `#| eval: false`. A miss needs `$RISHI_RECORD_CHAT`,
+so a stale recording fails loudly instead of turning a CI job into a two-gigabyte download, and an
+exception is recorded like any other reply, because a backend that rejects its own tool call is
+exactly what the code around it has to handle.
+
+The key is a `sha256` of what a reply depends on - `KEY_VERSION`, the model, the briefing, the tool
+names, and who said what so far - and not of the bookkeeping that rides along, so a reply that gains
+a `usage` field or a thinking channel still replays. Once a repo commits a recording the shape of
+that key is public API: `KEY_VERSION` is the deliberate way to break it, and it invalidates
+everything, everywhere, on purpose.
 
 **Tag-protocol tools on hosted models.** `RemoteChat(tool_mode='tags')` puts the tool schemas
 in the system prompt via the new `tag_tools_sp`, sends nothing in the wire's tool field, and
