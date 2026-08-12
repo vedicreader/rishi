@@ -1,4 +1,4 @@
-"""The backend-agnostic core of rishi: the `Chat` base that dispatches to a backend by model name, the shared callback system, human-in-the-loop tool approval, streaming display, structured output, and usage tracking.
+"""Backend-agnostic `Chat`: dispatch by model name, callbacks, HITL tools, streaming, structured output, usage tracking.
 
 Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
@@ -438,6 +438,7 @@ def common_prefix_len(a, b):
     return n
 
 # %% ../nbs/00_core.ipynb #2e94a7d34fc04994
+#: Runtime name -> (module, Chat class) for `get_runtime`.
 runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat'),
             'mlx': ('rishi.mlx','MlxChat'), 'remote': ('rishi.remote','RemoteChat'),
             'cursor': ('rishi.cursor','CursorChat')}
@@ -497,6 +498,7 @@ def _mk_obj(schema, d):
         return schema(**{k: (_mk_obj(hints[k], v) if k in hints else v) for k, v in d.items() if k in names})
     return schema(**d)
 
+
 # %% ../nbs/00_core.ipynb #6c3276481c342ac
 class ToolCall(dict):
     "One tool call in canonical form. A `dict` subclass, so anything that indexes it keeps working."
@@ -527,6 +529,7 @@ def mk_tool_res_msgs(tcs, results):
     return [mk_tool_res_msg(tc, r) for tc, r in zip(tcs, results)]
 
 # %% ../nbs/00_core.ipynb #11c2627de6f9c1d8
+#: Shown to the model when `max_steps` tool budget is exhausted.
 budget_msg_ = 'Tool-call budget exceeded; no more tools will run this turn.'
 dflt_final_prompt_ = ("You've reached the tool-call budget for this turn. Stop calling tools and "
                       "answer with what you already have.")
@@ -543,6 +546,7 @@ def is_ctx_error(chat, e):
     if any(m in str(e).lower() for m in _ctx_err_markers): return True
     try: return bool(chat.ctx_limit) and chat.pct_full >= 1
     except Exception: return False
+
 
 # %% ../nbs/00_core.ipynb #7757316ddbeb90fa
 class Chat:
@@ -1046,6 +1050,7 @@ def structured(self:Chat, prompt, schema, sp='Reply with only a JSON object matc
     return _mk_obj(schema, self._structured_call(prompt, schema, sp))
 
 # %% ../nbs/00_core.ipynb #b7e7d57fc1af5337
+#: System prompt for `chat.check` — asks for a fenced final answer.
 qa_sp_ = "Answer the question, then put your final answer inside a ```answer fence."
 
 @patch
@@ -1061,6 +1066,7 @@ def check(self:Chat, question, expected, grade_fn=matches_, llm_judge=False, jud
     a = extract_fence(self.oneshot(question, sp), tag)
     ok = (judge or self).grades(question, expected, a) if (llm_judge or judge) else grade_fn(a, expected)
     return AttrDict(question=question, expected=expected, answer=a, ok=ok)
+
 
 # %% ../nbs/00_core.ipynb #cachedchat
 CHAT_CACHE = 'chatcache'   # a diskcache directory; the one under `nbs/` is committed, for CI

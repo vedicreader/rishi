@@ -1,4 +1,4 @@
-"""Hosted models through the same `Chat` API, via [fastllm](https://github.com/AnswerDotAI/fastllm).
+"""Hosted models through [fastllm](https://github.com/AnswerDotAI/fastllm) — same `Chat` API with API keys in the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …).
 
 Docs: https://vedicreader.github.io/rishi/remote.html.md"""
 
