@@ -2,7 +2,9 @@
 
 <!-- do not remove -->
 
-## Unreleased
+## 0.1.3
+
+Cursor models added . can be accessed through sdk and cli
 
 Two public doors onto things every harness was already doing through private attributes.
 
