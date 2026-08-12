@@ -196,7 +196,7 @@ print(resp_text(tchat('Add 2 and 3, then delete /tmp/data.')))
 ``` python
 from rishi.core import CachedChat
 
-c = CachedChat(path=repo_root()/'nbs/chatcache', max_output_tokens=64)
+c = CachedChat(path=repo_root()/'nbs/chatcache', max_output_tokens=64, record=True)
 q = 'Say hello in one short sentence.'
 print(resp_text(c(q)))
 c.reconfigure(sp='You are a pirate. Always talk like one.')
@@ -222,7 +222,7 @@ local.close(); remote.close()
 
     llama_context: n_ctx_seq (4096) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
 
-    You asked what you previously asked and what the answer was. I will summarize what your question was and then provide the answer based on that.
+    You asked what 2 + 3 is, and I found the answer to be 5 after using the add tool.
 
 ### Run Python from replies
 
@@ -232,22 +232,6 @@ local.close(); remote.close()
 py = Chat(gemma4_e2b, sp='Use a ```python fence, then answer in prose.')
 py('What is 2**100?', cbs=[PyFenceCallback(done=output_matches(str(2**100)))])
 ```
-
-``` python
-result = 2**100
-print(result)
-```
-
-$2^{100}$ is a very large number.
-
-To give you a sense of its magnitude, we can calculate it:
-
-$2^{100} = (2^{10})^{10} = (1024)^{10}$
-
-This number is:
-$$1,267,650,600,228,229,401,496,703,205,305,665,334,356,479,000,000$$
-
-In scientific notation, it is approximately $1.26765 \times 10^{30}$.
 
 ### Structured output and checks
 
@@ -264,10 +248,6 @@ print(chat.classify('I loved this film!', ['positive', 'negative']))
 print(chat.check('Capital of France?', 'Paris'))
 ```
 
-    Person(name='John Smith', age=30)
-    positive
-    {'question': 'Capital of France?', 'expected': 'Paris', 'answer': 'Paris', 'ok': True}
-
 ## Same API on MLX, hosted, and Cursor
 
 | backend | install | typical use |
@@ -277,6 +257,8 @@ print(chat.check('Capital of France?', 'Paris'))
 | cursor | `rishi[cursor]` + `$CURSOR_API_KEY`, or `cursor-agent login` | Cursor-only models; use `cursor/` prefix or [`CursorChat`](https://vedicreader.github.io/rishi/cursor.html#cursorchat) |
 
 See `03_mlx.ipynb`, `04_remote.ipynb`, `05_cursor.ipynb` for knobs and examples.
+
+`<<<<<<< HEAD`
 
 ``` python
 # MLX (Apple Silicon)
@@ -293,15 +275,24 @@ from rishi.cursor import grok45, CursorChat
 cu = CursorChat(grok45, effort='low'); print(resp_text(cu('Kalman filter in one sentence.'))); cu.close()
 ```
 
-    Fetching 9 files:   0%|                                                                                                                  | 0/9 [00:00<?, ?it/s]Fetching 9 files: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00<00:00, 937.48it/s]
+`=======`
 
-    **One fascinating fact about octopuses:**  
-    Octopuses have **three hearts**! Two of these hearts pump blood to the gills, while the third pumps blood to the rest of the body. When an octopus swims, the heart that supplies the body **stops beating** to conserve energy, which is why they can’t swim continuously—instead, they jet-propel by expelling water from their body, a process called *jet propulsion*. This unique cardiovascular system allows them to move efficiently in their marine environment. 🐙
+``` python
+# MLX (Apple Silicon)
+from rishi.mlx import qwen3_4b as mlx_qwen
+m = Chat(mlx_qwen); print(resp_text(m('One octopus fact.'))); m.close()
 
-    llama_context: n_ctx_seq (8192) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
+# Hosted — hand local history to a bigger model
+loc = Chat(qwen3_4b); loc('My name is Karthik and my favourite number is 17.')
+big = Chat('gpt-4.1-nano', messages=loc.hist)
+print(resp_text(big('What is my name and favourite number?'))); loc.close(); big.close()
 
-    Your name is Karthik, and your favorite number is 17.
-    A Kalman filter is a recursive algorithm that optimally estimates a system’s true state by combining a noisy prediction from a dynamic model with a noisy measurement, weighting each by how uncertain it is.
+# Cursor — SDK path (prefix required for plain `Chat`)
+from rishi.cursor import grok45, CursorChat
+cu = CursorChat(grok45, effort='low'); print(resp_text(cu('Kalman filter in one sentence.'))); cu.close()
+```
+
+`>>>>>>> cursor/streamline-backend-notebooks-e91f`
 
 ## Go deeper
 

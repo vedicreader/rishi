@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.4
+nb cleanup
+
 ## 0.1.3
 
 Cursor models added . can be accessed through sdk and cli
