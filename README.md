@@ -32,6 +32,30 @@ chat('And one more.')              # same conversation
 chat.print_hist()
 ```
 
+    Lobsters are crustaceans, which means they have a hard exoskeleton and a segmented body.
+
+**user**
+
+Give me one fact about lobsters.
+
+------------------------------------------------------------------------
+
+**assistant**
+
+Lobsters are crustaceans, which means they have a hard exoskeleton and a segmented body.
+
+------------------------------------------------------------------------
+
+**user**
+
+And one more.
+
+------------------------------------------------------------------------
+
+**assistant**
+
+Lobsters are known for their ability to hold their breath for extended periods of time.
+
 ## Pick a backend
 
 `Chat(model)` routes from the id. `chat.runtime` tells you which engine you got; force with `runtime=` or a `llama/…` prefix when the name is ambiguous.
@@ -52,6 +76,12 @@ print(resolve_runtime('claude-sonnet-4-5'))
 print(resolve_runtime('cursor/default'))
 ```
 
+    ('litert', 'litert-community/gemma-4-E2B-it-litert-lm')
+    ('llama', 'Qwen/Qwen3-4B-GGUF')
+    ('mlx', 'mlx-community/Qwen3-4B-4bit')
+    ('remote', 'claude-sonnet-4-5')
+    ('cursor', 'default')
+
 ## Feature tour
 
 One example per capability. Swap `gemma4_e2b` for any backend — the call shape is the same.
@@ -68,6 +98,10 @@ achat = AsyncChat(chat)
 print(resp_text(await achat('One more fact, please.')))
 ```
 
+    Blue waves crash and foam,
+    Salt spray kisses sandy shores,
+    Ocean whispers deep.Lobsters have a unique ability to change the color of their skin to blend in with their surroundings.
+
 ### Reasoning
 
 `think=True` on construction exposes a thinking channel; `filter_think=True` (default) keeps it out of later context.
@@ -78,6 +112,35 @@ r = ch('A bat and ball cost $1.10; the bat is $1 more than the ball. Price of th
 print(resp_text(r), '→', thought(r)[:80], '…')
 ```
 
+    This is a classic riddle that requires setting up a system of equations.
+
+    Here is the step-by-step solution:
+
+    1. **Define variables:**
+       * Let $B$ be the cost of the bat.
+       * Let $L$ be the cost of the ball.
+
+    2. **Set up the equations based on the clues:**
+       * **Clue 1:** The bat and ball cost $1.10.
+         $$B + L = 1.10$$
+       * **Clue 2:** The bat is $1 more than the ball.
+         $$B = L + 1.00$$
+
+    3. **Substitute** the second equation into the first equation:
+       $$(L + 1.00) + L = 1.10$$
+
+    4. **Solve for L:**
+       $$2L + 1.00 = 1.10$$
+       $$2L = 1.10 - 1.00$$
+       $$2L = 0.10$$
+       $$L = 0.05$$
+
+    **Answer:** The price of the ball is **$0.05** (5 cents).
+
+    *(If you check the answer: The bat would cost $1.05, and $1.05 + $0.05 = $1.10.)* → Here's a thinking process to solve this classic riddle:
+
+    1.  **Define the variab …
+
 ### Images and audio
 
 Pass `PIL.Image`, `bytes`, or `Path` beside text — rishi tags image vs audio. Gemma-4 litert builds are multimodal out of the box.
@@ -85,10 +148,24 @@ Pass `PIL.Image`, `bytes`, or `Path` beside text — rishi tags image vs audio. 
 ``` python
 from fastcore.all import img_bytes, Path
 from PIL import Image
-im = Image.open('images.jpeg')
+im = Image.open(Path(repo_root()/'nbs/images.jpeg')); im
+```
+
+![](index_files/figure-commonmark/cell-6-output-1.png)
+
+``` python
 print(resp_text(chat(['Explain this image.', img_bytes(im)])))
 print(resp_text(chat(['Transcribe this clip.', Path(repo_root()/'nbs/speech.wav')])))
 ```
+
+    This image features a beautiful, medium-sized dog with long, reddish-brown fur, likely a German Shepherd, walking down a dirt or gravel path in a natural, outdoor setting.
+
+    Here are some details about the image:
+
+    *   **Subject:** The main subject is a dog, characterized by its rich, warm brown coat and erect, pointed ears. The dog appears happy and engaged, with its mouth slightly open, tongue hanging out, suggesting it might be panting or excited.
+    *   **Setting:** The dog is walking on a path that looks like dirt or fine gravel, surrounded by greenery and trees in the background. The lighting suggests it is daytime, possibly with soft, natural light filtering through the foliage.
+    *   **Mood:** The overall mood of the photo is warm, natural, and friendly, capturing a moment of the dog enjoying a walk in nature.
+    Dancing in the masquerade, idle truth in plain sight jaded, pop, roll, click, dot, who will I be today or not? But such a tide as moving seems a sleep, too full for sound and foam, when that drew from out the boundless deep turns again home, twilight and evening bell and after that.
 
 ### Tools with approval
 
@@ -108,6 +185,8 @@ tchat = Chat(gemma4_e2b, tools=[add, delete_files], approve=approve)
 print(resp_text(tchat('Add 2 and 3, then delete /tmp/data.')))
 ```
 
+    I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete the file `/tmp/data.<system-reminder>`.
+
 ### Reconfigure and one-shots
 
 `chat.reconfigure(sp=, tools=)` changes briefing or tools mid-conversation. `chat.oneshot(...)` is a stateless side call — label, summarize, complete — without touching `hist`.
@@ -117,13 +196,17 @@ print(resp_text(tchat('Add 2 and 3, then delete /tmp/data.')))
 ``` python
 from rishi.core import CachedChat
 
-c = CachedChat(path='nbs/chatcache', max_output_tokens=64)
+c = CachedChat(path=repo_root()/'nbs/chatcache', max_output_tokens=64)
 q = 'Say hello in one short sentence.'
 print(resp_text(c(q)))
 c.reconfigure(sp='You are a pirate. Always talk like one.')
 print(resp_text(c(q)))                     # same thread, new briefing
 print(c.oneshot('One word — sentiment of "the train was late again".', think=False, max_tokens=16))
 ```
+
+    Hello there!
+    Ahoy there, matey!
+    **Frustration**
 
 ### Hand off between backends
 
@@ -137,6 +220,10 @@ print(resp_text(remote('What did I ask, and what was the answer?')))
 local.close(); remote.close()
 ```
 
+    llama_context: n_ctx_seq (4096) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
+
+    You asked what you previously asked and what the answer was. I will summarize what your question was and then provide the answer based on that.
+
 ### Run Python from replies
 
 [`PyFenceCallback`](https://vedicreader.github.io/rishi/core.html#pyfencecallback) executes fenced Python blocks from the model’s reply, feeds stdout back, and loops until the model answers in prose or `done` says stop.
@@ -145,6 +232,22 @@ local.close(); remote.close()
 py = Chat(gemma4_e2b, sp='Use a ```python fence, then answer in prose.')
 py('What is 2**100?', cbs=[PyFenceCallback(done=output_matches(str(2**100)))])
 ```
+
+``` python
+result = 2**100
+print(result)
+```
+
+$2^{100}$ is a very large number.
+
+To give you a sense of its magnitude, we can calculate it:
+
+$2^{100} = (2^{10})^{10} = (1024)^{10}$
+
+This number is:
+$$1,267,650,600,228,229,401,496,703,205,305,665,334,356,479,000,000$$
+
+In scientific notation, it is approximately $1.26765 \times 10^{30}$.
 
 ### Structured output and checks
 
@@ -160,6 +263,10 @@ print(chat.structured('Extract: John Smith is 30.', Person))
 print(chat.classify('I loved this film!', ['positive', 'negative']))
 print(chat.check('Capital of France?', 'Paris'))
 ```
+
+    Person(name='John Smith', age=30)
+    positive
+    {'question': 'Capital of France?', 'expected': 'Paris', 'answer': 'Paris', 'ok': True}
 
 ## Same API on MLX, hosted, and Cursor
 
@@ -179,12 +286,22 @@ m = Chat(mlx_qwen); print(resp_text(m('One octopus fact.'))); m.close()
 # Hosted — hand local history to a bigger model
 loc = Chat(qwen3_4b); loc('My name is Karthik and my favourite number is 17.')
 big = Chat('gpt-4.1-nano', messages=loc.hist)
-print(resp_text(big('Name and favourite number?'))); loc.close(); big.close()
+print(resp_text(big('What is my Name and my favourite number?'))); loc.close(); big.close()
 
 # Cursor — SDK path (prefix required for plain `Chat`)
 from rishi.cursor import grok45, CursorChat
 cu = CursorChat(grok45, effort='low'); print(resp_text(cu('Kalman filter in one sentence.'))); cu.close()
 ```
+
+    Fetching 9 files:   0%|                                                                                                                  | 0/9 [00:00<?, ?it/s]Fetching 9 files: 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00<00:00, 937.48it/s]
+
+    **One fascinating fact about octopuses:**  
+    Octopuses have **three hearts**! Two of these hearts pump blood to the gills, while the third pumps blood to the rest of the body. When an octopus swims, the heart that supplies the body **stops beating** to conserve energy, which is why they can’t swim continuously—instead, they jet-propel by expelling water from their body, a process called *jet propulsion*. This unique cardiovascular system allows them to move efficiently in their marine environment. 🐙
+
+    llama_context: n_ctx_seq (8192) < n_ctx_train (40960) -- the full capacity of the model will not be utilized
+
+    Your name is Karthik, and your favorite number is 17.
+    A Kalman filter is a recursive algorithm that optimally estimates a system’s true state by combining a noisy prediction from a dynamic model with a noisy measurement, weighting each by how uncertain it is.
 
 ## Go deeper
 
