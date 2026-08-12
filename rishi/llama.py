@@ -1,4 +1,4 @@
-"""The same `Chat` API as `rishi.core`, over [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) GGUF models - OpenAI-style message helpers, tool schemas via `fastcore.funccall`, a Python-side tool loop with human-in-the-loop approval, `<think>` channel handling, sync/async streaming, and usage tracking.
+"""`Chat` over [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) GGUF models — prefix KV cache, GPU offload, and mtmd multimodal (image + audio via patched `MTMDChatHandler`).
 
 Docs: https://vedicreader.github.io/rishi/llama.html.md"""
 
@@ -37,6 +37,7 @@ _parse_args, _mk_tag_tc, _acc_tc = parse_args, mk_tag_tc, acc_tc
 _UsageCallback, _ToolReminderCallback = UsageCallback, ToolReminderCallback
 
 # %% ../nbs/01_llama.ipynb #84426f78
+#: Common HuggingFace GGUF repo ids for `Chat(...)` / `LlamaChat(...)`.
 qwen3_06b = 'Qwen/Qwen3-0.6B-GGUF'
 qwen3_17b = 'Qwen/Qwen3-1.7B-GGUF'
 qwen3_4b  = 'Qwen/Qwen3-4B-GGUF'
@@ -80,6 +81,7 @@ def get_mmproj(model_id, mmproj_path=None):
     if (hit := _cached_mmproj(model_id)): return hit
     if not (fn := _mmproj(list_repo_files(model_id))): raise FileNotFoundError(f"No mmproj .gguf found for {model_id}")
     return hf_hub_download(model_id, fn)
+
 
 # %% ../nbs/01_llama.ipynb #a1metal01
 from llama_cpp import llama_supports_gpu_offload

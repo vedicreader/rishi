@@ -1,4 +1,4 @@
-"""Chat over local MLX models on Apple silicon.
+"""[mlx-lm](https://github.com/ml-explore/mlx-lm) on Apple Silicon — explicit prompt cache, speculative decoding, quantized KV, and mlx-vlm routing for vision/audio.
 
 Docs: https://vedicreader.github.io/rishi/mlx.html.md"""
 
@@ -33,6 +33,7 @@ _all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp'
          'mk_toolspec', 'split_think', 'parse_tool_tags', 'StreamSplit']
 
 # %% ../nbs/03_mlx.ipynb #70712d3bc7721d7c
+#: Common mlx-community repo ids.
 qwen3_06b  = 'mlx-community/Qwen3-0.6B-4bit'    # tiny; useful as a speculative-decoding draft model
 qwen3_17b  = 'mlx-community/Qwen3-1.7B-4bit'
 qwen3_4b   = 'mlx-community/Qwen3-4B-4bit'
@@ -67,6 +68,7 @@ def cached_models():
     "MLX repo ids already in the local HuggingFace cache (no network)."
     try: return L(r.repo_id for r in scan_cache_dir().repos if 'mlx' in r.repo_id.lower())
     except Exception: return L()
+
 
 # %% ../nbs/03_mlx.ipynb #9004a338faf74842
 class MlxEngine:

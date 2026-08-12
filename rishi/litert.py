@@ -1,4 +1,4 @@
-"""A fastllm-style `Chat` over litert_lm - message helpers, an ordered callback system, human-in-the-loop tool approval, sync streaming, and `token_count`-based usage tracking.
+"""Google's [litert_lm](https://github.com/google-ai-edge/litert-lm) backend for `.litertlm` Gemma builds — litert message helpers, GPU/NPU backends, KV-cache usage, and `bench()`.
 
 Docs: https://vedicreader.github.io/rishi/litert.html.md"""
 
@@ -45,6 +45,7 @@ def _mk_msgs(msgs):
     return [normalize_message(m if isinstance(m, (Message, dict)) else _mk_msg(m)) for m in listify(msgs)]
 
 # %% ../nbs/02_litert.ipynb #e2f22e05c7e09016
+#: Short unique id for litert tool-call messages.
 def _call_id(): return f"call_{uuid.uuid4().hex[:8]}"
 
 _ph = {'image': '[image]', 'audio': '[audio]'}
@@ -118,6 +119,7 @@ def _to_litert_msg(m):
     return m if isinstance(m, Message) else (_hist2fmt1(m) if isinstance(m, dict) else _mk_msg(m))
 
 
+
 # %% ../nbs/02_litert.ipynb #29afb8197a5161ee
 class _ToolReminderCallback(ChatCallback):
     'Inject a tool-summary reminder into the outgoing message when tools are registered.'
@@ -149,6 +151,7 @@ class _UsageCallback(ChatCallback):
 
 
 # %% ../nbs/02_litert.ipynb #1d26406d13cefa08
+#: Tool name from an OpenAI-shaped tool-call dict.
 def _tc_name(tc): return tc.get('function', {}).get('name', '')
 
 class ChatToolHandler(ToolEventHandler):
@@ -179,12 +182,16 @@ class ChatToolHandler(ToolEventHandler):
         for _ in run_cbs(self.chat, 'after_tool_calls'): pass
         return tool_response
 
+
 # %% ../nbs/02_litert.ipynb #6aa00146bc49f9c1
+#: Default litert-community model ids.
 gemma4_e4b='litert-community/gemma-4-E4B-it-litert-lm'
 gemma4_e2b='litert-community/gemma-4-E2B-it-litert-lm'
 gemma4_12b='litert-community/gemma-4-12B-it-litert-lm'
 
+
 # %% ../nbs/02_litert.ipynb #335a97782120c273
+#: `RISHI_LITERT_GPU=0` forces CPU when GPU/NPU init fails.
 LITERT_GPU = str2bool(os.getenv('RISHI_LITERT_GPU', '1').lower())
 def _litertlm(fs):
     "First native `.litertlm` path in `fs` (skips `-web`/other builds)."
@@ -383,6 +390,7 @@ class LitertChat(core.Chat):
             self._stack.close()
         self._stack = None
         self.conv = None
+
 
 # %% ../nbs/02_litert.ipynb #bea63711
 def bench(model_id=gemma4_e2b, model_path=None, backend=Backend.CPU(), prefill_tokens=64, decode_tokens=64, **kw):

@@ -1,4 +1,4 @@
-"""Cursor's models through the same `Chat` API, by driving the `cursor-agent` CLI.
+"""Cursor's models via the `cursor-agent` CLI or SDK — not a completion endpoint but an agent with its own prompt overhead (~16k input tokens/turn).
 
 Docs: https://vedicreader.github.io/rishi/cursor.html.md"""
 

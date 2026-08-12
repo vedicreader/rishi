@@ -28,9 +28,7 @@ web service — "running the app" means importing `rishi` and driving a model th
 - One notebook fails in a bare environment for external reasons, NOT a code bug:
   `05_cursor.ipynb` needs the `cursor-agent` CLI on `$PATH` (install the Cursor CLI and
   `cursor-agent login`); even listing models shells out to it.
-- `index.ipynb` is the overview/README source — examples are `#| eval: false`. After editing it,
-  run `uv run nbdev-readme` (requires Quarto; `uv run nbdev-install-quarto` once) to refresh
-  `README.md`.
+- `index.ipynb` is the overview/README source — examples are `#| eval: false`. Backend notebooks (`00_core` … `05_cursor`) follow the same pattern: exported cells (`#| export`) are package code with `#:` comments; demo cells are `eval: false`. After editing, run `uv run nbdev-export` and `uv run nbdev-readme` (Quarto required) to refresh `rishi/*.py` and `README.md`.
 
 ### Running a real model with no API key
 - The keyless, self-contained path is the llama.cpp backend with a small GGUF. Example:
