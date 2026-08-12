@@ -25,12 +25,12 @@ web service — "running the app" means importing `rishi` and driving a model th
 ### Tests
 - `uv run nbdev-test` executes every notebook. Most pass offline: model calls are served from a
   record/replay cache (`RecordCache`, backed by `diskcache`) rather than hitting real models.
-- Two notebooks fail in a bare environment for external reasons, NOT code bugs:
-  - `05_cursor.ipynb` needs the `cursor-agent` CLI on `$PATH` (install the Cursor CLI and
-    `cursor-agent login`); even listing models shells out to it.
-  - `index.ipynb` has a live chat cell that needs either a committed recording or
-    `RISHI_RECORD_CHAT=1` plus a real backend/API key.
-  To record fresh fixtures, set `RISHI_RECORD_CHAT=1` and re-run with a working backend.
+- One notebook fails in a bare environment for external reasons, NOT a code bug:
+  `05_cursor.ipynb` needs the `cursor-agent` CLI on `$PATH` (install the Cursor CLI and
+  `cursor-agent login`); even listing models shells out to it.
+- `index.ipynb` is the overview/README source — examples are `#| eval: false`. After editing it,
+  run `uv run nbdev-readme` (requires Quarto; `uv run nbdev-install-quarto` once) to refresh
+  `README.md`.
 
 ### Running a real model with no API key
 - The keyless, self-contained path is the llama.cpp backend with a small GGUF. Example:
