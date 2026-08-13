@@ -20,6 +20,29 @@ from fastcore.all import Path, store_attr, patch, L, ifnone, first, listify
 from . import core
 from .core import *
 
+# %% ../nbs/04_remote.ipynb #httpx2fix
+def _client_httpx():
+    "The httpx the OpenAPI client itself imported: fastspec is on httpx2 in some installs, httpx in others."
+    import fastspec.oapi as o
+    return getattr(o, 'httpx2', None) or getattr(o, 'httpx', None)
+
+def _fix_client_timeout():
+    "fastllm builds `mk_client`'s default timeout with its own httpx, which need not be the client's."
+    import fastllm.acomplete as fa
+    mod = _client_httpx()
+    if mod is None: return
+    f = getattr(fa.mk_client, '__wrapped__', fa.mk_client)
+    def swap(x):
+        if isinstance(x, mod.Timeout) or not all(hasattr(x, k) for k in ('connect','read','write','pool')): return x
+        return mod.Timeout(connect=x.connect, read=x.read, write=x.write, pool=x.pool)
+    f.__defaults__ = tuple(swap(x) for x in (f.__defaults__ or ()))
+    cache = getattr(fa.mk_client, 'cache', None)
+    if cache is not None:
+        try: cache.clear()
+        except Exception: pass
+
+_fix_client_timeout()
+
 # %% ../nbs/04_remote.ipynb #rm_reexport
 _all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
          'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec',
