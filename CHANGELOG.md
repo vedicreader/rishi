@@ -2,9 +2,9 @@
 
 <!-- do not remove -->
 
-## Unreleased
+## 0.1.7
 
-### Fixed
+Fixed
 
 - litert models with tools failed to load: `Engine.create_conversation` used to take
   `enable_constrained_decoding=True` and now takes `constrained_decoding_config`, so a caller
