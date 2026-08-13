@@ -6,10 +6,17 @@
 
 Fixed
 
+- Every hosted turn failed with `TypeError: unsupported operand type(s) for +: 'float' and 'Timeout'`,
+  a message naming neither library involved. `fastllm` builds `mk_client`'s default timeout with the
+  httpx *it* imported, which is not always the one `fastspec`'s `OpenAPIClient` runs on: where
+  fastspec is on httpx2 the object reached `anyio.fail_after` unconverted and was added to a float.
+  The timeout is now rebuilt with whichever httpx the client's own module imported, keeping its
+  values, so it is right in both installs and a no-op once the types agree.
+
 - litert models with tools failed to load: `Engine.create_conversation` used to take
   `enable_constrained_decoding=True` and now takes `constrained_decoding_config`, so a caller
   passing the old name through `conv_kw` got a `TypeError` naming an argument they never chose to
-  send. `LitertChat` gains `constrain=None|True|False` — on by default when the chat has tools,
+  send. `LitertChat` gains `constrain=None|True|False`: on by default when the chat has tools,
   forced either way, and a `constrained_decoding_config` supplied through `conv_kw` is left alone.
   The old name is still accepted and translated, with a `DeprecationWarning`. Decided when the
   conversation is built, so tools added later through `reconfigure` are covered too.
