@@ -2,6 +2,18 @@
 
 <!-- do not remove -->
 
+## Unreleased
+
+### Fixed
+
+- litert models with tools failed to load: `Engine.create_conversation` used to take
+  `enable_constrained_decoding=True` and now takes `constrained_decoding_config`, so a caller
+  passing the old name through `conv_kw` got a `TypeError` naming an argument they never chose to
+  send. `LitertChat` gains `constrain=None|True|False` — on by default when the chat has tools,
+  forced either way, and a `constrained_decoding_config` supplied through `conv_kw` is left alone.
+  The old name is still accepted and translated, with a `DeprecationWarning`. Decided when the
+  conversation is built, so tools added later through `reconfigure` are covered too.
+
 ## 0.1.6
 cursor models
 

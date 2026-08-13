@@ -12,7 +12,7 @@ import json, re, os, asyncio, io, base64, uuid, warnings
 from html import escape
 from mimetypes import guess_type
 from contextlib import ExitStack, redirect_stdout
-from litert_lm import (Engine, Backend, Conversation, Session, Message, Contents, Content, Role, ToolCall,
+from litert_lm import (Engine, Backend, ConstrainedDecodingConfig, Conversation, Session, Message, Contents, Content, Role, ToolCall,
                        ToolEventHandler, SamplerConfig, Benchmark, set_min_log_severity)
 from litert_lm._messages import Text, ImageBytes, ImageFile, AudioBytes, AudioFile, ToolResponse, normalize_message
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
@@ -258,7 +258,8 @@ class LitertChat(core.Chat):
                  sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None,
                  max_steps=10, final_prompt=dflt_final_prompt_, parallel_tools=False, max_parallel_tools=None,
                  think=False, filter_think=True, temp=None, top_k=None, top_p=None,
-                 seed=None, sampler_config=None, max_output_tokens=None, conv_kw=None, cbs=None, default_cbs=True):
+                 seed=None, sampler_config=None, max_output_tokens=None, constrain=None, conv_kw=None,
+                 cbs=None, default_cbs=True):
         if parallel_tools: raise NotImplementedError(
             "litert runs its tool loop inside the engine, so it can't dispatch calls in parallel; "
             "use runtime='llama' (or 'mlx') for parallel_tools=True.")
@@ -280,6 +281,12 @@ class LitertChat(core.Chat):
         cvk = dict(sampler_config=sampler_config, max_output_tokens=max_output_tokens, **(conv_kw or {}))
         if think: cvk['extra_context'] = {**cvk.get('extra_context', {}), 'enable_thinking': True}
         if filter_think: cvk['filter_channel_content_from_kv_cache'] = True
+        if (legacy := cvk.pop('enable_constrained_decoding', None)) is not None:
+            warnings.warn("enable_constrained_decoding was litert's own name for this and is "
+                          'not accepted any more; pass constrain=True/False to rishi instead.',
+                          DeprecationWarning, stacklevel=2)
+            if constrain is None: constrain = bool(legacy)
+        self._constrain = constrain
         self._conv_kw, self.tools, self.conv = cvk, L(tools), None
         self.tool_handler = ChatToolHandler(self)
         self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in listify(messages)])
@@ -288,13 +295,21 @@ class LitertChat(core.Chat):
                     tool_max_len=tool_max_len, max_steps=max_steps, max_parallel_tools=max_parallel_tools,
                     final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
 
+    def _constrained(self):
+        "The `constrained_decoding_config` to build with, or `None`. Default is on when there are tools."
+        if 'constrained_decoding_config' in self._conv_kw: return None
+        want = bool(self.tools) if self._constrain is None else bool(self._constrain)
+        return ConstrainedDecodingConfig(enable=True) if want else None
+
     def _mk_conv(self, messages=None):
         "Build the conversation from `messages`, releasing any current one first."
         self._conv_stack.close()
         self._conv_stack = ExitStack()
+        kw = dict(self._conv_kw)
+        if (cd := self._constrained()) is not None: kw['constrained_decoding_config'] = cd
         self.conv = self._conv_stack.enter_context(self.engine.create_conversation(
             messages=messages or None, tools=list(self.tools) or None,
-            tool_event_handler=self.tool_handler, **self._conv_kw))
+            tool_event_handler=self.tool_handler, **kw))
         return self.conv
 
     def _set_sp(self, sp):
