@@ -3724,6 +3724,20 @@ all = [
 cursor = [
     { name = "cursor-sdk" },
 ]
+dev = [
+    { name = "aidialog" },
+    { name = "cursor-sdk" },
+    { name = "diskcache" },
+    { name = "litert-lm-api" },
+    { name = "llama-cpp-python", version = "0.3.30", source = { registry = "https://abetlen.github.io/llama-cpp-python/whl/cpu" }, marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
+    { name = "llama-cpp-python", version = "0.3.30", source = { registry = "https://abetlen.github.io/llama-cpp-python/whl/metal" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "python-fastllm" },
+    { name = "soundfile" },
+]
 litert = [
     { name = "litert-lm-api" },
 ]
@@ -3763,32 +3777,43 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aidialog", marker = "extra == 'all'", specifier = "==0.0.7" },
+    { name = "aidialog", marker = "extra == 'dev'", specifier = "==0.0.7" },
     { name = "aidialog", marker = "extra == 'remote'", specifier = "==0.0.7" },
     { name = "cursor-sdk", marker = "extra == 'all'", specifier = ">=0.1" },
     { name = "cursor-sdk", marker = "extra == 'cursor'", specifier = ">=0.1" },
+    { name = "cursor-sdk", marker = "extra == 'dev'", specifier = ">=0.1" },
     { name = "diskcache", marker = "extra == 'all'", specifier = ">=5.6.3" },
+    { name = "diskcache", marker = "extra == 'dev'", specifier = ">=5.6.3" },
     { name = "diskcache", marker = "extra == 'record'", specifier = ">=5.6.3" },
     { name = "fastcore", specifier = ">=2.0.0" },
     { name = "huggingface-hub", specifier = ">=1.23.0" },
     { name = "litert-lm-api", marker = "extra == 'all'", specifier = ">=0.14.0" },
+    { name = "litert-lm-api", marker = "extra == 'dev'", specifier = ">=0.14.0" },
     { name = "litert-lm-api", marker = "extra == 'litert'", specifier = ">=0.14.0" },
     { name = "llama-cpp-python", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'all'", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/metal" },
+    { name = "llama-cpp-python", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'dev'", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/metal" },
     { name = "llama-cpp-python", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'llama'", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/metal" },
     { name = "llama-cpp-python", marker = "(platform_machine != 'arm64' and extra == 'all') or (sys_platform != 'darwin' and extra == 'all')", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/cpu" },
+    { name = "llama-cpp-python", marker = "(platform_machine != 'arm64' and extra == 'dev') or (sys_platform != 'darwin' and extra == 'dev')", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/cpu" },
     { name = "llama-cpp-python", marker = "(platform_machine != 'arm64' and extra == 'llama') or (sys_platform != 'darwin' and extra == 'llama')", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/cpu" },
     { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'all'", specifier = ">=0.31.3" },
+    { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'dev'", specifier = ">=0.31.3" },
     { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mlx'", specifier = ">=0.31.3" },
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'all'", specifier = ">=0.6.8" },
+    { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'dev'", specifier = ">=0.6.8" },
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mlx-vlm'", specifier = ">=0.6.8" },
     { name = "numpy", marker = "extra == 'all'" },
+    { name = "numpy", marker = "extra == 'dev'" },
     { name = "numpy", marker = "extra == 'llama'" },
     { name = "python-fastllm", marker = "extra == 'all'", specifier = "==0.0.36" },
+    { name = "python-fastllm", marker = "extra == 'dev'", specifier = "==0.0.36" },
     { name = "python-fastllm", marker = "extra == 'remote'", specifier = "==0.0.36" },
     { name = "safepyrun", specifier = ">=0.2.3" },
     { name = "soundfile", marker = "extra == 'all'", specifier = ">=0.14.0" },
+    { name = "soundfile", marker = "extra == 'dev'", specifier = ">=0.14.0" },
     { name = "soundfile", marker = "extra == 'llama'", specifier = ">=0.14.0" },
 ]
-provides-extras = ["all", "cursor", "litert", "llama", "mlx", "mlx-vlm", "record", "remote"]
+provides-extras = ["all", "cursor", "dev", "litert", "llama", "mlx", "mlx-vlm", "record", "remote"]
 
 [package.metadata.requires-dev]
 dev = [

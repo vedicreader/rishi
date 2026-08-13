@@ -40,7 +40,7 @@ llama = [
 cursor = ["cursor-sdk>=0.1",]
 record = ["diskcache>=5.6.3",]
 all = ["rishi[litert,remote,mlx,mlx-vlm,llama,cursor,record]",]
-
+dev = ["rishi[all]",]
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"
 Documentation = "https://vedicreader.github.io/rishi/"
