@@ -446,8 +446,8 @@ dflt_runtime = 'litert'
 # checked in order, so the local file/repo shapes win over the hosted model-name patterns
 _pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'), 'llama': ('.gguf','gguf'),
          'mlx': ('mlx-community','mlx_lm','-mlx','mlx-'),
-         # cursor before remote: a `cursor-grok-...` is Cursor's, not xAI's, and `grok-` would claim it
-         'cursor': ('cursor-',),
+         # cursor before remote: Cursor accepts both decorated and plain `grok-...` ids
+         'cursor': ('cursor-', 'grok-'),
          'remote': ('claude-','gpt-','gemini-','kimi-','deepseek-','grok-','sonnet','opus','haiku','fable')}
 
 def split_runtime(model):

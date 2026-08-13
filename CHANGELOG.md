@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.6
+cursor models
+
 ## 0.1.5
 release
 
