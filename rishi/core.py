@@ -9,8 +9,8 @@ __all__ = ['tool_reminder_', 'TAG_TOOLS_SP', 'runtimes', 'dflt_runtime', 'budget
            'CHAT_CACHE', 'KEY_VERSION', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'quote_',
            'Resp', 'tc_summary_', 'mk_tr_details', 'StreamFormatter', 'display_stream', 'truncated',
            'TruncationCallback', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs', 'is_media', 'mk_toolspec',
-           'split_think', 'mk_tag_tc', 'parse_tool_tags', 'tag_tools_sp', 'parse_args', 'norm_resp', 'to_oai_msg',
-           'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback', 'ToolReminderCallback',
+           'split_think', 'mk_tag_tc', 'parse_tool_tags', 'tag_tools_sp', 'render_prompt', 'parse_args', 'norm_resp',
+           'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback', 'ToolReminderCallback',
            'common_prefix_len', 'split_runtime', 'infer_runtime', 'resolve_runtime', 'get_runtime', 'ToolCall',
            'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError', 'is_ctx_error', 'Chat',
            'ToolLoopMixin', 'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'AsyncChat', 'adisplay_stream',
@@ -284,6 +284,21 @@ def tag_tools_sp(toolspecs, sp='', template=TAG_TOOLS_SP):
     block = '\n'.join(json.dumps(t, ensure_ascii=False) for t in toolspecs)
     return (sp or '') + template.format(tools=block)
 
+_roles = {'user': 'User', 'assistant': 'Assistant', 'tool': 'Tool result', 'system': 'System'}
+
+def render_prompt(hist, sp=''):
+    "A conversation as one block of text, for a transport that takes a prompt rather than a message list."
+    out = [sp] if sp else []
+    for m in hist:
+        if not (txt := resp_text(m)) and not m.get('tool_calls'): continue
+        who = _roles.get(m.get('role'), m.get('role', '?'))
+        if m.get('role') == 'tool': who = f"Tool result ({m.get('name', '?')})"
+        calls = '\n'.join(f'<tool_call>\n{json.dumps({"name": tc_name(tc), "arguments": tc.get("function", {}).get("arguments") or {}})}\n</tool_call>'
+                           for tc in (m.get('tool_calls') or []))
+        out.append(f"## {who}\n{txt}{chr(10) + calls if calls else ''}")
+    return '\n\n'.join(out)
+
+
 # %% ../nbs/00_core.ipynb #1a1bd3f698b5e98e
 def parse_args(a):
     "Parse OpenAI JSON-string tool arguments to a dict (dicts pass through)."
@@ -441,13 +456,15 @@ def common_prefix_len(a, b):
 #: Runtime name -> (module, Chat class) for `get_runtime`.
 runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat'),
             'mlx': ('rishi.mlx','MlxChat'), 'remote': ('rishi.remote','RemoteChat'),
-            'cursor': ('rishi.cursor','CursorChat')}
+            'cursor': ('rishi.cursor','CursorChat'), 'claude': ('rishi.claude','ClaudeChat')}
 dflt_runtime = 'litert'
 # checked in order, so the local file/repo shapes win over the hosted model-name patterns
 _pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'), 'llama': ('.gguf','gguf'),
          'mlx': ('mlx-community','mlx_lm','-mlx','mlx-'),
          # cursor before remote: Cursor accepts both decorated and plain `grok-...` ids
          'cursor': ('cursor-', 'grok-'),
+         # `claude` is not inferred: `claude-...` has always meant the hosted API through
+         # `remote`, and moving it would reroute every existing caller. Ask by prefix.
          'remote': ('claude-','gpt-','gemini-','kimi-','deepseek-','grok-','sonnet','opus','haiku','fable')}
 
 def split_runtime(model):

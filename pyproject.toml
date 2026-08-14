@@ -38,8 +38,10 @@ llama = [
     "numpy",
 ]
 cursor = ["cursor-sdk>=0.1",]
+# Only the SDK path needs this; the `claude` CLI path drives a binary and needs nothing installed.
+claude = ["claude-agent-sdk>=0.2",]
 record = ["diskcache>=5.6.3",]
-all = ["rishi[litert,remote,mlx,mlx-vlm,llama,cursor,record]",]
+all = ["rishi[litert,remote,mlx,mlx-vlm,llama,cursor,claude,record]",]
 dev = ["rishi[all]",]
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"

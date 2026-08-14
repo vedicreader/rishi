@@ -13,6 +13,7 @@ pip install 'rishi[llama]'     # any GGUF
 pip install 'rishi[mlx]'       # Apple Silicon (add mlx-vlm for vision/audio)
 pip install 'rishi[remote]'    # Claude, GPT, Gemini, … via fastllm
 pip install 'rishi[cursor]'    # Cursor models via SDK or cursor-agent CLI
+pip install 'rishi[claude]'    # Claude Code via the Agent SDK (the `claude` CLI needs nothing)
 pip install 'rishi[all]'       # everything your platform supports
 ```
 
@@ -60,13 +61,16 @@ Lobsters are known for their ability to hold their breath for extended periods o
 
 `Chat(model)` routes from the id. `chat.runtime` tells you which engine you got; force with `runtime=` or a `llama/…` prefix when the name is ambiguous.
 
-| model id looks like               | backend          |
-|-----------------------------------|------------------|
-| `litert-community/…`, `.litertlm` | litert           |
-| `…-GGUF`, `.gguf` path            | llama.cpp        |
-| `mlx-community/…`                 | MLX              |
-| `claude-…`, `gpt-…`, `gemini-…`   | remote (fastllm) |
-| `cursor/…` or `CursorChat(…)`     | cursor           |
+| model id looks like               | backend              |
+|-----------------------------------|----------------------|
+| `litert-community/…`, `.litertlm` | litert               |
+| `…-GGUF`, `.gguf` path            | llama.cpp            |
+| `mlx-community/…`                 | MLX                  |
+| `claude-…`, `gpt-…`, `gemini-…`   | remote (fastllm)     |
+| `cursor/…` or `CursorChat(…)`     | cursor               |
+| `claude/…` or `ClaudeChat(…)`     | claude (Claude Code) |
+
+Claude Code is reached by prefix only: a bare `claude-…` id still means the hosted API through `remote`, so callers that had one keep it.
 
 ``` python
 print(resolve_runtime('litert-community/gemma-4-E2B-it-litert-lm'))
@@ -248,15 +252,16 @@ print(chat.classify('I loved this film!', ['positive', 'negative']))
 print(chat.check('Capital of France?', 'Paris'))
 ```
 
-## Same API on MLX, hosted, and Cursor
+## Same API on MLX, hosted, Cursor, and Claude Code
 
 | backend | install | typical use |
 |----|----|----|
 | MLX | `rishi[mlx]` | Apple Silicon; explicit prompt cache, `kv_bits`, LoRA |
 | remote | `rishi[remote]` + vendor key | same tools/HITL as local; `tool_choice`, `reasoning_effort` |
 | cursor | `rishi[cursor]` + `$CURSOR_API_KEY`, or `cursor-agent login` | Cursor-only models; use `cursor/` prefix or [`CursorChat`](https://vedicreader.github.io/rishi/cursor.html#cursorchat) |
+| claude | `rishi[claude]`, or just Claude Code + `claude /login` | your tools without MCP; use `claude/` prefix or [`ClaudeChat`](https://vedicreader.github.io/rishi/claude.html#claudechat) |
 
-See `03_mlx.ipynb`, `04_remote.ipynb`, `05_cursor.ipynb` for knobs and examples.
+See `03_mlx.ipynb`, `04_remote.ipynb`, `05_cursor.ipynb`, `06_claude.ipynb` for knobs and examples.
 
 `<<<<<<< HEAD`
 
@@ -294,6 +299,21 @@ cu = CursorChat(grok45, effort='low'); print(resp_text(cu('Kalman filter in one 
 
 `>>>>>>> cursor/streamline-backend-notebooks-e91f`
 
+## Claude Code
+
+`Chat('claude/claude-sonnet-5')` runs a turn through Claude Code: `via='sdk'` uses the `claude-agent-sdk` package (`pip install 'rishi[claude]'`), `via='cli'` drives the `claude` binary and needs nothing installed beyond Claude Code itself, and `via=None` takes the SDK when it is there. `ClaudeChat.local` is `False`.
+
+The point of the module is the tools. Claude Code declares a caller’s tools as an in-process MCP server, and an enterprise-managed configuration forbids every dynamic MCP server — which leaves the model with no tools at all. So rishi sends your schemas in the system prompt as `<tool_call>` tags and opens no server, and a managed policy has nothing to refuse. It must not ask for `--strict-mcp-config` / `strict_mcp_config=True` either: that flag is itself refused where an enterprise config exists, so the obvious way to say “only my servers” is the one shape a managed machine rejects.
+
+Unlike `cursor`, Claude Code has a real system-prompt channel, so the briefing and the schemas go there and only the conversation is rendered into the prompt. Two costs. The harness’s own system prompt is ~48-53k prompt tokens a turn. And the tags channel depends on the model punctuating it: `claude-sonnet-5` did so reliably here, `claude-haiku-4-5` read the schema, called the tool unavailable and answered from its own arithmetic — so route tool-using turns to Sonnet-tier or better.
+
+``` python
+from rishi.claude import sonnet5, ClaudeChat
+cc = ClaudeChat(sonnet5, tools=[add], sp='Use the add tool.')   # or Chat('claude/claude-sonnet-5')
+print(resp_text(cc('What is 2 + 3?')))
+cc.close()
+```
+
 ## Go deeper
 
 | notebook | topics |
@@ -304,3 +324,4 @@ cu = CursorChat(grok45, effort='low'); print(resp_text(cu('Kalman filter in one 
 | [`03_mlx.ipynb`](mlx.html) | vision/audio routing, speculative decoding, cache save/load |
 | [`04_remote.ipynb`](remote.html) | provider tools, server-side search |
 | [`05_cursor.ipynb`](cursor.html) | CLI vs SDK, model ids, agent modes |
+| [`06_claude.ipynb`](claude.html) | SDK vs CLI, tools as prompt tags, MCP under a managed policy |

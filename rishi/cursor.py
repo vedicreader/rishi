@@ -10,9 +10,9 @@ __all__ = ['CURSOR_BIN', 'cursor_default', 'grok45', 'composer25', 'opus5', 'opu
            'gpt54', 'gpt54_mini', 'gpt54_nano', 'gpt53_codex', 'gpt52', 'gpt51', 'gpt5_mini', 'gemini36_flash',
            'gemini35_flash', 'gemini31_pro', 'gemini3_flash', 'gemini25_flash', 'kimi_k3', 'kimi_k27_code', 'glm52',
            'CURSOR_MODELS', 'cursor_bin', 'cursor_via', 'sdk_available', 'cursor_models', 'sdk_mode', 'cursor_model',
-           'render_prompt', 'norm_cursor', 'norm_cursor_usage', 'CursorChat', 'UsageStats', 'ChatCallback', 'run_cbs',
-           'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy',
-           'extract_fence', 'mk_toolspec', 'ToolCall']
+           'norm_cursor', 'norm_cursor_usage', 'CursorChat', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text',
+           'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy', 'extract_fence',
+           'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/05_cursor.ipynb #cu_imports
 import json, os, shutil, subprocess
@@ -133,20 +133,6 @@ def cursor_model(model, effort=None, fast=None, via='cli'):
     if via != 'sdk': return f"{model}[{','.join(f'{k}={v}' for k, v in vals)}]"
     from cursor_sdk import ModelSelection, ModelParameterValue
     return ModelSelection(id=model, params=[ModelParameterValue(id=k, value=v) for k, v in vals])
-
-_roles = {'user': 'User', 'assistant': 'Assistant', 'tool': 'Tool result', 'system': 'System'}
-
-def render_prompt(hist, sp=''):
-    "A conversation as the one block of text `cursor-agent` takes; `sp` leads, since there is no system channel."
-    out = [sp] if sp else []
-    for m in hist:
-        if not (txt := resp_text(m)) and not m.get('tool_calls'): continue
-        who = _roles.get(m.get('role'), m.get('role', '?'))
-        if m.get('role') == 'tool': who = f"Tool result ({m.get('name', '?')})"
-        calls = '\n'.join(f'<tool_call>\n{json.dumps({"name": tc_name(tc), "arguments": tc.get("function", {}).get("arguments") or {}})}\n</tool_call>'
-                           for tc in (m.get('tool_calls') or []))
-        out.append(f"## {who}\n{txt}{chr(10) + calls if calls else ''}")
-    return '\n\n'.join(out)
 
 def norm_cursor(d, model=None):
     "A `cursor-agent` JSON result -> a rishi `Resp`, with `<tool_call>` tags read out of the text."
