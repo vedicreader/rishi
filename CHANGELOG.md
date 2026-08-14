@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.12
+estimate tokens for cursor and claude
+
 ## 0.1.11
 release
 

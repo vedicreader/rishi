@@ -191,8 +191,8 @@ class CursorChat(ToolLoopMixin, Chat):
 
     @property
     def token_count(self):
-        "Tokens the last turn reported; there is no live context read-out through the CLI."
-        return self._ctx_tokens
+        "the prompt this chat would send next.cursor returns 0 so, we estimate"
+        return est_tokens(self._prompt())
 
     def _cmd(self, fmt):
         "The `cursor-agent` command line for one turn, minus the prompt."
@@ -216,7 +216,7 @@ class CursorChat(ToolLoopMixin, Chat):
         return r
 
     def _note_usage(self, r):
-        "Remember what the turn cost, since `token_count` is the only context read-out there is."
+        "Remember what the turn cost. This is billing volume, not occupancy -- see `token_count`."
         self._ctx_tokens = (r.get('usage') or {}).get('total_tokens') or self._ctx_tokens
         return r
 

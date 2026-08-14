@@ -122,8 +122,8 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     @property
     def token_count(self):
-        "Tokens the last turn reported; there is no live context read-out through either path."
-        return self._ctx_tokens
+        "the prompt this chat would send next. claude code doesn't give you usage. we estimate"
+        return est_tokens(self._prompt()) + est_tokens(self._sp())
 
     def _sp(self):
         "The briefing plus the tool schemas, for the one channel a managed MCP policy cannot close."
@@ -134,7 +134,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
         return render_prompt(self.hist)
 
     def _note_usage(self, r):
-        "Remember what the turn cost, since `token_count` is the only context read-out there is."
+        "Remember what the turn cost. This is billing volume, not occupancy -- see `token_count`."
         self._ctx_tokens = (r.get('usage') or {}).get('total_tokens') or self._ctx_tokens
         return r
 
