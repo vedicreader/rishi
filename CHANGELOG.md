@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.11
+release
+
 ## 0.1.10
 adding claude code and connecting cursor models to non mcp routes
 

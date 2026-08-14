@@ -263,25 +263,6 @@ print(chat.check('Capital of France?', 'Paris'))
 
 See `03_mlx.ipynb`, `04_remote.ipynb`, `05_cursor.ipynb`, `06_claude.ipynb` for knobs and examples.
 
-`<<<<<<< HEAD`
-
-``` python
-# MLX (Apple Silicon)
-from rishi.mlx import qwen3_4b as mlx_qwen
-m = Chat(mlx_qwen); print(resp_text(m('One octopus fact.'))); m.close()
-
-# Hosted — hand local history to a bigger model
-loc = Chat(qwen3_4b); loc('My name is Karthik and my favourite number is 17.')
-big = Chat('gpt-4.1-nano', messages=loc.hist)
-print(resp_text(big('What is my Name and my favourite number?'))); loc.close(); big.close()
-
-# Cursor — SDK path (prefix required for plain `Chat`)
-from rishi.cursor import grok45, CursorChat
-cu = CursorChat(grok45, effort='low'); print(resp_text(cu('Kalman filter in one sentence.'))); cu.close()
-```
-
-`=======`
-
 ``` python
 # MLX (Apple Silicon)
 from rishi.mlx import qwen3_4b as mlx_qwen
@@ -296,8 +277,6 @@ print(resp_text(big('What is my name and favourite number?'))); loc.close(); big
 from rishi.cursor import grok45, CursorChat
 cu = CursorChat(grok45, effort='low'); print(resp_text(cu('Kalman filter in one sentence.'))); cu.close()
 ```
-
-`>>>>>>> cursor/streamline-backend-notebooks-e91f`
 
 ## Claude Code
 
