@@ -181,7 +181,7 @@ def norm_completion(comp):
     if comp.finish_reason == 'length': res['truncated'] = True
     res['usage'] = norm_usage(comp.usage, comp.model)
     # off `content`, so everything that walks response text is unchanged
-    if (media := gen_media(comp.raw)): res['media'] = media
+    if (media := gen_media(getattr(comp, 'raw', None))): res['media'] = media
     return Resp(res)
 
 # %% ../nbs/04_remote.ipynb #rm_chat
