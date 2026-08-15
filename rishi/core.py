@@ -524,7 +524,7 @@ def _mk_obj(schema, d):
 
 
 # %% ../nbs/00_core.ipynb #d029e67b
-#: Modality names, in the spelling litellm's model table uses.
+#: Modality names, in the spelling fastllm's model table uses.
 MODALITIES = ('text', 'image', 'audio', 'video')
 
 @dataclass(frozen=True)
@@ -533,7 +533,7 @@ class Caps:
     inp: tuple = ('text',)      # modalities it accepts
     out: tuple = ('text',)      # modalities it returns unprompted
     tools: tuple = ()           # modalities it returns when given a server-side generation tool
-    source: str = 'default'     # who answered: litellm|mmproj|config|runtime|fallback|default
+    source: str = 'default'     # who answered: fastllm|mmproj|config|runtime|fallback|default
 
     @property
     def gen_image(self): return 'image' in self.out or 'image' in self.tools
@@ -557,7 +557,7 @@ class Caps:
 #: `mode` values that describe a generator rather than a chat, and what they return.
 _gen_modes = {'image_generation': ('image',), 'video_generation': ('video',), 'audio_speech': ('audio',)}
 
-#: Modalities for vendors litellm's table leaves blank. Prefix -> (inp, out).
+#: Modalities for vendors fastllm's table leaves blank. Prefix -> (inp, out).
 CAPS_FALLBACK = {p: (('text', 'image'), ('text',)) for p in
                  ('claude', 'anthropic/', 'sonnet', 'opus', 'haiku', 'fable')}
 
@@ -570,7 +570,7 @@ def _tool_modalities(info):
     return tuple(dict.fromkeys(m for e, ms in ENDPOINT_TOOLS.items() if e in eps for m in ms))
 
 def _tbl_caps(model):
-    "Modalities from litellm's model table (through fastllm), or `None` when the table says nothing."
+    "Modalities from fastllm's bundled model table, or `None` when it says nothing."
     try:
         from fastllm.types import get_model_info
         v, _, m = str(model).partition('/')
@@ -580,10 +580,10 @@ def _tbl_caps(model):
     out = tuple(out) if out else _gen_modes.get(info.get('mode'))
     if not inp: inp = ('text', 'image') if info.get('supports_vision') else None
     if not inp and not out: return None
-    return Caps(tuple(inp or ('text',)), tuple(out or ('text',)), _tool_modalities(info), 'litellm')
+    return Caps(tuple(inp or ('text',)), tuple(out or ('text',)), _tool_modalities(info), 'fastllm')
 
 def _fallback_caps(model):
-    "Modalities from `CAPS_FALLBACK`, for the vendors litellm's table leaves empty."
+    "Modalities from `CAPS_FALLBACK`, for the vendors fastllm's table leaves empty."
     s = str(model).lower()
     hit = first(CAPS_FALLBACK.items(), lambda kv: kv[0] in s)
     return Caps(hit[1][0], hit[1][1], (), 'fallback') if hit else None
