@@ -1,4 +1,4 @@
-__version__ = "0.1.12"
+__version__ = "0.1.13"
 
 from .core import *
 from .core import Chat, AsyncChat

@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.13
+support image and video generation
+
 ## 0.1.12
 estimate tokens for cursor and claude
 
