@@ -538,9 +538,7 @@ class Caps:
     @property
     def gen_video(self): return 'video' in self.out
     @property
-    def known(self):
-        "Did anything actually answer, or is this the text-only assumption?"
-        return self.source != 'default'
+    def known(self): return self.source != 'default'
     def accepts(self, kind): return kind in self.inp
     def fmt(self):
         "One line for a status bar; silent about a plain text-in/text-out model."
@@ -567,8 +565,6 @@ def _tbl_caps(model):
     except Exception: return None
     inp, out = info.get('supported_modalities'), info.get('supported_output_modalities')
     out = tuple(out) if out else _gen_modes.get(info.get('mode'))
-    # a table row with no modality fields still carries `supports_vision`, which is the one thing
-    # worth reading off it; a row with neither tells us nothing and should not answer at all
     if not inp: inp = ('text', 'image') if info.get('supports_vision') else None
     if not inp and not out: return None
     return Caps(tuple(inp or ('text',)), tuple(out or ('text',)), 'litellm')
@@ -588,12 +584,7 @@ def _hub_files(repo):
     return [str(f.file_path) for rev in r.revisions for f in rev.files] if r else []
 
 def _mmproj_caps(model, model_path=None):
-    """A GGUF model with an `mmproj` projector beside it takes media.
-
-    Which media the projector carries is only knowable once mtmd opens it -- `rishi.llama` patches
-    `MTMDChatHandler` precisely because audio-only projectors exist -- so this reports the common
-    case, image, and leaves `source='mmproj'` for a caller that wants to say how it knows.
-    """
+    "A GGUF model with an `mmproj` projector beside it takes images."
     fs = list(_hub_files(model)) if model and not _is_path(model) else []
     for p in (model_path, model):
         d = Path(p).parent if p else None
@@ -627,7 +618,7 @@ def model_caps(model=None, runtime=None, model_path=None):
     try: nm, mid = resolve_runtime(model, runtime, model_path)
     except Exception: nm, mid = runtime, model
     mid = str(mid if mid is not None else (model or ''))
-    # litert engines are built with vision and audio backends by default (`LitertChat(multimodal=True)`)
+    # LitertChat(multimodal=True) builds vision and audio backends
     if nm == 'litert': return Caps(('text', 'image', 'audio'), ('text',), 'runtime')
     if nm == 'llama': return _mmproj_caps(mid, model_path) or Caps()
     if nm == 'mlx': return _cfg_caps(mid, model_path) or Caps()

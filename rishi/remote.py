@@ -141,16 +141,14 @@ def _media_from(o):
         if (inl := d.get(k)):
             inl = _d(inl)
             if inl.get('data'): out.append((inl.get(mk) or 'image/png', b64decode(inl['data'])))
-    # the OpenAI-shaped route litellm normalises Gemini's image output onto
     u = _d(d.get('image_url') or {}).get('url') or (d.get('image_url') if isinstance(d.get('image_url'), str) else None)
     if u and (du := data_url(u)): out.append((du[0], b64decode(du[1])))
-    # the Responses API image tool, and the Images API, both hand back bare base64
     for k in ('result', 'b64_json'):
         if isinstance(d.get(k), str) and d[k]: out.append(('image/png', b64decode(d[k])))
     return out
 
 def _walk(o, depth=0):
-    "Every dict-ish node in a raw response, breadth of shape being provider-specific."
+    "Every dict-ish node in a raw response."
     if depth > 6: return
     if isinstance(o, (list, tuple)):
         for x in o: yield from _walk(x, depth+1)
@@ -162,16 +160,7 @@ def _walk(o, depth=0):
         if isinstance(v, (dict, list, tuple)) or hasattr(v, '__dict__'): yield from _walk(v, depth+1)
 
 def gen_media(raw):
-    """Images a model generated, dug out of the untouched provider response.
-
-    fastllm's `PartType` is input-only -- `input_image`, `input_audio`, `input_video`, `input_file`
-    -- so a chat-native generated image is dropped before `norm_completion` ever sees the message.
-    `Completion.raw` still carries it, which is why this reaches past the parsed message at all.
-
-    That means parsing provider-shaped payloads here, which is exactly the layering fastllm exists
-    to remove. It is confined to this one function so that an upstream `output_image` part type
-    replaces it without anything above noticing.
-    """
+    "Images a model generated, dug out of `Completion.raw` (fastllm's `PartType` is input-only)."
     if raw is None: return []
     seen, out = set(), []
     for node in _walk(raw):
@@ -191,8 +180,7 @@ def norm_completion(comp):
     if tcs: res['tool_calls'] = tcs
     if comp.finish_reason == 'length': res['truncated'] = True
     res['usage'] = norm_usage(comp.usage, comp.model)
-    # kept off `content` so everything that walks response text is unchanged; the next turn
-    # replaces it with an `[image]` placeholder through the usual `strip_media` route
+    # off `content`, so everything that walks response text is unchanged
     if (media := gen_media(comp.raw)): res['media'] = media
     return Resp(res)
 
