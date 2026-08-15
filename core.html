@@ -1,0 +1,1854 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="description" content="Backend-agnostic Chat: dispatch by model name, callbacks, HITL tools, streaming, structured output, usage tracking.">
+
+<title>core – rishi</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-d63a2c9c8df14b07662b36303925c8cc.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="core – rishi">
+<meta property="og:description" content="Backend-agnostic Chat: dispatch by model name, callbacks, HITL tools, streaming, structured output, usage tracking.">
+<meta property="og:site_name" content="rishi">
+<meta name="twitter:title" content="core – rishi">
+<meta name="twitter:description" content="Backend-agnostic Chat: dispatch by model name, callbacks, HITL tools, streaming, structured output, usage tracking.">
+<meta name="twitter:card" content="summary">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">rishi</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./core.html">core</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">rishi</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">core</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./llama.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">llama</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./litert.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">litert</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./mlx.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">mlx</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./remote.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">remote</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./cursor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">cursor</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./claude.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">claude</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#usage-tracking" id="toc-usage-tracking" class="nav-link active" data-scroll-target="#usage-tracking">Usage tracking</a>
+  <ul class="collapse">
+  <li><a href="#usagestats" id="toc-usagestats" class="nav-link" data-scroll-target="#usagestats">UsageStats</a></li>
+  </ul></li>
+  <li><a href="#callbacks" id="toc-callbacks" class="nav-link" data-scroll-target="#callbacks">Callbacks</a>
+  <ul class="collapse">
+  <li><a href="#run_cbs" id="toc-run_cbs" class="nav-link" data-scroll-target="#run_cbs">run_cbs</a></li>
+  <li><a href="#chatcallback" id="toc-chatcallback" class="nav-link" data-scroll-target="#chatcallback">ChatCallback</a></li>
+  </ul></li>
+  <li><a href="#streaming-display" id="toc-streaming-display" class="nav-link" data-scroll-target="#streaming-display">Streaming display</a>
+  <ul class="collapse">
+  <li><a href="#display_stream" id="toc-display_stream" class="nav-link" data-scroll-target="#display_stream">display_stream</a></li>
+  <li><a href="#streamformatter" id="toc-streamformatter" class="nav-link" data-scroll-target="#streamformatter">StreamFormatter</a></li>
+  <li><a href="#mk_tr_details" id="toc-mk_tr_details" class="nav-link" data-scroll-target="#mk_tr_details">mk_tr_details</a></li>
+  <li><a href="#tc_summary_" id="toc-tc_summary_" class="nav-link" data-scroll-target="#tc_summary_">tc_summary_</a></li>
+  <li><a href="#resp" id="toc-resp" class="nav-link" data-scroll-target="#resp">Resp</a></li>
+  <li><a href="#quote_" id="toc-quote_" class="nav-link" data-scroll-target="#quote_">quote_</a></li>
+  <li><a href="#thought" id="toc-thought" class="nav-link" data-scroll-target="#thought">thought</a></li>
+  <li><a href="#resp_text" id="toc-resp_text" class="nav-link" data-scroll-target="#resp_text">resp_text</a></li>
+  </ul></li>
+  <li><a href="#built-in-callbacks" id="toc-built-in-callbacks" class="nav-link" data-scroll-target="#built-in-callbacks">Built-in callbacks</a>
+  <ul class="collapse">
+  <li><a href="#truncationcallback" id="toc-truncationcallback" class="nav-link" data-scroll-target="#truncationcallback">TruncationCallback</a></li>
+  <li><a href="#truncated" id="toc-truncated" class="nav-link" data-scroll-target="#truncated">truncated</a></li>
+  </ul></li>
+  <li><a href="#openai-style-messages" id="toc-openai-style-messages" class="nav-link" data-scroll-target="#openai-style-messages">OpenAI-style messages</a>
+  <ul class="collapse">
+  <li><a href="#is_media" id="toc-is_media" class="nav-link" data-scroll-target="#is_media">is_media</a></li>
+  <li><a href="#mk_oai_msgs" id="toc-mk_oai_msgs" class="nav-link" data-scroll-target="#mk_oai_msgs">mk_oai_msgs</a></li>
+  <li><a href="#mk_oai_msg" id="toc-mk_oai_msg" class="nav-link" data-scroll-target="#mk_oai_msg">mk_oai_msg</a></li>
+  <li><a href="#mk_oai_content" id="toc-mk_oai_content" class="nav-link" data-scroll-target="#mk_oai_content">mk_oai_content</a></li>
+  </ul></li>
+  <li><a href="#tool-schemas" id="toc-tool-schemas" class="nav-link" data-scroll-target="#tool-schemas">Tool schemas</a>
+  <ul class="collapse">
+  <li><a href="#mk_toolspec" id="toc-mk_toolspec" class="nav-link" data-scroll-target="#mk_toolspec">mk_toolspec</a></li>
+  </ul></li>
+  <li><a href="#think-tags-and-tool-call-tags" id="toc-think-tags-and-tool-call-tags" class="nav-link" data-scroll-target="#think-tags-and-tool-call-tags">Think tags and tool-call tags</a>
+  <ul class="collapse">
+  <li><a href="#render_prompt" id="toc-render_prompt" class="nav-link" data-scroll-target="#render_prompt">render_prompt</a></li>
+  <li><a href="#est_tokens" id="toc-est_tokens" class="nav-link" data-scroll-target="#est_tokens">est_tokens</a></li>
+  <li><a href="#tag_tools_sp" id="toc-tag_tools_sp" class="nav-link" data-scroll-target="#tag_tools_sp">tag_tools_sp</a></li>
+  <li><a href="#parse_tool_tags" id="toc-parse_tool_tags" class="nav-link" data-scroll-target="#parse_tool_tags">parse_tool_tags</a></li>
+  <li><a href="#mk_tag_tc" id="toc-mk_tag_tc" class="nav-link" data-scroll-target="#mk_tag_tc">mk_tag_tc</a></li>
+  <li><a href="#split_think" id="toc-split_think" class="nav-link" data-scroll-target="#split_think">split_think</a></li>
+  </ul></li>
+  <li><a href="#response-normalization" id="toc-response-normalization" class="nav-link" data-scroll-target="#response-normalization">Response normalization</a>
+  <ul class="collapse">
+  <li><a href="#strip_media" id="toc-strip_media" class="nav-link" data-scroll-target="#strip_media">strip_media</a></li>
+  <li><a href="#sum_usage" id="toc-sum_usage" class="nav-link" data-scroll-target="#sum_usage">sum_usage</a></li>
+  <li><a href="#to_oai_msg" id="toc-to_oai_msg" class="nav-link" data-scroll-target="#to_oai_msg">to_oai_msg</a></li>
+  <li><a href="#norm_resp" id="toc-norm_resp" class="nav-link" data-scroll-target="#norm_resp">norm_resp</a></li>
+  <li><a href="#parse_args" id="toc-parse_args" class="nav-link" data-scroll-target="#parse_args">parse_args</a></li>
+  </ul></li>
+  <li><a href="#streaming-text-splitter" id="toc-streaming-text-splitter" class="nav-link" data-scroll-target="#streaming-text-splitter">Streaming text splitter</a>
+  <ul class="collapse">
+  <li><a href="#acc_tc" id="toc-acc_tc" class="nav-link" data-scroll-target="#acc_tc">acc_tc</a></li>
+  <li><a href="#streamsplit" id="toc-streamsplit" class="nav-link" data-scroll-target="#streamsplit">StreamSplit</a></li>
+  </ul></li>
+  <li><a href="#shared-built-in-callbacks" id="toc-shared-built-in-callbacks" class="nav-link" data-scroll-target="#shared-built-in-callbacks">Shared built-in callbacks</a>
+  <ul class="collapse">
+  <li><a href="#toolremindercallback" id="toc-toolremindercallback" class="nav-link" data-scroll-target="#toolremindercallback">ToolReminderCallback</a></li>
+  <li><a href="#usagecallback" id="toc-usagecallback" class="nav-link" data-scroll-target="#usagecallback">UsageCallback</a></li>
+  </ul></li>
+  <li><a href="#chat-and-dispatch" id="toc-chat-and-dispatch" class="nav-link" data-scroll-target="#chat-and-dispatch">Chat and dispatch</a>
+  <ul class="collapse">
+  <li><a href="#reusing-a-token-prefix" id="toc-reusing-a-token-prefix" class="nav-link" data-scroll-target="#reusing-a-token-prefix">Reusing a token prefix</a></li>
+  <li><a href="#common_prefix_len" id="toc-common_prefix_len" class="nav-link" data-scroll-target="#common_prefix_len">common_prefix_len</a></li>
+  <li><a href="#get_runtime" id="toc-get_runtime" class="nav-link" data-scroll-target="#get_runtime">get_runtime</a></li>
+  <li><a href="#resolve_runtime" id="toc-resolve_runtime" class="nav-link" data-scroll-target="#resolve_runtime">resolve_runtime</a></li>
+  <li><a href="#infer_runtime" id="toc-infer_runtime" class="nav-link" data-scroll-target="#infer_runtime">infer_runtime</a></li>
+  <li><a href="#split_runtime" id="toc-split_runtime" class="nav-link" data-scroll-target="#split_runtime">split_runtime</a></li>
+  </ul></li>
+  <li><a href="#model-capabilities" id="toc-model-capabilities" class="nav-link" data-scroll-target="#model-capabilities">Model capabilities</a>
+  <ul class="collapse">
+  <li><a href="#model_caps" id="toc-model_caps" class="nav-link" data-scroll-target="#model_caps">model_caps</a></li>
+  <li><a href="#caps" id="toc-caps" class="nav-link" data-scroll-target="#caps">Caps</a></li>
+  <li><a href="#tool-calls-and-tool-results" id="toc-tool-calls-and-tool-results" class="nav-link" data-scroll-target="#tool-calls-and-tool-results">Tool calls and tool results</a></li>
+  <li><a href="#mk_tool_res_msgs" id="toc-mk_tool_res_msgs" class="nav-link" data-scroll-target="#mk_tool_res_msgs">mk_tool_res_msgs</a></li>
+  <li><a href="#mk_tool_res_msg" id="toc-mk_tool_res_msg" class="nav-link" data-scroll-target="#mk_tool_res_msg">mk_tool_res_msg</a></li>
+  <li><a href="#tc_name" id="toc-tc_name" class="nav-link" data-scroll-target="#tc_name">tc_name</a></li>
+  <li><a href="#toolcall" id="toc-toolcall" class="nav-link" data-scroll-target="#toolcall">ToolCall</a></li>
+  </ul></li>
+  <li><a href="#tool-call-budget-and-context-recovery" id="toc-tool-call-budget-and-context-recovery" class="nav-link" data-scroll-target="#tool-call-budget-and-context-recovery">Tool-call budget and context recovery</a>
+  <ul class="collapse">
+  <li><a href="#is_ctx_error" id="toc-is_ctx_error" class="nav-link" data-scroll-target="#is_ctx_error">is_ctx_error</a></li>
+  <li><a href="#contextwindowexceedederror" id="toc-contextwindowexceedederror" class="nav-link" data-scroll-target="#contextwindowexceedederror">ContextWindowExceededError</a></li>
+  <li><a href="#chat" id="toc-chat" class="nav-link" data-scroll-target="#chat">Chat</a></li>
+  <li><a href="#reconfigure-and-one-shots" id="toc-reconfigure-and-one-shots" class="nav-link" data-scroll-target="#reconfigure-and-one-shots">Reconfigure and one-shots</a></li>
+  </ul></li>
+  <li><a href="#the-tool-loop" id="toc-the-tool-loop" class="nav-link" data-scroll-target="#the-tool-loop">The tool loop</a>
+  <ul class="collapse">
+  <li><a href="#toolloopmixin" id="toc-toolloopmixin" class="nav-link" data-scroll-target="#toolloopmixin">ToolLoopMixin</a></li>
+  </ul></li>
+  <li><a href="#keeping-the-context-window-from-filling-up" id="toc-keeping-the-context-window-from-filling-up" class="nav-link" data-scroll-target="#keeping-the-context-window-from-filling-up">Keeping the context window from filling up</a>
+  <ul class="collapse">
+  <li><a href="#slidingwindowcallback" id="toc-slidingwindowcallback" class="nav-link" data-scroll-target="#slidingwindowcallback">SlidingWindowCallback</a></li>
+  <li><a href="#evict_middle" id="toc-evict_middle" class="nav-link" data-scroll-target="#evict_middle">evict_middle</a></li>
+  <li><a href="#msg_groups" id="toc-msg_groups" class="nav-link" data-scroll-target="#msg_groups">msg_groups</a></li>
+  <li><a href="#testing-the-tool-loop-without-a-model" id="toc-testing-the-tool-loop-without-a-model" class="nav-link" data-scroll-target="#testing-the-tool-loop-without-a-model">Testing the tool loop without a model</a></li>
+  <li><a href="#adisplay_stream" id="toc-adisplay_stream" class="nav-link" data-scroll-target="#adisplay_stream">adisplay_stream</a></li>
+  <li><a href="#asyncchat" id="toc-asyncchat" class="nav-link" data-scroll-target="#asyncchat">AsyncChat</a></li>
+  <li><a href="#draining-an-async-stream" id="toc-draining-an-async-stream" class="nav-link" data-scroll-target="#draining-an-async-stream">Draining an async stream</a></li>
+  <li><a href="#managing-callbacks" id="toc-managing-callbacks" class="nav-link" data-scroll-target="#managing-callbacks">Managing callbacks</a></li>
+  </ul></li>
+  <li><a href="#human-in-the-loop-tool-approval" id="toc-human-in-the-loop-tool-approval" class="nav-link" data-scroll-target="#human-in-the-loop-tool-approval">Human-in-the-loop tool approval</a>
+  <ul class="collapse">
+  <li><a href="#hitl_policy" id="toc-hitl_policy" class="nav-link" data-scroll-target="#hitl_policy">hitl_policy</a></li>
+  <li><a href="#browser_approval" id="toc-browser_approval" class="nav-link" data-scroll-target="#browser_approval">browser_approval</a></li>
+  </ul></li>
+  <li><a href="#running-python-from-replies" id="toc-running-python-from-replies" class="nav-link" data-scroll-target="#running-python-from-replies">Running python from replies</a>
+  <ul class="collapse">
+  <li><a href="#pyfencecallback" id="toc-pyfencecallback" class="nav-link" data-scroll-target="#pyfencecallback">PyFenceCallback</a></li>
+  <li><a href="#output_matches" id="toc-output_matches" class="nav-link" data-scroll-target="#output_matches">output_matches</a></li>
+  <li><a href="#task_complete" id="toc-task_complete" class="nav-link" data-scroll-target="#task_complete">task_complete</a></li>
+  <li><a href="#chat.run_py" id="toc-chat.run_py" class="nav-link" data-scroll-target="#chat.run_py">Chat.run_py</a></li>
+  <li><a href="#sync_iter" id="toc-sync_iter" class="nav-link" data-scroll-target="#sync_iter">sync_iter</a></li>
+  <li><a href="#run_coro" id="toc-run_coro" class="nav-link" data-scroll-target="#run_coro">run_coro</a></li>
+  <li><a href="#mk_result_fence" id="toc-mk_result_fence" class="nav-link" data-scroll-target="#mk_result_fence">mk_result_fence</a></li>
+  <li><a href="#matches_" id="toc-matches_" class="nav-link" data-scroll-target="#matches_">matches_</a></li>
+  <li><a href="#extract_fence" id="toc-extract_fence" class="nav-link" data-scroll-target="#extract_fence">extract_fence</a></li>
+  <li><a href="#extract_code" id="toc-extract_code" class="nav-link" data-scroll-target="#extract_code">extract_code</a></li>
+  </ul></li>
+  <li><a href="#utilities-classify-structured" id="toc-utilities-classify-structured" class="nav-link" data-scroll-target="#utilities-classify-structured">Utilities: classify, structured</a>
+  <ul class="collapse">
+  <li><a href="#chat.structured" id="toc-chat.structured" class="nav-link" data-scroll-target="#chat.structured">Chat.structured</a></li>
+  <li><a href="#chat.classify" id="toc-chat.classify" class="nav-link" data-scroll-target="#chat.classify">Chat.classify</a></li>
+  </ul></li>
+  <li><a href="#grading-answers" id="toc-grading-answers" class="nav-link" data-scroll-target="#grading-answers">Grading answers</a>
+  <ul class="collapse">
+  <li><a href="#chat.check" id="toc-chat.check" class="nav-link" data-scroll-target="#chat.check">Chat.check</a></li>
+  <li><a href="#chat.grades" id="toc-chat.grades" class="nav-link" data-scroll-target="#chat.grades">Chat.grades</a></li>
+  </ul></li>
+  <li><a href="#recording-a-chat-for-ci-replay" id="toc-recording-a-chat-for-ci-replay" class="nav-link" data-scroll-target="#recording-a-chat-for-ci-replay">Recording a chat for CI replay</a>
+  <ul class="collapse">
+  <li><a href="#cachedchat" id="toc-cachedchat" class="nav-link" data-scroll-target="#cachedchat">CachedChat</a></li>
+  <li><a href="#recordcache" id="toc-recordcache" class="nav-link" data-scroll-target="#recordcache">RecordCache</a></li>
+  <li><a href="#is_transient" id="toc-is_transient" class="nav-link" data-scroll-target="#is_transient">is_transient</a></li>
+  </ul></li>
+  <li><a href="#installing-the-skill" id="toc-installing-the-skill" class="nav-link" data-scroll-target="#installing-the-skill">Installing the skill</a>
+  <ul class="collapse">
+  <li><a href="#mv_skill_md" id="toc-mv_skill_md" class="nav-link" data-scroll-target="#mv_skill_md">mv_skill_md</a></li>
+  <li><a href="#repo_root" id="toc-repo_root" class="nav-link" data-scroll-target="#repo_root">repo_root</a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="core.html.md"><i class="bi bi-file-code"></i>Markdown</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">core</h1>
+</div>
+
+<div>
+  <div class="description">
+    Backend-agnostic <code>Chat</code>: dispatch by model name, callbacks, HITL tools, streaming, structured output, usage tracking.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<section id="usage-tracking" class="level2">
+<h2 class="anchored" data-anchor-id="usage-tracking">Usage tracking</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#usagestats"><code>UsageStats</code></a> tallies prompt/completion/cached tokens per turn. <code>chat.use</code> is the last turn; backends merge into <code>chat.usage</code>. <code>cost</code>/<code>model</code> are always set so local and hosted usage share one type.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L72" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="usagestats" class="level3">
+<h3 class="anchored" data-anchor-id="usagestats">UsageStats</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> UsageStats(</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    prompt_tokens:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span>, completion_tokens:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span>, total_tokens:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span>, n:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span>, cached_tokens:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span>, cost:<span class="bu">float</span><span class="op">=</span><span class="fl">0.0</span>,</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    model:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Token usage for a chat turn. <code>cached_tokens</code> is the part of the prompt served from a KV/prefix cache. <code>cost</code>/<code>model</code> are always present (<code>cost</code> is 0 for local inference) so a harness merging local and hosted usage can carry one type instead of two.</em></p>
+<div id="f5b4ed5cd6f26fbd" class="cell" data-execution_count="6">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.test <span class="im">import</span> test_eq, test_fail, test_close</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>a <span class="op">=</span> UsageStats(prompt_tokens<span class="op">=</span><span class="dv">10</span>, completion_tokens<span class="op">=</span><span class="dv">5</span>, total_tokens<span class="op">=</span><span class="dv">15</span>, n<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>b <span class="op">=</span> UsageStats(prompt_tokens<span class="op">=</span><span class="dv">3</span>, completion_tokens<span class="op">=</span><span class="dv">2</span>, total_tokens<span class="op">=</span><span class="dv">20</span>, n<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> a <span class="op">+</span> b</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>test_eq((c.prompt_tokens, c.completion_tokens, c.n), (<span class="dv">13</span>, <span class="dv">7</span>, <span class="dv">2</span>))</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">"in=13"</span> <span class="kw">in</span> <span class="bu">repr</span>(c) <span class="kw">and</span> <span class="st">"out=7"</span> <span class="kw">in</span> <span class="bu">repr</span>(c)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>test_eq((a <span class="op">+</span> <span class="va">None</span>).prompt_tokens, <span class="dv">10</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co"># cost/model default to 0/None and stay out of the repr until something sets them</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>test_eq((a.cost, a.model), (<span class="fl">0.0</span>, <span class="va">None</span>))</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'cost'</span> <span class="kw">not</span> <span class="kw">in</span> <span class="bu">repr</span>(a) <span class="kw">and</span> <span class="st">'model'</span> <span class="kw">not</span> <span class="kw">in</span> <span class="bu">repr</span>(a)</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> UsageStats(prompt_tokens<span class="op">=</span><span class="dv">1</span>, cost<span class="op">=</span><span class="fl">0.02</span>, model<span class="op">=</span><span class="st">'gemma-4-e2b'</span>) <span class="op">+</span> UsageStats(prompt_tokens<span class="op">=</span><span class="dv">1</span>, cost<span class="op">=</span><span class="fl">0.03</span>)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>test_eq(d.cost, <span class="fl">0.05</span>)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>test_eq(d.model, <span class="st">'gemma-4-e2b'</span>)                       <span class="co"># first non-None model wins</span></span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'cost=$0.0500'</span> <span class="kw">in</span> <span class="bu">repr</span>(d) <span class="kw">and</span> <span class="st">'model=gemma-4-e2b'</span> <span class="kw">in</span> <span class="bu">repr</span>(d)</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="co"># cached_tokens sums like the other counters, and only shows up once a backend reports one</span></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>test_eq(a.cached_tokens, <span class="dv">0</span>)</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'cached'</span> <span class="kw">not</span> <span class="kw">in</span> <span class="bu">repr</span>(a)</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>e <span class="op">=</span> UsageStats(prompt_tokens<span class="op">=</span><span class="dv">100</span>, cached_tokens<span class="op">=</span><span class="dv">90</span>) <span class="op">+</span> UsageStats(prompt_tokens<span class="op">=</span><span class="dv">100</span>, cached_tokens<span class="op">=</span><span class="dv">80</span>)</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>test_eq(e.cached_tokens, <span class="dv">170</span>)</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'cached=170'</span> <span class="kw">in</span> <span class="bu">repr</span>(e)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="callbacks" class="level2">
+<h2 class="anchored" data-anchor-id="callbacks">Callbacks</h2>
+<p>Subclass <a href="https://vedicreader.github.io/rishi/core.html#chatcallback"><code>ChatCallback</code></a>, hook <code>before_send</code> / <code>after_response</code> / <code>before_tool_calls</code> / <code>after_tool_calls</code>. <code>order</code> controls sequencing; <a href="https://vedicreader.github.io/rishi/core.html#run_cbs"><code>run_cbs</code></a> dispatches. State lives on <code>self.chat</code> via <code>GetAttr</code>.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L97" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="run_cbs" class="level3">
+<h3 class="anchored" data-anchor-id="run_cbs">run_cbs</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> run_cbs(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    chat, event</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Dispatch <code>event</code> to enabled callbacks in <code>order</code>; forward any yielded stream items.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L92" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="chatcallback" class="level3">
+<h3 class="anchored" data-anchor-id="chatcallback">ChatCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ChatCallback(</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Base chat callback; reads chat state via <code>GetAttr</code> (<code>self.turn_msg</code> -&gt; <code>chat.turn_msg</code>).</em></p>
+<div id="aa2ad922fb1cab15" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _Dummy: <span class="cf">pass</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _A(ChatCallback):</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    order <span class="op">=</span> <span class="dv">20</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> before_send(<span class="va">self</span>): <span class="va">self</span>.chat.log.append(<span class="st">'A'</span>)</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _B(ChatCallback):</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    order <span class="op">=</span> <span class="dv">10</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> before_send(<span class="va">self</span>):</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.chat.log.append(<span class="st">'B'</span>)</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>        <span class="cf">yield</span> {<span class="st">'text'</span>: <span class="st">'from-B'</span>}</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>d <span class="op">=</span> _Dummy()<span class="op">;</span> d.log <span class="op">=</span> []</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>a, b <span class="op">=</span> _A(), _B()<span class="op">;</span> a.chat <span class="op">=</span> d<span class="op">;</span> b.chat <span class="op">=</span> d</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>d.cbs <span class="op">=</span> L(a, b)</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>out <span class="op">=</span> <span class="bu">list</span>(run_cbs(d, <span class="st">'before_send'</span>))</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>test_eq(d.log, [<span class="st">'B'</span>, <span class="st">'A'</span>])</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>test_eq(out, [{<span class="st">'text'</span>: <span class="st">'from-B'</span>}])</span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">repr</span>(a), <span class="st">'_A'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="streaming-display" class="level2">
+<h2 class="anchored" data-anchor-id="streaming-display">Streaming display</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#streamformatter"><code>StreamFormatter</code></a> turns token chunks into markdown for notebooks. <code>display_stream(gen)</code> renders live; <a href="https://vedicreader.github.io/rishi/core.html#adisplay_stream"><code>adisplay_stream</code></a> is the async twin.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L166" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="display_stream" class="level3">
+<h3 class="anchored" data-anchor-id="display_stream">display_stream</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> display_stream(</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    chunks</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Progressively render a markdown-chunk stream (e.g.&nbsp;<code>chat(msg, stream=True)</code>) live in a notebook; returns the full markdown.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L144" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="streamformatter" class="level3">
+<h3 class="anchored" data-anchor-id="streamformatter">StreamFormatter</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> StreamFormatter(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    mx:<span class="bu">int</span><span class="op">=</span><span class="dv">2000</span>, showthink:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Format a litert response stream to markdown; thinking streams as a blockquote.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L139" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_tr_details" class="level3">
+<h3 class="anchored" data-anchor-id="mk_tr_details">mk_tr_details</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_tr_details(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    name, args, result, mx:<span class="bu">int</span><span class="op">=</span><span class="dv">2000</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em><code>&lt;details&gt;</code> JSON block for a completed tool call.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L133" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="tc_summary_" class="level3">
+<h3 class="anchored" data-anchor-id="tc_summary_">tc_summary_</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> tc_summary_(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    name, args, result:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>One-line <code>&lt;code&gt;</code> summary of a tool call.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L119" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="resp" class="level3">
+<h3 class="anchored" data-anchor-id="resp">Resp</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> Resp(</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>A litert response dict that renders as markdown (thinking + text + tool calls/responses) in notebooks.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L115" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="quote_" class="level3">
+<h3 class="anchored" data-anchor-id="quote_">quote_</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> quote_(</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    text</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Render <code>text</code> as a markdown blockquote with a Thinking header (renders in any md engine).</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L111" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="thought" class="level3">
+<h3 class="anchored" data-anchor-id="thought">thought</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> thought(</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    resp</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>The model’s thinking (<code>channels.thought</code>) for a litert response/chunk, or ’’.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L105" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="resp_text" class="level3">
+<h3 class="anchored" data-anchor-id="resp_text">resp_text</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> resp_text(</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    resp</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Join text parts of a litert response/chunk dict.</em></p>
+</section>
+</section>
+<section id="built-in-callbacks" class="level2">
+<h2 class="anchored" data-anchor-id="built-in-callbacks">Built-in callbacks</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#usagecallback"><code>UsageCallback</code></a> accumulates tokens. <a href="https://vedicreader.github.io/rishi/core.html#toolremindercallback"><code>ToolReminderCallback</code></a> nudges the model when tools exist but weren’t called. <a href="https://vedicreader.github.io/rishi/core.html#truncationcallback"><code>TruncationCallback</code></a> clips over-long tool results before they hit the context.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L183" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="truncationcallback" class="level3">
+<h3 class="anchored" data-anchor-id="truncationcallback">TruncationCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> TruncationCallback(</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    max_tokens</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Flag <code>turn_res['truncated']</code> when the reply reaches <code>max_tokens</code> output tokens (best-effort).</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L179" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="truncated" class="level3">
+<h3 class="anchored" data-anchor-id="truncated">truncated</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> truncated(</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    resp</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Whether <code>resp</code> was flagged as cut off at the token cap.</em></p>
+</section>
+</section>
+<section id="openai-style-messages" class="level2">
+<h2 class="anchored" data-anchor-id="openai-style-messages">OpenAI-style messages</h2>
+<p>Helpers to build OpenAI-shaped message dicts (<a href="https://vedicreader.github.io/rishi/core.html#mk_oai_content"><code>mk_oai_content</code></a>, <a href="https://vedicreader.github.io/rishi/core.html#mk_oai_msg"><code>mk_oai_msg</code></a>, <a href="https://vedicreader.github.io/rishi/core.html#mk_oai_msgs"><code>mk_oai_msgs</code></a>) used by llama.cpp and as the canonical interchange format. Media items become placeholders in past turns via <a href="https://vedicreader.github.io/rishi/core.html#strip_media"><code>strip_media</code></a>.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L220" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="is_media" class="level3">
+<h3 class="anchored" data-anchor-id="is_media">is_media</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> is_media(</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    p</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Is <code>p</code> an image or audio content part?</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L217" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_oai_msgs" class="level3">
+<h3 class="anchored" data-anchor-id="mk_oai_msgs">mk_oai_msgs</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_oai_msgs(</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    msgs</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Normalize a list of messages to OpenAI-style dicts.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L210" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_oai_msg" class="level3">
+<h3 class="anchored" data-anchor-id="mk_oai_msg">mk_oai_msg</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_oai_msg(</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    content, role:<span class="bu">str</span><span class="op">=</span><span class="st">'user'</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Create an OpenAI-style message dict from str/bytes/list/dict.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L197" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_oai_content" class="level3">
+<h3 class="anchored" data-anchor-id="mk_oai_content">mk_oai_content</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_oai_content(</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    o</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Convert <code>o</code> to an OpenAI-style content part (text, a base64 <code>image_url</code>, or an <code>input_audio</code>).</em></p>
+<div id="c51835d7d8e96ead" class="cell" data-execution_count="28">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.test <span class="im">import</span> test_eq, test_fail</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="ff7de589b556ca3b" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>test_eq(mk_oai_msg(<span class="st">"hello"</span>), {<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'hello'</span>})</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>test_eq(mk_oai_msg([<span class="st">"a"</span>, <span class="st">"b"</span>]), {<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'a</span><span class="ch">\n</span><span class="st">b'</span>})</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>test_eq(mk_oai_msg({<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'hi'</span>}), {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'hi'</span>})</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>test_eq(mk_oai_msgs([<span class="st">'hi'</span>, {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'hello'</span>}]),</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>        [{<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'hi'</span>}, {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'hello'</span>}])</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>png <span class="op">=</span> <span class="st">b'</span><span class="ch">\x89</span><span class="st">PNG</span><span class="ch">\r\n\x1a\n</span><span class="st">'</span> <span class="op">+</span> <span class="st">b'0'</span> <span class="op">*</span> <span class="dv">8</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> mk_oai_msg([png, <span class="st">'what is this?'</span>])[<span class="st">'content'</span>][<span class="dv">0</span>][<span class="st">'type'</span>] <span class="op">==</span> <span class="st">'image_url'</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>test_eq(mk_oai_content(<span class="st">b'RIFF0000WAVE'</span>)[<span class="st">'type'</span>], <span class="st">'input_audio'</span>)          <span class="co"># audio is sniffed too</span></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: mk_oai_content(<span class="st">b'%PDF-1.4 junk'</span>), contains<span class="op">=</span><span class="st">'text, image, and audio'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="tool-schemas" class="level2">
+<h2 class="anchored" data-anchor-id="tool-schemas">Tool schemas</h2>
+<p><code>mk_toolspec(fn)</code> reads signatures and docstrings into a JSON schema for the model.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L226" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="mk_toolspec" class="level3">
+<h3 class="anchored" data-anchor-id="mk_toolspec">mk_toolspec</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_toolspec(</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    f</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>OpenAI-style tool spec for callable <code>f</code> (via <a href="https://fastcore.fast.ai/funccall.html#get_schema"><code>fastcore.funccall.get_schema</code></a>); spec dicts pass through.</em></p>
+<div id="ff64e5575a673e95" class="cell" data-execution_count="31">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _add(</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    a:<span class="bu">int</span>, <span class="co"># first addend</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    b:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span> <span class="co"># second addend</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>):</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">'Add two integers.'</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> a <span class="op">+</span> b</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>s <span class="op">=</span> mk_toolspec(_add)</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>test_eq(s[<span class="st">'type'</span>], <span class="st">'function'</span>)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>test_eq(s[<span class="st">'function'</span>][<span class="st">'name'</span>], <span class="st">'_add'</span>)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>test_eq(s[<span class="st">'function'</span>][<span class="st">'parameters'</span>][<span class="st">'required'</span>], [<span class="st">'a'</span>])</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a>test_eq(mk_toolspec(s), s)                      <span class="co"># spec dicts pass through</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a><span class="co"># `get_schema` adds a stray `title` for classes/dataclasses (the `structured` path); it must not reach</span></span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a><span class="co"># the rendered tool listing or llama.cpp's JSON-schema grammar builder</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dataclasses <span class="im">import</span> dataclass</span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a><span class="at">@dataclass</span></span>
+<span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _Point:</span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a>    <span class="co">'A 2d point'</span></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>    x: <span class="bu">int</span>  <span class="co"># the x coord</span></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>    y: <span class="bu">int</span>  <span class="co"># the y coord</span></span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>p <span class="op">=</span> mk_toolspec(_Point)</span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a>test_eq(p[<span class="st">'function'</span>][<span class="st">'name'</span>], <span class="st">'_Point'</span>)</span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a>test_eq(p[<span class="st">'function'</span>][<span class="st">'parameters'</span>][<span class="st">'required'</span>], [<span class="st">'x'</span>, <span class="st">'y'</span>])</span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'title'</span> <span class="kw">not</span> <span class="kw">in</span> p[<span class="st">'function'</span>][<span class="st">'parameters'</span>], p[<span class="st">'function'</span>][<span class="st">'parameters'</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="think-tags-and-tool-call-tags" class="level2">
+<h2 class="anchored" data-anchor-id="think-tags-and-tool-call-tags">Think tags and tool-call tags</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#split_think"><code>split_think</code></a> separates <code>&lt;think&gt;</code> from answer text. Tag-mode backends parse <code>&lt;tool_call&gt;</code> blocks via <a href="https://vedicreader.github.io/rishi/core.html#parse_tool_tags"><code>parse_tool_tags</code></a> / <a href="https://vedicreader.github.io/rishi/core.html#mk_tag_tc"><code>mk_tag_tc</code></a>.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L296" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="render_prompt" class="level3">
+<h3 class="anchored" data-anchor-id="render_prompt">render_prompt</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> render_prompt(</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>    hist, sp:<span class="bu">str</span><span class="op">=</span><span class="st">''</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>A conversation as one block of text, for a transport that takes a prompt rather than a message list.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L290" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="est_tokens" class="level3">
+<h3 class="anchored" data-anchor-id="est_tokens">est_tokens</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> est_tokens(</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    text</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Rough tokens in <code>text</code>, for a transport with no tokenizer of its own.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L282" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="tag_tools_sp" class="level3">
+<h3 class="anchored" data-anchor-id="tag_tools_sp">tag_tools_sp</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> tag_tools_sp(</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>    toolspecs, sp:<span class="bu">str</span><span class="op">=</span><span class="st">''</span>,</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>    template:<span class="bu">str</span><span class="op">=</span><span class="st">'</span><span class="ch">\n\n</span><span class="st"># Tools</span><span class="ch">\n\n</span><span class="st">You can call the functions below. Their signatures are given as JSON schemas inside &lt;tools&gt;&lt;/tools&gt;:</span><span class="ch">\n\n</span><span class="st">&lt;tools&gt;</span><span class="ch">\n</span><span class="sc">{tools}</span><span class="ch">\n</span><span class="st">&lt;/tools&gt;</span><span class="ch">\n\n</span><span class="st">To call one, emit a JSON object with the function</span><span class="ch">\'</span><span class="st">s name and its arguments inside &lt;tool_call&gt;&lt;/tool_call&gt;, and then stop and wait for the result:</span><span class="ch">\n\n</span><span class="st">&lt;tool_call&gt;</span><span class="ch">\n</span><span class="sc">{{</span><span class="st">"name": "the_function_name", "arguments": </span><span class="sc">{{</span><span class="st">"first": "value"</span><span class="sc">}}}}</span><span class="ch">\n</span><span class="st">&lt;/tool_call&gt;</span><span class="ch">\n\n</span><span class="st">Call one function at a time. Do not describe the call in prose as well as emitting it, and never invent a result -- the real one comes back in the next message.'</span></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em><code>sp</code> plus the tag protocol and <code>toolspecs</code> as JSON, for a transport that can’t carry tools.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L255" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="parse_tool_tags" class="level3">
+<h3 class="anchored" data-anchor-id="parse_tool_tags">parse_tool_tags</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> parse_tool_tags(</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    text</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Parse Hermes/Qwen-style <code>&lt;tool_call&gt;{json}&lt;/tool_call&gt;</code> blocks; returns <code>(clean_text, tool_calls)</code>.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L247" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_tag_tc" class="level3">
+<h3 class="anchored" data-anchor-id="mk_tag_tc">mk_tag_tc</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_tag_tc(</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    s</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Build a tool_call dict from the JSON inside a <code>&lt;tool_call&gt;</code> block, or None.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L237" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="split_think" class="level3">
+<h3 class="anchored" data-anchor-id="split_think">split_think</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> split_think(</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    text</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Split <code>&lt;think&gt;...&lt;/think&gt;</code> blocks out of <code>text</code>; returns <code>(clean_text, thought)</code>.</em></p>
+<div id="668b34f8a557fd35" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>test_eq(split_think(<span class="st">'&lt;think&gt;hmm&lt;/think&gt;</span><span class="ch">\n\n</span><span class="st">hi'</span>), (<span class="st">'hi'</span>, <span class="st">'hmm'</span>))</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>test_eq(split_think(<span class="st">'no tags'</span>), (<span class="st">'no tags'</span>, <span class="st">''</span>))</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>test_eq(split_think(<span class="st">'&lt;think&gt;cut off mid-'</span>), (<span class="st">''</span>, <span class="st">'cut off mid-'</span>))</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>txt, tcs <span class="op">=</span> parse_tool_tags(<span class="st">'calling now</span><span class="ch">\n</span><span class="st">&lt;tool_call&gt;{"name": "add", "arguments": {"a": 1</span><span class="sc">}}</span><span class="st">&lt;/tool_call&gt;'</span>)</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>test_eq(txt, <span class="st">'calling now'</span>)</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>test_eq(tcs[<span class="dv">0</span>][<span class="st">'function'</span>], {<span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'arguments'</span>: {<span class="st">'a'</span>: <span class="dv">1</span>}})</span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>test_eq(parse_tool_tags(<span class="st">'&lt;tool_call&gt;not json&lt;/tool_call&gt;'</span>)[<span class="dv">1</span>], [])</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>spec <span class="op">=</span> mk_toolspec(_add)</span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>sp <span class="op">=</span> tag_tools_sp([spec], <span class="st">'Be terse.'</span>)</span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> sp.startswith(<span class="st">'Be terse.'</span>) <span class="kw">and</span> <span class="st">'&lt;tool_call&gt;'</span> <span class="kw">in</span> sp <span class="kw">and</span> <span class="st">'"name": "_add"'</span> <span class="kw">in</span> sp</span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>test_eq(tag_tools_sp([], <span class="st">'Be terse.'</span>), <span class="st">'Be terse.'</span>)      <span class="co"># no tools, nothing to teach</span></span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a><span class="co"># what the prompt asks for is what the parser reads back</span></span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a>test_eq(parse_tool_tags(sp)[<span class="dv">1</span>][<span class="dv">0</span>][<span class="st">'function'</span>], {<span class="st">'name'</span>: <span class="st">'the_function_name'</span>, <span class="st">'arguments'</span>: {<span class="st">'first'</span>: <span class="st">'value'</span>}})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="response-normalization" class="level2">
+<h2 class="anchored" data-anchor-id="response-normalization">Response normalization</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#norm_resp"><code>norm_resp</code></a> maps backend completion dicts to <a href="https://vedicreader.github.io/rishi/core.html#resp"><code>Resp</code></a>. <a href="https://vedicreader.github.io/rishi/core.html#to_oai_msg"><code>to_oai_msg</code></a> converts canonical history entries back to wire messages.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L355" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="strip_media" class="level3">
+<h3 class="anchored" data-anchor-id="strip_media">strip_media</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> strip_media(</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>    m</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Replace media parts with a text placeholder and collapse content to a string, so past-turn media isn’t re-encoded.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L345" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="sum_usage" class="level3">
+<h3 class="anchored" data-anchor-id="sum_usage">sum_usage</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> sum_usage(</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>    us</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Sum OpenAI usage dicts (ignoring Nones); None if nothing to sum. A <code>model</code> name, if any, is carried through rather than summed.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L333" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="to_oai_msg" class="level3">
+<h3 class="anchored" data-anchor-id="to_oai_msg">to_oai_msg</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> to_oai_msg(</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>    m</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Project a history entry to an OpenAI-style wire message: drop rishi-only keys, re-encode tool-call args as JSON.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L316" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="norm_resp" class="level3">
+<h3 class="anchored" data-anchor-id="norm_resp">norm_resp</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> norm_resp(</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>    r</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Normalize an OpenAI-style chat completion to a rishi-style <a href="https://vedicreader.github.io/rishi/core.html#resp"><code>Resp</code></a> dict.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L310" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="parse_args" class="level3">
+<h3 class="anchored" data-anchor-id="parse_args">parse_args</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> parse_args(</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>    a</span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Parse OpenAI JSON-string tool arguments to a dict (dicts pass through).</em></p>
+<div id="71f23bcbda7d372a" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>raw <span class="op">=</span> {<span class="st">'choices'</span>: [{<span class="st">'message'</span>: {<span class="st">'role'</span>: <span class="st">'assistant'</span>,</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>                               <span class="st">'content'</span>: <span class="st">'&lt;think&gt;2+3&lt;/think&gt;The answer is 5.</span><span class="ch">\n</span><span class="st">&lt;tool_call&gt;{"name": "add", "arguments": {"a": 2, "b": 3</span><span class="sc">}}</span><span class="st">&lt;/tool_call&gt;'</span>,</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>                               <span class="st">'tool_calls'</span>: [{<span class="st">'id'</span>: <span class="st">'x1'</span>, <span class="st">'type'</span>: <span class="st">'function'</span>,</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>                                               <span class="st">'function'</span>: {<span class="st">'name'</span>: <span class="st">'mul'</span>, <span class="st">'arguments'</span>: <span class="st">'{"a": 4}'</span>}}]},</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>                    <span class="st">'finish_reason'</span>: <span class="st">'stop'</span>}],</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>       <span class="st">'usage'</span>: {<span class="st">'prompt_tokens'</span>: <span class="dv">10</span>, <span class="st">'completion_tokens'</span>: <span class="dv">5</span>, <span class="st">'total_tokens'</span>: <span class="dv">15</span>}}</span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> norm_resp(raw)</span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>test_eq(resp_text(r), <span class="st">'The answer is 5.'</span>)</span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>test_eq(thought(r), <span class="st">'2+3'</span>)</span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>test_eq([tc[<span class="st">'function'</span>][<span class="st">'name'</span>] <span class="cf">for</span> tc <span class="kw">in</span> r[<span class="st">'tool_calls'</span>]], [<span class="st">'mul'</span>, <span class="st">'add'</span>])</span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>test_eq(r[<span class="st">'tool_calls'</span>][<span class="dv">0</span>][<span class="st">'function'</span>][<span class="st">'arguments'</span>], {<span class="st">'a'</span>: <span class="dv">4</span>})</span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="kw">not</span> truncated(r)</span>
+<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-14"><a href="#cb36-14" aria-hidden="true" tabindex="-1"></a>o <span class="op">=</span> to_oai_msg(r)</span>
+<span id="cb36-15"><a href="#cb36-15" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'channels'</span> <span class="kw">not</span> <span class="kw">in</span> o <span class="kw">and</span> <span class="st">'usage'</span> <span class="kw">not</span> <span class="kw">in</span> o</span>
+<span id="cb36-16"><a href="#cb36-16" aria-hidden="true" tabindex="-1"></a>test_eq(o[<span class="st">'tool_calls'</span>][<span class="dv">0</span>][<span class="st">'function'</span>][<span class="st">'arguments'</span>], <span class="st">'{"a": 4}'</span>)</span>
+<span id="cb36-17"><a href="#cb36-17" aria-hidden="true" tabindex="-1"></a>test_eq(to_oai_msg({<span class="st">'role'</span>: <span class="st">'tool'</span>, <span class="st">'tool_call_id'</span>: <span class="st">'t1'</span>, <span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'content'</span>: <span class="st">'5'</span>}),</span>
+<span id="cb36-18"><a href="#cb36-18" aria-hidden="true" tabindex="-1"></a>        {<span class="st">'role'</span>: <span class="st">'tool'</span>, <span class="st">'tool_call_id'</span>: <span class="st">'t1'</span>, <span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'content'</span>: <span class="st">'5'</span>})</span>
+<span id="cb36-19"><a href="#cb36-19" aria-hidden="true" tabindex="-1"></a>test_eq(sum_usage([{<span class="st">'prompt_tokens'</span>: <span class="dv">1</span>, <span class="st">'completion_tokens'</span>: <span class="dv">2</span>, <span class="st">'total_tokens'</span>: <span class="dv">3</span>}, <span class="va">None</span>,</span>
+<span id="cb36-20"><a href="#cb36-20" aria-hidden="true" tabindex="-1"></a>                    {<span class="st">'prompt_tokens'</span>: <span class="dv">10</span>, <span class="st">'completion_tokens'</span>: <span class="dv">20</span>, <span class="st">'total_tokens'</span>: <span class="dv">30</span>}]),</span>
+<span id="cb36-21"><a href="#cb36-21" aria-hidden="true" tabindex="-1"></a>        {<span class="st">'prompt_tokens'</span>: <span class="dv">11</span>, <span class="st">'completion_tokens'</span>: <span class="dv">22</span>, <span class="st">'total_tokens'</span>: <span class="dv">33</span>, <span class="st">'cached_tokens'</span>: <span class="dv">0</span>})</span>
+<span id="cb36-22"><a href="#cb36-22" aria-hidden="true" tabindex="-1"></a>test_eq(sum_usage([{<span class="st">'cached_tokens'</span>: <span class="dv">5</span>}, {<span class="st">'cached_tokens'</span>: <span class="dv">7</span>}])[<span class="st">'cached_tokens'</span>], <span class="dv">12</span>)</span>
+<span id="cb36-23"><a href="#cb36-23" aria-hidden="true" tabindex="-1"></a>test_eq(sum_usage([<span class="va">None</span>, <span class="va">None</span>]), <span class="va">None</span>)</span>
+<span id="cb36-24"><a href="#cb36-24" aria-hidden="true" tabindex="-1"></a>test_eq(sum_usage([{<span class="st">'model'</span>: <span class="st">'a'</span>}, {<span class="st">'model'</span>: <span class="st">'b'</span>}])[<span class="st">'model'</span>], <span class="st">'a'</span>)   <span class="co"># carried, not summed</span></span>
+<span id="cb36-25"><a href="#cb36-25" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'model'</span> <span class="kw">not</span> <span class="kw">in</span> sum_usage([{<span class="st">'prompt_tokens'</span>: <span class="dv">1</span>}])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="streaming-text-splitter" class="level2">
+<h2 class="anchored" data-anchor-id="streaming-text-splitter">Streaming text splitter</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#streamsplit"><code>StreamSplit</code></a> incrementally splits a token stream on think/tool/answer boundaries for live display.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L424" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="acc_tc" class="level3">
+<h3 class="anchored" data-anchor-id="acc_tc">acc_tc</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> acc_tc(</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>    acc, deltas</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Fold streamed OpenAI <code>tool_calls</code> deltas into <code>acc</code> (a list of partial tool_call dicts).</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L366" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="streamsplit" class="level3">
+<h3 class="anchored" data-anchor-id="streamsplit">StreamSplit</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> StreamSplit():</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Stateful splitter for streamed text: <code>&lt;think&gt;</code> -&gt; thought chunks, <code>&lt;tool_call&gt;</code> blocks held back and parsed.</em></p>
+<div id="bed3e8c42fc59070" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _run_split(deltas):</span>
+<span id="cb39-2"><a href="#cb39-2" aria-hidden="true" tabindex="-1"></a>    sp, chunks <span class="op">=</span> StreamSplit(), []</span>
+<span id="cb39-3"><a href="#cb39-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> d <span class="kw">in</span> deltas: chunks <span class="op">+=</span> <span class="bu">list</span>(sp.feed(d))</span>
+<span id="cb39-4"><a href="#cb39-4" aria-hidden="true" tabindex="-1"></a>    chunks <span class="op">+=</span> <span class="bu">list</span>(sp.finish())</span>
+<span id="cb39-5"><a href="#cb39-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> sp, chunks</span>
+<span id="cb39-6"><a href="#cb39-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-7"><a href="#cb39-7" aria-hidden="true" tabindex="-1"></a><span class="co"># tags split across chunk boundaries</span></span>
+<span id="cb39-8"><a href="#cb39-8" aria-hidden="true" tabindex="-1"></a>sp, chunks <span class="op">=</span> _run_split([<span class="st">'&lt;thi'</span>, <span class="st">'nk&gt;let me'</span>, <span class="st">' see&lt;/th'</span>, <span class="st">'ink&gt;</span><span class="ch">\n\n</span><span class="st">ans'</span>, <span class="st">'wer: 5 &lt;tool'</span>, <span class="st">'_call&gt;{"name": "add", "arguments": {"a": 1</span><span class="sc">}}</span><span class="st">&lt;/tool_call&gt;'</span>])</span>
+<span id="cb39-9"><a href="#cb39-9" aria-hidden="true" tabindex="-1"></a>test_eq(sp.thought, <span class="st">'let me see'</span>)</span>
+<span id="cb39-10"><a href="#cb39-10" aria-hidden="true" tabindex="-1"></a>test_eq(sp.text, <span class="st">'answer: 5 '</span>)</span>
+<span id="cb39-11"><a href="#cb39-11" aria-hidden="true" tabindex="-1"></a>test_eq(sp.tool_calls[<span class="dv">0</span>][<span class="st">'function'</span>], {<span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'arguments'</span>: {<span class="st">'a'</span>: <span class="dv">1</span>}})</span>
+<span id="cb39-12"><a href="#cb39-12" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>((<span class="st">'channels'</span> <span class="kw">in</span> c) <span class="kw">or</span> (<span class="st">'content'</span> <span class="kw">in</span> c) <span class="cf">for</span> c <span class="kw">in</span> chunks)</span>
+<span id="cb39-13"><a href="#cb39-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-14"><a href="#cb39-14" aria-hidden="true" tabindex="-1"></a><span class="co"># plain text passes through; unterminated think flushes to thought</span></span>
+<span id="cb39-15"><a href="#cb39-15" aria-hidden="true" tabindex="-1"></a>sp, _ <span class="op">=</span> _run_split([<span class="st">'just '</span>, <span class="st">'text'</span>])</span>
+<span id="cb39-16"><a href="#cb39-16" aria-hidden="true" tabindex="-1"></a>test_eq((sp.text, sp.thought, sp.tool_calls), (<span class="st">'just text'</span>, <span class="st">''</span>, []))</span>
+<span id="cb39-17"><a href="#cb39-17" aria-hidden="true" tabindex="-1"></a>sp, _ <span class="op">=</span> _run_split([<span class="st">'&lt;think&gt;never closed'</span>])</span>
+<span id="cb39-18"><a href="#cb39-18" aria-hidden="true" tabindex="-1"></a>test_eq(sp.thought, <span class="st">'never closed'</span>)</span>
+<span id="cb39-19"><a href="#cb39-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-20"><a href="#cb39-20" aria-hidden="true" tabindex="-1"></a><span class="co"># a lone '&lt;' that never becomes a tag is still emitted</span></span>
+<span id="cb39-21"><a href="#cb39-21" aria-hidden="true" tabindex="-1"></a>sp, _ <span class="op">=</span> _run_split([<span class="st">'a &lt; b'</span>, <span class="st">' and c'</span>])</span>
+<span id="cb39-22"><a href="#cb39-22" aria-hidden="true" tabindex="-1"></a>test_eq(sp.text, <span class="st">'a &lt; b and c'</span>)</span>
+<span id="cb39-23"><a href="#cb39-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb39-24"><a href="#cb39-24" aria-hidden="true" tabindex="-1"></a>acc <span class="op">=</span> []</span>
+<span id="cb39-25"><a href="#cb39-25" aria-hidden="true" tabindex="-1"></a>acc_tc(acc, [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'id'</span>: <span class="st">'c1'</span>, <span class="st">'function'</span>: {<span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'arguments'</span>: <span class="st">''</span>}}])</span>
+<span id="cb39-26"><a href="#cb39-26" aria-hidden="true" tabindex="-1"></a>acc_tc(acc, [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'function'</span>: {<span class="st">'arguments'</span>: <span class="st">'{"a"'</span>}}])</span>
+<span id="cb39-27"><a href="#cb39-27" aria-hidden="true" tabindex="-1"></a>acc_tc(acc, [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'function'</span>: {<span class="st">'arguments'</span>: <span class="st">': 2}'</span>}}])</span>
+<span id="cb39-28"><a href="#cb39-28" aria-hidden="true" tabindex="-1"></a>test_eq(acc, [{<span class="st">'id'</span>: <span class="st">'c1'</span>, <span class="st">'type'</span>: <span class="st">'function'</span>, <span class="st">'function'</span>: {<span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'arguments'</span>: <span class="st">'{"a": 2}'</span>}}])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="shared-built-in-callbacks" class="level2">
+<h2 class="anchored" data-anchor-id="shared-built-in-callbacks">Shared built-in callbacks</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#usagecallback"><code>UsageCallback</code></a>, <a href="https://vedicreader.github.io/rishi/core.html#toolremindercallback"><code>ToolReminderCallback</code></a>, and <a href="https://vedicreader.github.io/rishi/core.html#slidingwindowcallback"><code>SlidingWindowCallback</code></a> register on every backend by default (<code>default_cbs=True</code>). Drop or replace with <code>remove_cb</code> / <code>default_cbs=False</code>.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L443" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="toolremindercallback" class="level3">
+<h3 class="anchored" data-anchor-id="toolremindercallback">ToolReminderCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ToolReminderCallback(</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>    tool_reminder:<span class="bu">str</span><span class="op">=</span><span class="st">'</span><span class="ch">\n</span><span class="st">&lt;system-reminder&gt;After every tool call result, briefly summarise in prose what you found before continuing or calling another tool.&lt;/system-reminder&gt;'</span></span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Inject a tool-summary reminder into the outgoing message when tools are registered.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L435" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="usagecallback" class="level3">
+<h3 class="anchored" data-anchor-id="usagecallback">UsageCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb41"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> UsageCallback(</span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Fold each turn’s <code>usage</code> block (summed across tool rounds) into <code>chat.use</code>.</em></p>
+</section>
+</section>
+<section id="chat-and-dispatch" class="level2">
+<h2 class="anchored" data-anchor-id="chat-and-dispatch">Chat and dispatch</h2>
+<section id="reusing-a-token-prefix" class="level3">
+<h3 class="anchored" data-anchor-id="reusing-a-token-prefix">Reusing a token prefix</h3>
+<p><a href="https://vedicreader.github.io/rishi/core.html#common_prefix_len"><code>common_prefix_len</code></a> finds shared token/id prefixes so backends can reuse KV state between turns.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L454" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="common_prefix_len" class="level3">
+<h3 class="anchored" data-anchor-id="common_prefix_len">common_prefix_len</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> common_prefix_len(</span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>    a, b</span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Length of the longest common prefix of sequences <code>a</code> and <code>b</code>.</em></p>
+<div id="fb075fc81b4bc98d" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>test_eq(common_prefix_len([<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">4</span>], [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">9</span>]), <span class="dv">2</span>)</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a>test_eq(common_prefix_len([<span class="dv">1</span>, <span class="dv">2</span>], [<span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>]), <span class="dv">2</span>)       <span class="co"># one is a prefix of the other</span></span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a>test_eq(common_prefix_len([], [<span class="dv">1</span>, <span class="dv">2</span>]), <span class="dv">0</span>)</span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>test_eq(common_prefix_len([<span class="dv">9</span>], [<span class="dv">1</span>]), <span class="dv">0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L508" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="get_runtime" class="level3">
+<h3 class="anchored" data-anchor-id="get_runtime">get_runtime</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb44"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_runtime(</span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a>    nm</span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>The <a href="https://vedicreader.github.io/rishi/core.html#chat"><code>Chat</code></a> subclass for runtime <code>nm</code> (imports the backend module lazily).</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L490" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="resolve_runtime" class="level3">
+<h3 class="anchored" data-anchor-id="resolve_runtime">resolve_runtime</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb45"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> resolve_runtime(</span>
+<span id="cb45-2"><a href="#cb45-2" aria-hidden="true" tabindex="-1"></a>    model:NoneType<span class="op">=</span><span class="va">None</span>, runtime:NoneType<span class="op">=</span><span class="va">None</span>, model_path:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb45-3"><a href="#cb45-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Resolve <code>(runtime, model)</code> from an explicit <code>runtime</code>, a <code>runtime/</code> prefix, or the id/path shape.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L484" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="infer_runtime" class="level3">
+<h3 class="anchored" data-anchor-id="infer_runtime">infer_runtime</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb46"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> infer_runtime(</span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>    model</span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Guess a runtime from the shape of a model id or path (<code>.litertlm</code> vs <code>.gguf</code>), else <code>None</code>.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L477" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="split_runtime" class="level3">
+<h3 class="anchored" data-anchor-id="split_runtime">split_runtime</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb47"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> split_runtime(</span>
+<span id="cb47-2"><a href="#cb47-2" aria-hidden="true" tabindex="-1"></a>    model</span>
+<span id="cb47-3"><a href="#cb47-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Split <code>'runtime/model'</code> into <code>(runtime, model)</code>; the prefix must name a known runtime, else <code>(None, model)</code>.</em></p>
+</section>
+</section>
+<section id="model-capabilities" class="level2">
+<h2 class="anchored" data-anchor-id="model-capabilities">Model capabilities</h2>
+<p><code>model_caps(model)</code> says what a model accepts and hands back without loading it, so a picker can label everything it lists. Cloud from fastllm’s bundled model table, GGUF from an <code>mmproj</code> beside the weights, MLX from the towers in <code>config.json</code>.</p>
+<p><code>Caps.source</code> records who answered — the table leaves the modality fields empty on rows it still carries <code>supports_vision</code> for, so a caller needs to tell <em>unknown</em> from <em>no</em>.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L629" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="model_caps" class="level3">
+<h3 class="anchored" data-anchor-id="model_caps">model_caps</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb48"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> model_caps(</span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>    model:NoneType<span class="op">=</span><span class="va">None</span>, runtime:NoneType<span class="op">=</span><span class="va">None</span>, model_path:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>What <code>model</code> accepts and what it returns, resolved without loading it.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L531" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="caps" class="level3">
+<h3 class="anchored" data-anchor-id="caps">Caps</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb49"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> Caps(</span>
+<span id="cb49-2"><a href="#cb49-2" aria-hidden="true" tabindex="-1"></a>    inp:<span class="bu">tuple</span><span class="op">=</span>(<span class="st">'text'</span>,), out:<span class="bu">tuple</span><span class="op">=</span>(<span class="st">'text'</span>,), tools:<span class="bu">tuple</span><span class="op">=</span>(), source:<span class="bu">str</span><span class="op">=</span><span class="st">'default'</span></span>
+<span id="cb49-3"><a href="#cb49-3" aria-hidden="true" tabindex="-1"></a>)<span class="op">-&gt;</span><span class="va">None</span>:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>What a model can be sent, and what it can send back.</em></p>
+<div id="82404c15" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb50"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> Caps((<span class="st">'text'</span>, <span class="st">'image'</span>), (<span class="st">'text'</span>, <span class="st">'image'</span>), source<span class="op">=</span><span class="st">'litellm'</span>)</span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>test_eq((c.gen_image, c.gen_video, c.known), (<span class="va">True</span>, <span class="va">False</span>, <span class="va">True</span>))</span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>test_eq(c.fmt(), <span class="st">'in: text image </span><span class="ch">\u00b7</span><span class="st"> out: text image'</span>)</span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> c.accepts(<span class="st">'image'</span>) <span class="kw">and</span> <span class="kw">not</span> c.accepts(<span class="st">'audio'</span>)</span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a>test_eq(Caps(source<span class="op">=</span><span class="st">'litellm'</span>).fmt(), <span class="st">''</span>)</span>
+<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a>test_eq(Caps().known, <span class="va">False</span>)</span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>test_eq(Caps().fmt(), <span class="st">'modalities unknown'</span>)</span>
+<span id="cb50-9"><a href="#cb50-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-10"><a href="#cb50-10" aria-hidden="true" tabindex="-1"></a><span class="co"># a chat model reaches image generation through the Responses tool, which the table's</span></span>
+<span id="cb50-11"><a href="#cb50-11" aria-hidden="true" tabindex="-1"></a><span class="co"># `supported_output_modalities` never says -- gpt-5.6-luna reports text-out and draws anyway</span></span>
+<span id="cb50-12"><a href="#cb50-12" aria-hidden="true" tabindex="-1"></a>luna <span class="op">=</span> _tbl_caps(<span class="st">'openai/gpt-5.6-luna'</span>)</span>
+<span id="cb50-13"><a href="#cb50-13" aria-hidden="true" tabindex="-1"></a>test_eq(luna.out, (<span class="st">'text'</span>,))</span>
+<span id="cb50-14"><a href="#cb50-14" aria-hidden="true" tabindex="-1"></a>test_eq(luna.tools, (<span class="st">'image'</span>,))</span>
+<span id="cb50-15"><a href="#cb50-15" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> luna.gen_image</span>
+<span id="cb50-16"><a href="#cb50-16" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'via tool: image'</span> <span class="kw">in</span> luna.fmt()</span>
+<span id="cb50-17"><a href="#cb50-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-18"><a href="#cb50-18" aria-hidden="true" tabindex="-1"></a>test_eq(_fallback_caps(<span class="st">'claude-opus-4-5'</span>), Caps((<span class="st">'text'</span>, <span class="st">'image'</span>), (<span class="st">'text'</span>,), (), <span class="st">'fallback'</span>))</span>
+<span id="cb50-19"><a href="#cb50-19" aria-hidden="true" tabindex="-1"></a>test_eq(_fallback_caps(<span class="st">'gpt-5'</span>), <span class="va">None</span>)</span>
+<span id="cb50-20"><a href="#cb50-20" aria-hidden="true" tabindex="-1"></a>test_eq(model_caps(runtime<span class="op">=</span><span class="st">'litert'</span>, model<span class="op">=</span><span class="st">'google/gemma-3n-E2B-it-litert-lm'</span>).inp,</span>
+<span id="cb50-21"><a href="#cb50-21" aria-hidden="true" tabindex="-1"></a>        (<span class="st">'text'</span>, <span class="st">'image'</span>, <span class="st">'audio'</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="tool-calls-and-tool-results" class="level3">
+<h3 class="anchored" data-anchor-id="tool-calls-and-tool-results">Tool calls and tool results</h3>
+<p><a href="https://vedicreader.github.io/rishi/core.html#toolcall"><code>ToolCall</code></a> records name/args/id. <a href="https://vedicreader.github.io/rishi/core.html#mk_tool_res_msg"><code>mk_tool_res_msg</code></a> builds the tool-result message appended after execution.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L666" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_tool_res_msgs" class="level3">
+<h3 class="anchored" data-anchor-id="mk_tool_res_msgs">mk_tool_res_msgs</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb51"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_tool_res_msgs(</span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>    tcs, results</span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Canonical tool-result messages for several calls at once.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L662" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_tool_res_msg" class="level3">
+<h3 class="anchored" data-anchor-id="mk_tool_res_msg">mk_tool_res_msg</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb52"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_tool_res_msg(</span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>    tc, result</span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Canonical <code>role='tool'</code> message carrying <code>result</code> back for tool call <code>tc</code>.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L658" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="tc_name" class="level3">
+<h3 class="anchored" data-anchor-id="tc_name">tc_name</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb53"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> tc_name(</span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>    tc</span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Name of a tool call, however it was built.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L642" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="toolcall" class="level3">
+<h3 class="anchored" data-anchor-id="toolcall">ToolCall</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb54"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ToolCall(</span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>    name:<span class="bu">str</span><span class="op">=</span><span class="st">''</span>, arguments:NoneType<span class="op">=</span><span class="va">None</span>, <span class="bu">id</span>:NoneType<span class="op">=</span><span class="va">None</span>, server:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span></span>
+<span id="cb54-3"><a href="#cb54-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>One tool call in canonical form. A <code>dict</code> subclass, so anything that indexes it keeps working.</em></p>
+<div id="82252cf0e631c726" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>tc <span class="op">=</span> ToolCall(<span class="st">'add'</span>, {<span class="st">'a'</span>: <span class="dv">1</span>, <span class="st">'b'</span>: <span class="dv">2</span>})</span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>test_eq((tc.name, tc.arguments), (<span class="st">'add'</span>, {<span class="st">'a'</span>: <span class="dv">1</span>, <span class="st">'b'</span>: <span class="dv">2</span>}))</span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>test_eq(tc[<span class="st">'function'</span>][<span class="st">'name'</span>], <span class="st">'add'</span>)          <span class="co"># still just a dict underneath</span></span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> tc[<span class="st">'id'</span>].startswith(<span class="st">'call_'</span>)</span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>test_eq(ToolCall(<span class="st">'x'</span>, <span class="bu">id</span><span class="op">=</span><span class="st">'fixed'</span>)[<span class="st">'id'</span>], <span class="st">'fixed'</span>)</span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>test_eq(tc.server, <span class="va">False</span>)</span>
+<span id="cb55-7"><a href="#cb55-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'server'</span> <span class="kw">not</span> <span class="kw">in</span> tc                       <span class="co"># not carried onto the wire unless it's true</span></span>
+<span id="cb55-8"><a href="#cb55-8" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> ToolCall(<span class="st">'web_search'</span>, server<span class="op">=</span><span class="va">True</span>).server</span>
+<span id="cb55-9"><a href="#cb55-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb55-10"><a href="#cb55-10" aria-hidden="true" tabindex="-1"></a>test_eq(mk_tool_res_msg(tc, <span class="dv">3</span>),</span>
+<span id="cb55-11"><a href="#cb55-11" aria-hidden="true" tabindex="-1"></a>        {<span class="st">'role'</span>: <span class="st">'tool'</span>, <span class="st">'tool_call_id'</span>: tc[<span class="st">'id'</span>], <span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'content'</span>: <span class="st">'3'</span>})</span>
+<span id="cb55-12"><a href="#cb55-12" aria-hidden="true" tabindex="-1"></a>test_eq([m[<span class="st">'content'</span>] <span class="cf">for</span> m <span class="kw">in</span> mk_tool_res_msgs([tc, tc], [<span class="dv">1</span>, <span class="dv">2</span>])], [<span class="st">'1'</span>, <span class="st">'2'</span>])</span>
+<span id="cb55-13"><a href="#cb55-13" aria-hidden="true" tabindex="-1"></a>test_eq(tc_name({<span class="st">'function'</span>: {<span class="st">'name'</span>: <span class="st">'f'</span>}}), <span class="st">'f'</span>)<span class="op">;</span> test_eq(tc_name({}), <span class="st">''</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="tool-call-budget-and-context-recovery" class="level2">
+<h2 class="anchored" data-anchor-id="tool-call-budget-and-context-recovery">Tool-call budget and context recovery</h2>
+<p><code>max_steps</code> caps tool calls per turn; past the cap calls are denied and <code>final_prompt</code> asks for a prose answer.</p>
+<p>If the context overflows mid-turn, <code>recover_context</code> truncates oldest tool results, rebuilds backend state, and retries once before raising <a href="https://vedicreader.github.io/rishi/core.html#contextwindowexceedederror"><code>ContextWindowExceededError</code></a>.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L683" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="is_ctx_error" class="level3">
+<h3 class="anchored" data-anchor-id="is_ctx_error">is_ctx_error</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb56"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb56-1"><a href="#cb56-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> is_ctx_error(</span>
+<span id="cb56-2"><a href="#cb56-2" aria-hidden="true" tabindex="-1"></a>    chat, e</span>
+<span id="cb56-3"><a href="#cb56-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Best-effort: does <code>e</code>, raised from a backend step, look like the context window filling up?</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L676" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="contextwindowexceedederror" class="level3">
+<h3 class="anchored" data-anchor-id="contextwindowexceedederror">ContextWindowExceededError</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb57"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ContextWindowExceededError(</span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb57-3"><a href="#cb57-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Raised when a turn can’t finish because the context window filled up and truncate-and-retry recovery also failed.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L691" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="chat" class="level3">
+<h3 class="anchored" data-anchor-id="chat">Chat</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb58"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> Chat(</span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Backend-agnostic chat: <code>Chat(model)</code> dispatches to the litert/llama/mlx subclass by <code>runtime</code>/model shape.</em></p>
+</section>
+<section id="reconfigure-and-one-shots" class="level3">
+<h3 class="anchored" data-anchor-id="reconfigure-and-one-shots">Reconfigure and one-shots</h3>
+<p><code>reconfigure(sp=, tools=)</code> changes briefing or tools without clearing <code>hist</code>.</p>
+<p><code>oneshot(prompt, …)</code> is a stateless side call (classify-sized jobs). <code>think=False</code> matters on reasoning models with tiny <code>max_tokens</code> budgets.</p>
+</section>
+</section>
+<section id="the-tool-loop" class="level2">
+<h2 class="anchored" data-anchor-id="the-tool-loop">The tool loop</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#toolloopmixin"><code>ToolLoopMixin</code></a> runs the Python-side tool loop for llama/MLX/cursor: approval, budget, optional <code>parallel_tools</code>, and context recovery. Backends supply <code>_model_step</code> / <code>_stream_step</code> and a tool namespace.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L820" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="toolloopmixin" class="level3">
+<h3 class="anchored" data-anchor-id="toolloopmixin">ToolLoopMixin</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb59"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ToolLoopMixin(</span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>The Python-side tool loop, for backends that get tool calls back as data (llama, mlx).</em></p>
+<p>The backend supplies one wire call - <code>_model_step(max_output_tokens) -&gt; Resp</code> and <code>_stream_step(max_output_tokens)</code>, a generator of chunk dicts that leaves the merged <a href="https://vedicreader.github.io/rishi/core.html#resp"><code>Resp</code></a> on <code>self._step_res</code> - plus a <code>ns</code> tool namespace. Backends holding conversation state of their own also override <code>_recreate_conv</code>.</p>
+</section>
+</section>
+<section id="keeping-the-context-window-from-filling-up" class="level2">
+<h2 class="anchored" data-anchor-id="keeping-the-context-window-from-filling-up">Keeping the context window from filling up</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#slidingwindowcallback"><code>SlidingWindowCallback</code></a> drops whole message groups from the middle of <code>hist</code> when <code>pct_full</code> crosses a threshold — keeping early and recent turns, never splitting a tool call from its result. <code>summarize=True</code> replaces evicted turns with one summary call. Registered by default on every backend.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L971" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="slidingwindowcallback" class="level3">
+<h3 class="anchored" data-anchor-id="slidingwindowcallback">SlidingWindowCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb60"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> SlidingWindowCallback(</span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>    threshold:<span class="bu">float</span><span class="op">=</span><span class="fl">0.9</span>, <span class="co"># evict once the context is this full</span></span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a>    keep_first:<span class="bu">int</span><span class="op">=</span><span class="dv">2</span>, <span class="co"># leading groups to anchor (the task, usually)</span></span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a>    keep_last:<span class="bu">int</span><span class="op">=</span><span class="dv">8</span>, <span class="co"># trailing groups to keep (the live thread)</span></span>
+<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a>    summarize:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, <span class="co"># spend one model call to replace the dropped middle with a summary</span></span>
+<span id="cb60-6"><a href="#cb60-6" aria-hidden="true" tabindex="-1"></a>    mx:<span class="bu">int</span><span class="op">=</span><span class="dv">4000</span>, <span class="co"># chars of dropped conversation to feed the summarizer</span></span>
+<span id="cb60-7"><a href="#cb60-7" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Evict the middle of <code>hist</code> before a turn that would overflow the context window.</em></p>
+<p>Needs <code>chat.ctx_limit</code> to be set - without a limit there is nothing to measure <code>pct_full</code> against, and the callback stays out of the way.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L961" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="evict_middle" class="level3">
+<h3 class="anchored" data-anchor-id="evict_middle">evict_middle</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb61"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> evict_middle(</span>
+<span id="cb61-2"><a href="#cb61-2" aria-hidden="true" tabindex="-1"></a>    hist, keep_first:<span class="bu">int</span><span class="op">=</span><span class="dv">2</span>, keep_last:<span class="bu">int</span><span class="op">=</span><span class="dv">8</span></span>
+<span id="cb61-3"><a href="#cb61-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Drop whole groups from the middle of <code>hist</code>, keeping the first and last few. Returns <code>(new_hist, dropped_msgs)</code>.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L948" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="msg_groups" class="level3">
+<h3 class="anchored" data-anchor-id="msg_groups">msg_groups</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb62"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> msg_groups(</span>
+<span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a>    hist</span>
+<span id="cb62-3"><a href="#cb62-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Split <code>hist</code> into atomic groups: an assistant message with <code>tool_calls</code> stays with the <code>tool</code> results that answer it.</em></p>
+</section>
+<section id="testing-the-tool-loop-without-a-model" class="level3">
+<h3 class="anchored" data-anchor-id="testing-the-tool-loop-without-a-model">Testing the tool loop without a model</h3>
+<p>The hide cells below drive <a href="https://vedicreader.github.io/rishi/core.html#toolloopmixin"><code>ToolLoopMixin</code></a> with a fake backend — no weights required.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1026" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="adisplay_stream" class="level3">
+<h3 class="anchored" data-anchor-id="adisplay_stream">adisplay_stream</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb63"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> adisplay_stream(</span>
+<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a>    chunks</span>
+<span id="cb63-3"><a href="#cb63-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Async twin of <a href="https://vedicreader.github.io/rishi/core.html#display_stream"><code>display_stream</code></a>: drive an async chunk stream - or the awaitable that yields one (<code>achat(msg, stream=True)</code>) - to completion, live-rendering in a notebook when possible; returns the full markdown.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1006" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="asyncchat" class="level3">
+<h3 class="anchored" data-anchor-id="asyncchat">AsyncChat</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb64"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb64-1"><a href="#cb64-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> AsyncChat(</span>
+<span id="cb64-2"><a href="#cb64-2" aria-hidden="true" tabindex="-1"></a>    model:NoneType<span class="op">=</span><span class="va">None</span>, runtime:NoneType<span class="op">=</span><span class="va">None</span>, <span class="op">**</span>kw</span>
+<span id="cb64-3"><a href="#cb64-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Async twin of <a href="https://vedicreader.github.io/rishi/core.html#chat"><code>Chat</code></a> for either backend; blocking calls run in a worker thread.</em></p>
+</section>
+<section id="draining-an-async-stream" class="level3">
+<h3 class="anchored" data-anchor-id="draining-an-async-stream">Draining an async stream</h3>
+<p><code>AsyncChat(msg, stream=True)</code> returns an async iterator; <code>.value</code> holds the final <a href="https://vedicreader.github.io/rishi/core.html#resp"><code>Resp</code></a>. Sync: wrap <code>chat(msg, stream=True)</code> in <code>SaveReturn</code> and read <code>.value</code> after iteration.</p>
+</section>
+<section id="managing-callbacks" class="level3">
+<h3 class="anchored" data-anchor-id="managing-callbacks">Managing callbacks</h3>
+<p><code>add_cb</code>, <code>remove_cb</code> (by instance or class), and per-call <code>cbs=</code> on a single turn.</p>
+</section>
+</section>
+<section id="human-in-the-loop-tool-approval" class="level2">
+<h2 class="anchored" data-anchor-id="human-in-the-loop-tool-approval">Human-in-the-loop tool approval</h2>
+<p><code>approve(tool_call) -&gt; bool</code> runs before each tool. <a href="https://vedicreader.github.io/rishi/core.html#hitl_policy"><code>hitl_policy</code></a> maps tool names to <code>approved</code> / <code>dont_run</code> / <code>check</code>. <code>browser=True</code> routes <code>check</code> to Leela’s approval card (<code>LEELA_URL</code>, default <code>http://127.0.0.1:5001</code>).</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1055" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="hitl_policy" class="level3">
+<h3 class="anchored" data-anchor-id="hitl_policy">hitl_policy</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb65"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> hitl_policy(</span>
+<span id="cb65-2"><a href="#cb65-2" aria-hidden="true" tabindex="-1"></a>    modes, ask:NoneType<span class="op">=</span><span class="va">None</span>, browser:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span></span>
+<span id="cb65-3"><a href="#cb65-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Build an <code>approve(tool_call)</code> from per-tool modes; optionally ask in the Leela browser.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1042" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="browser_approval" class="level3">
+<h3 class="anchored" data-anchor-id="browser_approval">browser_approval</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb66"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> browser_approval(</span>
+<span id="cb66-2"><a href="#cb66-2" aria-hidden="true" tabindex="-1"></a>    url:NoneType<span class="op">=</span><span class="va">None</span>, timeout:<span class="bu">int</span><span class="op">=</span><span class="dv">300</span></span>
+<span id="cb66-3"><a href="#cb66-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>An approval callback that asks through a running Leela web IDE.</em></p>
+</section>
+</section>
+<section id="running-python-from-replies" class="level2">
+<h2 class="anchored" data-anchor-id="running-python-from-replies">Running python from replies</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#pyfencecallback"><code>PyFenceCallback</code></a> runs the last <code>python fence through `safepyrun`, feeds a</code>result block back, and loops until prose or <code>done</code>. Same <code>approve</code> gate as tools. <code>chat.run_py(code)</code> executes directly in the persistent sandbox.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1133" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="pyfencecallback" class="level3">
+<h3 class="anchored" data-anchor-id="pyfencecallback">PyFenceCallback</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb67"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> PyFenceCallback(</span>
+<span id="cb67-2"><a href="#cb67-2" aria-hidden="true" tabindex="-1"></a>    max_rounds:<span class="bu">int</span><span class="op">=</span><span class="dv">5</span>, done:NoneType<span class="op">=</span><span class="va">None</span>, pyrun:<span class="bu">callable</span><span class="op">=</span><span class="va">None</span></span>
+<span id="cb67-3"><a href="#cb67-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Run ``<code>python fences, feed results back, loop until</code>done(chat)<code>(default: no fence).</code>max_rounds` is a safety cap.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1129" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="output_matches" class="level3">
+<h3 class="anchored" data-anchor-id="output_matches">output_matches</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb68"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> output_matches(</span>
+<span id="cb68-2"><a href="#cb68-2" aria-hidden="true" tabindex="-1"></a>    expected</span>
+<span id="cb68-3"><a href="#cb68-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em><code>done</code> policy: stop once the last code output contains <code>str(expected)</code> (e.g.&nbsp;the answer to match against).</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1124" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="task_complete" class="level3">
+<h3 class="anchored" data-anchor-id="task_complete">task_complete</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb69"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> task_complete(</span>
+<span id="cb69-2"><a href="#cb69-2" aria-hidden="true" tabindex="-1"></a>    chat</span>
+<span id="cb69-3"><a href="#cb69-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em><code>done</code> policy: judge (via <code>classify</code>, isolated) whether the latest result completes the request.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1113" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="chat.run_py" class="level3">
+<h3 class="anchored" data-anchor-id="chat.run_py">Chat.run_py</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb70"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> run_py(</span>
+<span id="cb70-2"><a href="#cb70-2" aria-hidden="true" tabindex="-1"></a>    code, ban_defs:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, g:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb70-3"><a href="#cb70-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Run <code>code</code> in this chat’s sandboxed, persistent namespace; return stdout + last-expr repr.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1090" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="sync_iter" class="level3">
+<h3 class="anchored" data-anchor-id="sync_iter">sync_iter</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb71"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> sync_iter(</span>
+<span id="cb71-2"><a href="#cb71-2" aria-hidden="true" tabindex="-1"></a>    agen_fn</span>
+<span id="cb71-3"><a href="#cb71-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Drive the async generator returned by <code>agen_fn()</code> from sync code, yielding its items.</em></p>
+<p>The whole generator runs on one event loop in one background thread, rather than a fresh loop per item: a streaming HTTP response is bound to the loop that opened it, so pumping it with repeated <code>asyncio.run</code> calls would tear the connection down mid-stream.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1084" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="run_coro" class="level3">
+<h3 class="anchored" data-anchor-id="run_coro">run_coro</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb72"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb72-1"><a href="#cb72-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> run_coro(</span>
+<span id="cb72-2"><a href="#cb72-2" aria-hidden="true" tabindex="-1"></a>    coro</span>
+<span id="cb72-3"><a href="#cb72-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Run an awaitable to completion from sync code, even inside a running event loop.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1079" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="mk_result_fence" class="level3">
+<h3 class="anchored" data-anchor-id="mk_result_fence">mk_result_fence</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb73"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_result_fence(</span>
+<span id="cb73-2"><a href="#cb73-2" aria-hidden="true" tabindex="-1"></a>    out</span>
+<span id="cb73-3"><a href="#cb73-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Feed a code result back, prompting a prose answer or more code.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1075" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="matches_" class="level3">
+<h3 class="anchored" data-anchor-id="matches_">matches_</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb74"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb74-1"><a href="#cb74-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> matches_(</span>
+<span id="cb74-2"><a href="#cb74-2" aria-hidden="true" tabindex="-1"></a>    actual, expected</span>
+<span id="cb74-3"><a href="#cb74-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>True if <code>actual</code> contains any value in <code>expected</code> (a scalar, or a list of accepted values).</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1070" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="extract_fence" class="level3">
+<h3 class="anchored" data-anchor-id="extract_fence">extract_fence</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb75"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb75-1"><a href="#cb75-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> extract_fence(</span>
+<span id="cb75-2"><a href="#cb75-2" aria-hidden="true" tabindex="-1"></a>    text, tag:<span class="bu">str</span><span class="op">=</span><span class="st">'answer'</span></span>
+<span id="cb75-3"><a href="#cb75-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Contents of the last ``<code>&lt;tag&gt; fence in</code>text`, else the whole stripped text.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1066" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="extract_code" class="level3">
+<h3 class="anchored" data-anchor-id="extract_code">extract_code</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb76"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb76-1"><a href="#cb76-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> extract_code(</span>
+<span id="cb76-2"><a href="#cb76-2" aria-hidden="true" tabindex="-1"></a>    text</span>
+<span id="cb76-3"><a href="#cb76-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Code of the last ``<code>python fence in</code>text`, else None.</em></p>
+</section>
+</section>
+<section id="utilities-classify-structured" class="level2">
+<h2 class="anchored" data-anchor-id="utilities-classify-structured">Utilities: classify, structured</h2>
+<p><code>classify</code> and <code>structured</code> run isolated one-shot turns on the same engine without touching <code>hist</code>.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1187" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="chat.structured" class="level3">
+<h3 class="anchored" data-anchor-id="chat.structured">Chat.structured</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb77"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb77-1"><a href="#cb77-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> structured(</span>
+<span id="cb77-2"><a href="#cb77-2" aria-hidden="true" tabindex="-1"></a>    prompt, schema, sp:<span class="bu">str</span><span class="op">=</span><span class="st">'Reply with only a JSON object matching the schema.'</span></span>
+<span id="cb77-3"><a href="#cb77-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>One-shot structured output; returns <code>schema(...)</code>, rebuilding nested dataclasses.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1181" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="chat.classify" class="level3">
+<h3 class="anchored" data-anchor-id="chat.classify">Chat.classify</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb78"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb78-1"><a href="#cb78-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> classify(</span>
+<span id="cb78-2"><a href="#cb78-2" aria-hidden="true" tabindex="-1"></a>    text, labels, sp:<span class="bu">str</span><span class="op">=</span><span class="st">'Reply with only the single best label and nothing else.'</span></span>
+<span id="cb78-3"><a href="#cb78-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>One-shot label for <code>text</code>, run stateless (isolated from the conversation).</em></p>
+</section>
+</section>
+<section id="grading-answers" class="level2">
+<h2 class="anchored" data-anchor-id="grading-answers">Grading answers</h2>
+<p><code>chat.check(question, expected)</code> pulls an ``<code>answer fence and grades with [</code>matches_<code>](https://vedicreader.github.io/rishi/core.html#matches_) by default. Pass</code>grade_fn<code>,</code>llm_judge=True<code>, or</code>judge=<code>another [</code>Chat`](https://vedicreader.github.io/rishi/core.html#chat) for model grading.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1203" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="chat.check" class="level3">
+<h3 class="anchored" data-anchor-id="chat.check">Chat.check</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb79"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb79-1"><a href="#cb79-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> check(</span>
+<span id="cb79-2"><a href="#cb79-2" aria-hidden="true" tabindex="-1"></a>    question, expected, grade_fn:function<span class="op">=</span>matches_, llm_judge:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, judge:NoneType<span class="op">=</span><span class="va">None</span>, tag:<span class="bu">str</span><span class="op">=</span><span class="st">'answer'</span>,</span>
+<span id="cb79-3"><a href="#cb79-3" aria-hidden="true" tabindex="-1"></a>    sp:<span class="bu">str</span><span class="op">=</span><span class="st">'Answer the question, then put your final answer inside a ```answer fence.'</span></span>
+<span id="cb79-4"><a href="#cb79-4" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Ask <code>question</code> stateless, extract the ``<code>&lt;tag&gt; answer, and grade it against</code>expected`.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1196" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="chat.grades" class="level3">
+<h3 class="anchored" data-anchor-id="chat.grades">Chat.grades</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb80"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb80-1"><a href="#cb80-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> grades(</span>
+<span id="cb80-2"><a href="#cb80-2" aria-hidden="true" tabindex="-1"></a>    question, expected, actual</span>
+<span id="cb80-3"><a href="#cb80-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>LLM-as-judge (on this chat’s engine): is <code>actual</code> a correct answer to <code>question</code> given reference <code>expected</code>?</em></p>
+<div id="5986aed7779ab68c" class="cell" data-execution_count="100">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb81"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb81-1"><a href="#cb81-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.test <span class="im">import</span> test_eq, test_fail</span>
+<span id="cb81-2"><a href="#cb81-2" aria-hidden="true" tabindex="-1"></a>test_eq(split_runtime(<span class="st">'llama/Qwen/Qwen3-4B-GGUF'</span>), (<span class="st">'llama'</span>, <span class="st">'Qwen/Qwen3-4B-GGUF'</span>))</span>
+<span id="cb81-3"><a href="#cb81-3" aria-hidden="true" tabindex="-1"></a>test_eq(split_runtime(<span class="st">'litert-community/gemma-4-E2B-it-litert-lm'</span>), (<span class="va">None</span>, <span class="st">'litert-community/gemma-4-E2B-it-litert-lm'</span>))</span>
+<span id="cb81-4"><a href="#cb81-4" aria-hidden="true" tabindex="-1"></a>test_eq(infer_runtime(<span class="st">'Qwen/Qwen3-0.6B-GGUF'</span>), <span class="st">'llama'</span>)<span class="op">;</span> test_eq(infer_runtime(<span class="st">'/m/x.litertlm'</span>), <span class="st">'litert'</span>)</span>
+<span id="cb81-5"><a href="#cb81-5" aria-hidden="true" tabindex="-1"></a>test_eq(infer_runtime(<span class="st">'mlx-community/Qwen3-4B-4bit'</span>), <span class="st">'mlx'</span>)</span>
+<span id="cb81-6"><a href="#cb81-6" aria-hidden="true" tabindex="-1"></a>test_eq(split_runtime(<span class="st">'mlx/Qwen3-4B'</span>), (<span class="st">'mlx'</span>, <span class="st">'Qwen3-4B'</span>))</span>
+<span id="cb81-7"><a href="#cb81-7" aria-hidden="true" tabindex="-1"></a>test_eq(resolve_runtime(<span class="st">'llama/my'</span>), (<span class="st">'llama'</span>,<span class="st">'my'</span>))<span class="op">;</span> test_eq(resolve_runtime(), (<span class="st">'litert'</span>, <span class="va">None</span>))</span>
+<span id="cb81-8"><a href="#cb81-8" aria-hidden="true" tabindex="-1"></a>test_eq(resolve_runtime(<span class="st">'mlx-community/Qwen3-4B-4bit'</span>)[<span class="dv">0</span>], <span class="st">'mlx'</span>)</span>
+<span id="cb81-9"><a href="#cb81-9" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: resolve_runtime(<span class="st">'gemma-4-E2B'</span>), contains<span class="op">=</span><span class="st">"Can't tell which backend"</span>)</span>
+<span id="cb81-10"><a href="#cb81-10" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: resolve_runtime(<span class="st">'x'</span>, runtime<span class="op">=</span><span class="st">'vllm'</span>), contains<span class="op">=</span><span class="st">'Unknown runtime'</span>)</span>
+<span id="cb81-11"><a href="#cb81-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dataclasses <span class="im">import</span> dataclass</span>
+<span id="cb81-12"><a href="#cb81-12" aria-hidden="true" tabindex="-1"></a><span class="at">@dataclass</span></span>
+<span id="cb81-13"><a href="#cb81-13" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _A: year:<span class="bu">int</span><span class="op">;</span> month:<span class="bu">int</span></span>
+<span id="cb81-14"><a href="#cb81-14" aria-hidden="true" tabindex="-1"></a><span class="at">@dataclass</span></span>
+<span id="cb81-15"><a href="#cb81-15" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _P: name:<span class="bu">str</span><span class="op">;</span> age:_A</span>
+<span id="cb81-16"><a href="#cb81-16" aria-hidden="true" tabindex="-1"></a>test_eq(_mk_obj(_P, {<span class="st">'name'</span>:<span class="st">'Alice'</span>,<span class="st">'age'</span>:{<span class="st">'year'</span>:<span class="dv">1995</span>,<span class="st">'month'</span>:<span class="dv">6</span>}}).age, _A(<span class="dv">1995</span>,<span class="dv">6</span>))</span>
+<span id="cb81-17"><a href="#cb81-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb81-18"><a href="#cb81-18" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _FakeChat(Chat):</span>
+<span id="cb81-19"><a href="#cb81-19" aria-hidden="true" tabindex="-1"></a>    _runtime<span class="op">=</span><span class="st">'litert'</span></span>
+<span id="cb81-20"><a href="#cb81-20" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, <span class="op">**</span>kw): <span class="va">self</span>.ctx_limit<span class="op">=</span><span class="dv">100</span><span class="op">;</span> <span class="va">self</span>._setup(<span class="op">**</span>kw)</span>
+<span id="cb81-21"><a href="#cb81-21" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> mk_msgs(<span class="va">self</span>, msgs): <span class="cf">return</span> <span class="bu">list</span>(msgs <span class="kw">or</span> [])</span>
+<span id="cb81-22"><a href="#cb81-22" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> _oneshot(<span class="va">self</span>, prompt, sp<span class="op">=</span><span class="st">''</span>, think<span class="op">=</span><span class="va">None</span>, max_tokens<span class="op">=</span><span class="va">None</span>):</span>
+<span id="cb81-23"><a href="#cb81-23" aria-hidden="true" tabindex="-1"></a>        <span class="va">self</span>.asked <span class="op">=</span> think<span class="op">;</span> <span class="cf">return</span> <span class="st">'positive because good'</span></span>
+<span id="cb81-24"><a href="#cb81-24" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> _structured_call(<span class="va">self</span>, prompt, schema, sp): <span class="cf">return</span> {<span class="st">'name'</span>:<span class="st">'Alice'</span>,<span class="st">'age'</span>:{<span class="st">'year'</span>:<span class="dv">1995</span>,<span class="st">'month'</span>:<span class="dv">6</span>}}</span>
+<span id="cb81-25"><a href="#cb81-25" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> _send(<span class="va">self</span>, msg, mot<span class="op">=</span><span class="va">None</span>): <span class="cf">return</span> Resp({<span class="st">'role'</span>:<span class="st">'assistant'</span>,<span class="st">'content'</span>:<span class="st">'ok'</span>})</span>
+<span id="cb81-26"><a href="#cb81-26" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> close(<span class="va">self</span>): <span class="cf">pass</span></span>
+<span id="cb81-27"><a href="#cb81-27" aria-hidden="true" tabindex="-1"></a>c<span class="op">=</span>_FakeChat(sp<span class="op">=</span><span class="st">'hi'</span>)</span>
+<span id="cb81-28"><a href="#cb81-28" aria-hidden="true" tabindex="-1"></a>test_eq(c.classify(<span class="st">'great'</span>, [<span class="st">'positive'</span>,<span class="st">'negative'</span>]), <span class="st">'positive'</span>)</span>
+<span id="cb81-29"><a href="#cb81-29" aria-hidden="true" tabindex="-1"></a>test_eq(c.asked, <span class="va">False</span>)                                      <span class="co"># a label is a cheap job, so: don't think</span></span>
+<span id="cb81-30"><a href="#cb81-30" aria-hidden="true" tabindex="-1"></a>test_eq(c.oneshot(<span class="st">'hi'</span>, think<span class="op">=</span><span class="va">True</span>, max_tokens<span class="op">=</span><span class="dv">8</span>), <span class="st">'positive because good'</span>)</span>
+<span id="cb81-31"><a href="#cb81-31" aria-hidden="true" tabindex="-1"></a>test_eq(c.structured(<span class="st">'x'</span>, _P).age, _A(<span class="dv">1995</span>,<span class="dv">6</span>))</span>
+<span id="cb81-32"><a href="#cb81-32" aria-hidden="true" tabindex="-1"></a>test_eq(run_coro(AsyncChat(c)(<span class="st">'go'</span>)), Resp({<span class="st">'role'</span>:<span class="st">'assistant'</span>,<span class="st">'content'</span>:<span class="st">'ok'</span>}))</span>
+<span id="cb81-33"><a href="#cb81-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb81-34"><a href="#cb81-34" aria-hidden="true" tabindex="-1"></a><span class="co"># dispatch runs the *subclass's* __new__, so a backend can re-route further (mlx -&gt; mlx-vlm)</span></span>
+<span id="cb81-35"><a href="#cb81-35" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> sys, types</span>
+<span id="cb81-36"><a href="#cb81-36" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _FakeSub(Chat):</span>
+<span id="cb81-37"><a href="#cb81-37" aria-hidden="true" tabindex="-1"></a>    _runtime <span class="op">=</span> <span class="st">'fakert'</span></span>
+<span id="cb81-38"><a href="#cb81-38" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__new__</span>(cls, model<span class="op">=</span><span class="va">None</span>, <span class="op">**</span>kw): <span class="cf">return</span> <span class="bu">object</span>.<span class="fu">__new__</span>(_FakeDeeper <span class="cf">if</span> kw.get(<span class="st">'deep'</span>) <span class="cf">else</span> cls)</span>
+<span id="cb81-39"><a href="#cb81-39" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _FakeDeeper(_FakeSub): <span class="cf">pass</span></span>
+<span id="cb81-40"><a href="#cb81-40" aria-hidden="true" tabindex="-1"></a>_m <span class="op">=</span> types.ModuleType(<span class="st">'_fake_backend'</span>)<span class="op">;</span> _m._FakeSub <span class="op">=</span> _FakeSub</span>
+<span id="cb81-41"><a href="#cb81-41" aria-hidden="true" tabindex="-1"></a>sys.modules[<span class="st">'_fake_backend'</span>] <span class="op">=</span> _m</span>
+<span id="cb81-42"><a href="#cb81-42" aria-hidden="true" tabindex="-1"></a>runtimes[<span class="st">'fakert'</span>] <span class="op">=</span> (<span class="st">'_fake_backend'</span>, <span class="st">'_FakeSub'</span>)</span>
+<span id="cb81-43"><a href="#cb81-43" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
+<span id="cb81-44"><a href="#cb81-44" aria-hidden="true" tabindex="-1"></a>    test_eq(<span class="bu">type</span>(Chat.<span class="fu">__new__</span>(Chat, <span class="st">'x'</span>, runtime<span class="op">=</span><span class="st">'fakert'</span>)), _FakeSub)</span>
+<span id="cb81-45"><a href="#cb81-45" aria-hidden="true" tabindex="-1"></a>    test_eq(<span class="bu">type</span>(Chat.<span class="fu">__new__</span>(Chat, <span class="st">'x'</span>, runtime<span class="op">=</span><span class="st">'fakert'</span>, deep<span class="op">=</span><span class="va">True</span>)), _FakeDeeper)</span>
+<span id="cb81-46"><a href="#cb81-46" aria-hidden="true" tabindex="-1"></a>    test_eq(<span class="bu">type</span>(_FakeSub.<span class="fu">__new__</span>(_FakeSub)), _FakeSub)          <span class="co"># direct construction is untouched</span></span>
+<span id="cb81-47"><a href="#cb81-47" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>: <span class="kw">del</span> runtimes[<span class="st">'fakert'</span>], sys.modules[<span class="st">'_fake_backend'</span>]</span>
+<span id="cb81-48"><a href="#cb81-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb81-49"><a href="#cb81-49" aria-hidden="true" tabindex="-1"></a><span class="co"># hosted model names route to the remote backend, and local shapes still win</span></span>
+<span id="cb81-50"><a href="#cb81-50" aria-hidden="true" tabindex="-1"></a>test_eq(infer_runtime(<span class="st">'claude-sonnet-4-5'</span>), <span class="st">'remote'</span>)</span>
+<span id="cb81-51"><a href="#cb81-51" aria-hidden="true" tabindex="-1"></a>test_eq(infer_runtime(<span class="st">'gpt-5.5'</span>), <span class="st">'remote'</span>)</span>
+<span id="cb81-52"><a href="#cb81-52" aria-hidden="true" tabindex="-1"></a>test_eq(infer_runtime(<span class="st">'anthropic/claude-opus-4-5'</span>), <span class="st">'remote'</span>)</span>
+<span id="cb81-53"><a href="#cb81-53" aria-hidden="true" tabindex="-1"></a>test_eq(infer_runtime(<span class="st">'mlx-community/Qwen3-4B-4bit'</span>), <span class="st">'mlx'</span>)      <span class="co"># a local repo, not a hosted name</span></span>
+<span id="cb81-54"><a href="#cb81-54" aria-hidden="true" tabindex="-1"></a>test_eq(split_runtime(<span class="st">'remote/claude-sonnet-4-5'</span>), (<span class="st">'remote'</span>, <span class="st">'claude-sonnet-4-5'</span>))</span>
+<span id="cb81-55"><a href="#cb81-55" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb81-56"><a href="#cb81-56" aria-hidden="true" tabindex="-1"></a><span class="co"># sync_iter drains an async generator from sync code, and propagates its exceptions</span></span>
+<span id="cb81-57"><a href="#cb81-57" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> _agen():</span>
+<span id="cb81-58"><a href="#cb81-58" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">3</span>): <span class="cf">yield</span> i</span>
+<span id="cb81-59"><a href="#cb81-59" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">list</span>(sync_iter(_agen)), [<span class="dv">0</span>, <span class="dv">1</span>, <span class="dv">2</span>])</span>
+<span id="cb81-60"><a href="#cb81-60" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> _aboom():</span>
+<span id="cb81-61"><a href="#cb81-61" aria-hidden="true" tabindex="-1"></a>    <span class="cf">yield</span> <span class="dv">1</span></span>
+<span id="cb81-62"><a href="#cb81-62" aria-hidden="true" tabindex="-1"></a>    <span class="cf">raise</span> <span class="pp">ValueError</span>(<span class="st">'boom'</span>)</span>
+<span id="cb81-63"><a href="#cb81-63" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: <span class="bu">list</span>(sync_iter(_aboom)), contains<span class="op">=</span><span class="st">'boom'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="recording-a-chat-for-ci-replay" class="level2">
+<h2 class="anchored" data-anchor-id="recording-a-chat-for-ci-replay">Recording a chat for CI replay</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#recordcache"><code>RecordCache</code></a> stores turn results in a diskcache directory; replays skip the engine entirely. A miss raises unless <code>RISHI_RECORD_CHAT=1</code> (or <code>record=True</code>). Keys hash model, briefing, tools, and conversation (<code>KEY_VERSION</code> bumps invalidate all recordings). <a href="https://vedicreader.github.io/rishi/core.html#cachedchat"><code>CachedChat</code></a> wraps <a href="https://vedicreader.github.io/rishi/core.html#chat"><code>Chat</code></a> for docs/CI. Transient errors (timeouts, rate limits) are never recorded.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1267" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="cachedchat" class="level3">
+<h3 class="anchored" data-anchor-id="cachedchat">CachedChat</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb82"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb82-1"><a href="#cb82-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> CachedChat(</span>
+<span id="cb82-2"><a href="#cb82-2" aria-hidden="true" tabindex="-1"></a>    model:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># anything `Chat` takes; part of the key</span></span>
+<span id="cb82-3"><a href="#cb82-3" aria-hidden="true" tabindex="-1"></a>    path:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># the diskcache directory; None -&gt; `CHAT_CACHE`</span></span>
+<span id="cb82-4"><a href="#cb82-4" aria-hidden="true" tabindex="-1"></a>    record:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># let a miss reach a real model; None -&gt; $RISHI_RECORD_CHAT</span></span>
+<span id="cb82-5"><a href="#cb82-5" aria-hidden="true" tabindex="-1"></a>    sp:<span class="bu">str</span><span class="op">=</span><span class="st">''</span>, <span class="co"># system prompt, part of the key</span></span>
+<span id="cb82-6"><a href="#cb82-6" aria-hidden="true" tabindex="-1"></a>    tools:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># tool names are part of the key; the real chat gets the tools themselves</span></span>
+<span id="cb82-7"><a href="#cb82-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>kw</span>
+<span id="cb82-8"><a href="#cb82-8" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>A <a href="https://vedicreader.github.io/rishi/core.html#chat"><code>Chat</code></a> whose replies are recorded to disk and replayed on a second ask; a replay builds no engine.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1222" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="recordcache" class="level3">
+<h3 class="anchored" data-anchor-id="recordcache">RecordCache</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb83"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb83-1"><a href="#cb83-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> RecordCache(</span>
+<span id="cb83-2"><a href="#cb83-2" aria-hidden="true" tabindex="-1"></a>    path:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># the diskcache directory; None -&gt; `CHAT_CACHE`</span></span>
+<span id="cb83-3"><a href="#cb83-3" aria-hidden="true" tabindex="-1"></a>    record:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># let a miss run for real; None -&gt; the environment</span></span>
+<span id="cb83-4"><a href="#cb83-4" aria-hidden="true" tabindex="-1"></a>    env:<span class="bu">str</span><span class="op">=</span><span class="st">'RISHI_RECORD_CHAT'</span>, <span class="co"># what says a miss may run</span></span>
+<span id="cb83-5"><a href="#cb83-5" aria-hidden="true" tabindex="-1"></a>    version:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># part of every key; None -&gt; `KEY_VERSION`</span></span>
+<span id="cb83-6"><a href="#cb83-6" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Record what a call returned the first time and replay it every time after; the primitive under <a href="https://vedicreader.github.io/rishi/core.html#cachedchat"><code>CachedChat</code></a>.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1218" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="is_transient" class="level3">
+<h3 class="anchored" data-anchor-id="is_transient">is_transient</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb84"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb84-1"><a href="#cb84-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> is_transient(</span>
+<span id="cb84-2"><a href="#cb84-2" aria-hidden="true" tabindex="-1"></a>    e</span>
+<span id="cb84-3"><a href="#cb84-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Is <code>e</code> a failure of the moment rather than of the ask? Those are not worth remembering.</em></p>
+</section>
+</section>
+<section id="installing-the-skill" class="level2">
+<h2 class="anchored" data-anchor-id="installing-the-skill">Installing the skill</h2>
+<p><a href="https://vedicreader.github.io/rishi/core.html#mv_skill_md"><code>mv_skill_md()</code></a> copies bundled <code>skill.md</code> into standard agent skill directories (<code>.claude/skills/rishi/</code>, <code>.agents/skills/rishi/</code>). <code>dry_run=True</code> prints paths only.</p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1348" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="mv_skill_md" class="level3">
+<h3 class="anchored" data-anchor-id="mv_skill_md">mv_skill_md</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb85"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb85-1"><a href="#cb85-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mv_skill_md(</span>
+<span id="cb85-2"><a href="#cb85-2" aria-hidden="true" tabindex="-1"></a>    dry_run:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, <span class="bu">dir</span>:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb85-3"><a href="#cb85-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Copy the bundled <code>skill.md</code> into <code>.claude</code> and <code>.agents</code> skill dirs so a harness can load the rishi skill.</em></p>
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/core.py#L1344" target="_blank" style="float:right; font-size:smaller">source</a></p>
+</section>
+<section id="repo_root" class="level3">
+<h3 class="anchored" data-anchor-id="repo_root">repo_root</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb86"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb86-1"><a href="#cb86-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> repo_root()<span class="op">-&gt;</span>Path:</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Root of the current git repository, or None if not in one.</em></p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vedicreader\.github\.io\/rishi");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>

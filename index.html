@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.18">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="description" content="One Chat API for litert, llama.cpp, MLX, fastllm-hosted models, Cursor, and Claude Code — tools, streaming, thinking, multimodal input, structured output, and a Python sandbox.">
+
+<title>rishi</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-64a204ab8560d761af7679ceaba22944.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-d63a2c9c8df14b07662b36303925c8cc.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="rishi">
+<meta property="og:description" content="One Chat API for litert, llama.cpp, MLX, fastllm-hosted models, Cursor, and Claude Code — tools, streaming, thinking, multimodal input, structured output, and a Python sandbox.">
+<meta property="og:image" content="https://vedicreader.github.io/rishi/index_files/figure-html/cell-6-output-1.png">
+<meta property="og:site_name" content="rishi">
+<meta property="og:image:height" content="447">
+<meta property="og:image:width" content="447">
+<meta name="twitter:title" content="rishi">
+<meta name="twitter:description" content="One Chat API for litert, llama.cpp, MLX, fastllm-hosted models, Cursor, and Claude Code — tools, streaming, thinking, multimodal input, structured output, and a Python sandbox.">
+<meta name="twitter:image" content="https://vedicreader.github.io/rishi/index_files/figure-html/cell-6-output-1.png">
+<meta name="twitter:image-height" content="447">
+<meta name="twitter:image-width" content="447">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">rishi</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./index.html">rishi</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">rishi</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">core</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./llama.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">llama</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./litert.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">litert</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./mlx.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">mlx</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./remote.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">remote</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./cursor.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">cursor</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./claude.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">claude</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#install" id="toc-install" class="nav-link active" data-scroll-target="#install">Install</a></li>
+  <li><a href="#quickstart" id="toc-quickstart" class="nav-link" data-scroll-target="#quickstart">Quickstart</a></li>
+  <li><a href="#pick-a-backend" id="toc-pick-a-backend" class="nav-link" data-scroll-target="#pick-a-backend">Pick a backend</a></li>
+  <li><a href="#feature-tour" id="toc-feature-tour" class="nav-link" data-scroll-target="#feature-tour">Feature tour</a>
+  <ul class="collapse">
+  <li><a href="#stream-and-async" id="toc-stream-and-async" class="nav-link" data-scroll-target="#stream-and-async">Stream and async</a></li>
+  <li><a href="#reasoning" id="toc-reasoning" class="nav-link" data-scroll-target="#reasoning">Reasoning</a></li>
+  <li><a href="#images-and-audio" id="toc-images-and-audio" class="nav-link" data-scroll-target="#images-and-audio">Images and audio</a></li>
+  <li><a href="#tools-with-approval" id="toc-tools-with-approval" class="nav-link" data-scroll-target="#tools-with-approval">Tools with approval</a></li>
+  <li><a href="#reconfigure-and-one-shots" id="toc-reconfigure-and-one-shots" class="nav-link" data-scroll-target="#reconfigure-and-one-shots">Reconfigure and one-shots</a></li>
+  <li><a href="#hand-off-between-backends" id="toc-hand-off-between-backends" class="nav-link" data-scroll-target="#hand-off-between-backends">Hand off between backends</a></li>
+  <li><a href="#run-python-from-replies" id="toc-run-python-from-replies" class="nav-link" data-scroll-target="#run-python-from-replies">Run Python from replies</a></li>
+  <li><a href="#structured-output-and-checks" id="toc-structured-output-and-checks" class="nav-link" data-scroll-target="#structured-output-and-checks">Structured output and checks</a></li>
+  </ul></li>
+  <li><a href="#same-api-on-mlx-hosted-cursor-and-claude-code" id="toc-same-api-on-mlx-hosted-cursor-and-claude-code" class="nav-link" data-scroll-target="#same-api-on-mlx-hosted-cursor-and-claude-code">Same API on MLX, hosted, Cursor, and Claude Code</a></li>
+  <li><a href="#claude-code" id="toc-claude-code" class="nav-link" data-scroll-target="#claude-code">Claude Code</a></li>
+  <li><a href="#go-deeper" id="toc-go-deeper" class="nav-link" data-scroll-target="#go-deeper">Go deeper</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="index.html.md"><i class="bi bi-file-code"></i>Markdown</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">rishi</h1>
+</div>
+
+<div>
+  <div class="description">
+    One <code>Chat</code> API for litert, llama.cpp, MLX, fastllm-hosted models, Cursor, and Claude Code — tools, streaming, thinking, multimodal input, structured output, and a Python sandbox.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<p>rishi is a thin chat layer: pass a model id, get a callable <a href="https://vedicreader.github.io/rishi/core.html#chat"><code>Chat</code></a>. History stays in <code>chat.hist</code>; each call returns a <a href="https://vedicreader.github.io/rishi/core.html#resp"><code>Resp</code></a> (<code>resp_text(r)</code> for the answer, <code>thought(r)</code> for reasoning). Backends share the same tool loop, approval gate, callbacks, and streaming — details live in the backend notebooks linked at the end.</p>
+<section id="install" class="level2">
+<h2 class="anchored" data-anchor-id="install">Install</h2>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode sh code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="st">'rishi[litert]'</span>    <span class="co"># .litertlm Gemma builds</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="st">'rishi[llama]'</span>     <span class="co"># any GGUF</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="st">'rishi[mlx]'</span>       <span class="co"># Apple Silicon (add mlx-vlm for vision/audio)</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="st">'rishi[remote]'</span>    <span class="co"># Claude, GPT, Gemini, … via fastllm</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="st">'rishi[cursor]'</span>    <span class="co"># Cursor models via SDK or cursor-agent CLI</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="st">'rishi[claude]'</span>    <span class="co"># Claude Code via the Agent SDK (the `claude` CLI needs nothing)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="st">'rishi[all]'</span>       <span class="co"># everything your platform supports</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Extras combine (<code>rishi[litert,remote]</code>). Backend modules import lazily — <code>import rishi</code> never pulls in wheels you didn’t install.</p>
+<p><strong>Contributors:</strong> <code>pip install -e '.[dev]'</code> then <code>nbdev-prepare</code>. Notebooks in <code>nbs/</code> are the source; <code>rishi/*.py</code> is generated.</p>
+</section>
+<section id="quickstart" class="level2">
+<h2 class="anchored" data-anchor-id="quickstart">Quickstart</h2>
+<p>First call downloads weights (here, Gemma-4-E2B via litert, ~2GB); later calls use the cache.</p>
+<div id="d0468550fd0fa854" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(gemma4_e2b)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">'Give me one fact about lobsters.'</span>)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r))</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>chat(<span class="st">'And one more.'</span>)              <span class="co"># same conversation</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>chat.print_hist()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Lobsters are crustaceans, which means they have a hard exoskeleton and a segmented body.</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p><strong>user</strong></p>
+<p>Give me one fact about lobsters.</p>
+<hr>
+<p><strong>assistant</strong></p>
+<p>Lobsters are crustaceans, which means they have a hard exoskeleton and a segmented body.</p>
+<hr>
+<p><strong>user</strong></p>
+<p>And one more.</p>
+<hr>
+<p><strong>assistant</strong></p>
+<p>Lobsters are known for their ability to hold their breath for extended periods of time.</p>
+</div>
+</div>
+</section>
+<section id="pick-a-backend" class="level2">
+<h2 class="anchored" data-anchor-id="pick-a-backend">Pick a backend</h2>
+<p><code>Chat(model)</code> routes from the id. <code>chat.runtime</code> tells you which engine you got; force with <code>runtime=</code> or a <code>llama/…</code> prefix when the name is ambiguous.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>model id looks like</th>
+<th>backend</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>litert-community/…</code>, <code>.litertlm</code></td>
+<td>litert</td>
+</tr>
+<tr class="even">
+<td><code>…-GGUF</code>, <code>.gguf</code> path</td>
+<td>llama.cpp</td>
+</tr>
+<tr class="odd">
+<td><code>mlx-community/…</code></td>
+<td>MLX</td>
+</tr>
+<tr class="even">
+<td><code>claude-…</code>, <code>gpt-…</code>, <code>gemini-…</code></td>
+<td>remote (fastllm)</td>
+</tr>
+<tr class="odd">
+<td><code>cursor/…</code> or <code>CursorChat(…)</code></td>
+<td>cursor</td>
+</tr>
+<tr class="even">
+<td><code>claude/…</code> or <code>ClaudeChat(…)</code></td>
+<td>claude (Claude Code)</td>
+</tr>
+</tbody>
+</table>
+<p>Claude Code is reached by prefix only: a bare <code>claude-…</code> id still means the hosted API through <code>remote</code>, so callers that had one keep it.</p>
+<div id="1d799df2e6f59663" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resolve_runtime(<span class="st">'litert-community/gemma-4-E2B-it-litert-lm'</span>))</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resolve_runtime(<span class="st">'Qwen/Qwen3-4B-GGUF'</span>))</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resolve_runtime(<span class="st">'mlx-community/Qwen3-4B-4bit'</span>))</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resolve_runtime(<span class="st">'claude-sonnet-4-5'</span>))</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resolve_runtime(<span class="st">'cursor/default'</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>('litert', 'litert-community/gemma-4-E2B-it-litert-lm')
+('llama', 'Qwen/Qwen3-4B-GGUF')
+('mlx', 'mlx-community/Qwen3-4B-4bit')
+('remote', 'claude-sonnet-4-5')
+('cursor', 'default')</code></pre>
+</div>
+</div>
+</section>
+<section id="feature-tour" class="level2">
+<h2 class="anchored" data-anchor-id="feature-tour">Feature tour</h2>
+<p>One example per capability. Swap <code>gemma4_e2b</code> for any backend — the call shape is the same.</p>
+<section id="stream-and-async" class="level3">
+<h3 class="anchored" data-anchor-id="stream-and-async">Stream and async</h3>
+<p><code>stream=True</code> yields markdown chunks; <code>display_stream(...)</code> renders live in a notebook. <a href="https://vedicreader.github.io/rishi/core.html#asyncchat"><code>AsyncChat</code></a> wraps any chat for <code>await</code> and <code>async for</code>.</p>
+<div id="3c15a7fa289f92cf" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> chunk <span class="kw">in</span> chat(<span class="st">'Write a haiku about the sea.'</span>, stream<span class="op">=</span><span class="va">True</span>):</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(chunk, end<span class="op">=</span><span class="st">''</span>, flush<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>achat <span class="op">=</span> AsyncChat(chat)</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(<span class="cf">await</span> achat(<span class="st">'One more fact, please.'</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Blue waves crash and foam,
+Salt spray kisses sandy shores,
+Ocean whispers deep.Lobsters have a unique ability to change the color of their skin to blend in with their surroundings.</code></pre>
+</div>
+</div>
+</section>
+<section id="reasoning" class="level3">
+<h3 class="anchored" data-anchor-id="reasoning">Reasoning</h3>
+<p><code>think=True</code> on construction exposes a thinking channel; <code>filter_think=True</code> (default) keeps it out of later context.</p>
+<div id="87baefc8191f59b1" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>ch <span class="op">=</span> Chat(gemma4_e2b, backend<span class="op">=</span>Backend.GPU(), think<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> ch(<span class="st">'A bat and ball cost $1.10; the bat is $1 more than the ball. Price of the ball?'</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r), <span class="st">'→'</span>, thought(r)[:<span class="dv">80</span>], <span class="st">'…'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>This is a classic riddle that requires setting up a system of equations.
+
+Here is the step-by-step solution:
+
+1. **Define variables:**
+   * Let $B$ be the cost of the bat.
+   * Let $L$ be the cost of the ball.
+
+2. **Set up the equations based on the clues:**
+   * **Clue 1:** The bat and ball cost $1.10.
+     $$B + L = 1.10$$
+   * **Clue 2:** The bat is $1 more than the ball.
+     $$B = L + 1.00$$
+
+3. **Substitute** the second equation into the first equation:
+   $$(L + 1.00) + L = 1.10$$
+
+4. **Solve for L:**
+   $$2L + 1.00 = 1.10$$
+   $$2L = 1.10 - 1.00$$
+   $$2L = 0.10$$
+   $$L = 0.05$$
+
+**Answer:** The price of the ball is **$0.05** (5 cents).
+
+*(If you check the answer: The bat would cost $1.05, and $1.05 + $0.05 = $1.10.)* → Here's a thinking process to solve this classic riddle:
+
+1.  **Define the variab …</code></pre>
+</div>
+</div>
+</section>
+<section id="images-and-audio" class="level3">
+<h3 class="anchored" data-anchor-id="images-and-audio">Images and audio</h3>
+<p>Pass <code>PIL.Image</code>, <code>bytes</code>, or <code>Path</code> beside text — rishi tags image vs audio. Gemma-4 litert builds are multimodal out of the box.</p>
+<div id="44164b14b409865e" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.<span class="bu">all</span> <span class="im">import</span> img_bytes, Path</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> PIL <span class="im">import</span> Image</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>im <span class="op">=</span> Image.<span class="bu">open</span>(Path(repo_root()<span class="op">/</span><span class="st">'nbs/images.jpeg'</span>))<span class="op">;</span> im</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="index_files/figure-html/cell-6-output-1.png" class="img-fluid figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+<div id="7fe9ffb1078a4ba5" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(chat([<span class="st">'Explain this image.'</span>, img_bytes(im)])))</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(chat([<span class="st">'Transcribe this clip.'</span>, Path(repo_root()<span class="op">/</span><span class="st">'nbs/speech.wav'</span>)])))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>This image features a beautiful, medium-sized dog with long, reddish-brown fur, likely a German Shepherd, walking down a dirt or gravel path in a natural, outdoor setting.
+
+Here are some details about the image:
+
+*   **Subject:** The main subject is a dog, characterized by its rich, warm brown coat and erect, pointed ears. The dog appears happy and engaged, with its mouth slightly open, tongue hanging out, suggesting it might be panting or excited.
+*   **Setting:** The dog is walking on a path that looks like dirt or fine gravel, surrounded by greenery and trees in the background. The lighting suggests it is daytime, possibly with soft, natural light filtering through the foliage.
+*   **Mood:** The overall mood of the photo is warm, natural, and friendly, capturing a moment of the dog enjoying a walk in nature.
+Dancing in the masquerade, idle truth in plain sight jaded, pop, roll, click, dot, who will I be today or not? But such a tide as moving seems a sleep, too full for sound and foam, when that drew from out the boundless deep turns again home, twilight and evening bell and after that.</code></pre>
+</div>
+</div>
+</section>
+<section id="tools-with-approval" class="level3">
+<h3 class="anchored" data-anchor-id="tools-with-approval">Tools with approval</h3>
+<p>Plain functions become tools; <code>approve</code> runs before each call. <a href="https://vedicreader.github.io/rishi/core.html#hitl_policy"><code>hitl_policy</code></a> maps tool names to <code>approved</code> / <code>dont_run</code> / <code>check</code>. <code>max_steps</code> caps tool rounds per turn.</p>
+<div id="9ba8429fc389be91" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> add(a: <span class="bu">int</span>, b: <span class="bu">int</span>) <span class="op">-&gt;</span> <span class="bu">int</span>:</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">'Add two integers.'</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> a <span class="op">+</span> b</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> delete_files(path: <span class="bu">str</span>) <span class="op">-&gt;</span> <span class="bu">str</span>:</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="co">'Delete everything under a path.'</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f'wiped </span><span class="sc">{</span>path<span class="sc">}</span><span class="ss">'</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>approve <span class="op">=</span> hitl_policy({<span class="st">'add'</span>: <span class="st">'approved'</span>, <span class="st">'delete_files'</span>: <span class="st">'dont_run'</span>})</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>tchat <span class="op">=</span> Chat(gemma4_e2b, tools<span class="op">=</span>[add, delete_files], approve<span class="op">=</span>approve)</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(tchat(<span class="st">'Add 2 and 3, then delete /tmp/data.'</span>)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>I have added 2 and 3, which resulted in 5.0. Now I will proceed to delete the file `/tmp/data.&lt;system-reminder&gt;`.
+</code></pre>
+</div>
+</div>
+</section>
+<section id="reconfigure-and-one-shots" class="level3">
+<h3 class="anchored" data-anchor-id="reconfigure-and-one-shots">Reconfigure and one-shots</h3>
+<p><code>chat.reconfigure(sp=, tools=)</code> changes briefing or tools mid-conversation. <code>chat.oneshot(...)</code> is a stateless side call — label, summarize, complete — without touching <code>hist</code>.</p>
+<p><code>CachedChat(path='nbs/chatcache')</code> replays recorded turns for docs/CI without loading weights.</p>
+<div id="872065ecd4b9b2b5" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rishi.core <span class="im">import</span> CachedChat</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(path<span class="op">=</span>repo_root()<span class="op">/</span><span class="st">'nbs/chatcache'</span>, max_output_tokens<span class="op">=</span><span class="dv">64</span>, record<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> <span class="st">'Say hello in one short sentence.'</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(c(q)))</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>c.reconfigure(sp<span class="op">=</span><span class="st">'You are a pirate. Always talk like one.'</span>)</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(c(q)))                     <span class="co"># same thread, new briefing</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(c.oneshot(<span class="st">'One word — sentiment of "the train was late again".'</span>, think<span class="op">=</span><span class="va">False</span>, max_tokens<span class="op">=</span><span class="dv">16</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Hello there!
+Ahoy there, matey!
+**Frustration**</code></pre>
+</div>
+</div>
+</section>
+<section id="hand-off-between-backends" class="level3">
+<h3 class="anchored" data-anchor-id="hand-off-between-backends">Hand off between backends</h3>
+<p><code>chat.hist</code> is backend-agnostic — start local, continue on a hosted model (or another local engine) with <code>messages=</code>.</p>
+<div id="48fd1f1f8c45fc19" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>local <span class="op">=</span> Chat(qwen3_4b, n_ctx<span class="op">=</span><span class="dv">4096</span>, tools<span class="op">=</span>[add])</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>local(<span class="st">'What is 2 + 3? Use the add tool.'</span>)</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>remote <span class="op">=</span> Chat(<span class="st">'gpt-4.1-nano'</span>, messages<span class="op">=</span>local.hist, tools<span class="op">=</span>[add])   <span class="co"># needs API key</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(remote(<span class="st">'What did I ask, and what was the answer?'</span>)))</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>local.close()<span class="op">;</span> remote.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>llama_context: n_ctx_seq (4096) &lt; n_ctx_train (40960) -- the full capacity of the model will not be utilized</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>You asked what 2 + 3 is, and I found the answer to be 5 after using the add tool.</code></pre>
+</div>
+</div>
+</section>
+<section id="run-python-from-replies" class="level3">
+<h3 class="anchored" data-anchor-id="run-python-from-replies">Run Python from replies</h3>
+<p><a href="https://vedicreader.github.io/rishi/core.html#pyfencecallback"><code>PyFenceCallback</code></a> executes fenced Python blocks from the model’s reply, feeds stdout back, and loops until the model answers in prose or <code>done</code> says stop.</p>
+<div id="d6204550b058d71f" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>py <span class="op">=</span> Chat(gemma4_e2b, sp<span class="op">=</span><span class="st">'Use a ```python fence, then answer in prose.'</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>py(<span class="st">'What is 2**100?'</span>, cbs<span class="op">=</span>[PyFenceCallback(done<span class="op">=</span>output_matches(<span class="bu">str</span>(<span class="dv">2</span><span class="op">**</span><span class="dv">100</span>)))])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="structured-output-and-checks" class="level3">
+<h3 class="anchored" data-anchor-id="structured-output-and-checks">Structured output and checks</h3>
+<p><code>structured</code> returns a dataclass instance; <code>classify</code> picks a label. Both use a throwaway turn and leave <code>hist</code> alone. <code>check</code> grades a fenced answer against an expected string.</p>
+<div id="332521a86f973ba7" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dataclasses <span class="im">import</span> dataclass</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="at">@dataclass</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Person: name: <span class="bu">str</span><span class="op">;</span> age: <span class="bu">int</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat.structured(<span class="st">'Extract: John Smith is 30.'</span>, Person))</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat.classify(<span class="st">'I loved this film!'</span>, [<span class="st">'positive'</span>, <span class="st">'negative'</span>]))</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat.check(<span class="st">'Capital of France?'</span>, <span class="st">'Paris'</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="same-api-on-mlx-hosted-cursor-and-claude-code" class="level2">
+<h2 class="anchored" data-anchor-id="same-api-on-mlx-hosted-cursor-and-claude-code">Same API on MLX, hosted, Cursor, and Claude Code</h2>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>backend</th>
+<th>install</th>
+<th>typical use</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>MLX</td>
+<td><code>rishi[mlx]</code></td>
+<td>Apple Silicon; explicit prompt cache, <code>kv_bits</code>, LoRA</td>
+</tr>
+<tr class="even">
+<td>remote</td>
+<td><code>rishi[remote]</code> + vendor key</td>
+<td>same tools/HITL as local; <code>tool_choice</code>, <code>reasoning_effort</code></td>
+</tr>
+<tr class="odd">
+<td>cursor</td>
+<td><code>rishi[cursor]</code> + <code>$CURSOR_API_KEY</code>, or <code>cursor-agent login</code></td>
+<td>Cursor-only models; use <code>cursor/</code> prefix or <a href="https://vedicreader.github.io/rishi/cursor.html#cursorchat"><code>CursorChat</code></a></td>
+</tr>
+<tr class="even">
+<td>claude</td>
+<td><code>rishi[claude]</code>, or just Claude Code + <code>claude /login</code></td>
+<td>your tools without MCP; use <code>claude/</code> prefix or <a href="https://vedicreader.github.io/rishi/claude.html#claudechat"><code>ClaudeChat</code></a></td>
+</tr>
+</tbody>
+</table>
+<p>See <code>03_mlx.ipynb</code>, <code>04_remote.ipynb</code>, <code>05_cursor.ipynb</code>, <code>06_claude.ipynb</code> for knobs and examples.</p>
+<div id="4b46e836c4a4c1c8" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="co"># MLX (Apple Silicon)</span></span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rishi.mlx <span class="im">import</span> qwen3_4b <span class="im">as</span> mlx_qwen</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>m <span class="op">=</span> Chat(mlx_qwen)<span class="op">;</span> <span class="bu">print</span>(resp_text(m(<span class="st">'One octopus fact.'</span>)))<span class="op">;</span> m.close()</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Hosted — hand local history to a bigger model</span></span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>loc <span class="op">=</span> Chat(qwen3_4b)<span class="op">;</span> loc(<span class="st">'My name is Karthik and my favourite number is 17.'</span>)</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>big <span class="op">=</span> Chat(<span class="st">'gpt-4.1-nano'</span>, messages<span class="op">=</span>loc.hist)</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(big(<span class="st">'What is my name and favourite number?'</span>)))<span class="op">;</span> loc.close()<span class="op">;</span> big.close()</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Cursor — SDK path (prefix required for plain `Chat`)</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rishi.cursor <span class="im">import</span> grok45, CursorChat</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>cu <span class="op">=</span> CursorChat(grok45, effort<span class="op">=</span><span class="st">'low'</span>)<span class="op">;</span> <span class="bu">print</span>(resp_text(cu(<span class="st">'Kalman filter in one sentence.'</span>)))<span class="op">;</span> cu.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="claude-code" class="level2">
+<h2 class="anchored" data-anchor-id="claude-code">Claude Code</h2>
+<p><code>Chat('claude/claude-sonnet-5')</code> runs a turn through Claude Code: <code>via='sdk'</code> uses the <code>claude-agent-sdk</code> package (<code>pip install 'rishi[claude]'</code>), <code>via='cli'</code> drives the <code>claude</code> binary and needs nothing installed beyond Claude Code itself, and <code>via=None</code> takes the SDK when it is there. <code>ClaudeChat.local</code> is <code>False</code>.</p>
+<p>The point of the module is the tools. Claude Code declares a caller’s tools as an in-process MCP server, and an enterprise-managed configuration forbids every dynamic MCP server — which leaves the model with no tools at all. So rishi sends your schemas in the system prompt as <code>&lt;tool_call&gt;</code> tags and opens no server, and a managed policy has nothing to refuse. It must not ask for <code>--strict-mcp-config</code> / <code>strict_mcp_config=True</code> either: that flag is itself refused where an enterprise config exists, so the obvious way to say “only my servers” is the one shape a managed machine rejects.</p>
+<p>Unlike <code>cursor</code>, Claude Code has a real system-prompt channel, so the briefing and the schemas go there and only the conversation is rendered into the prompt. Two costs. The harness’s own system prompt is ~48-53k prompt tokens a turn. And the tags channel depends on the model punctuating it: <code>claude-sonnet-5</code> did so reliably here, <code>claude-haiku-4-5</code> read the schema, called the tool unavailable and answered from its own arithmetic — so route tool-using turns to Sonnet-tier or better.</p>
+<div id="55c0e7d2" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rishi.claude <span class="im">import</span> sonnet5, ClaudeChat</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>cc <span class="op">=</span> ClaudeChat(sonnet5, tools<span class="op">=</span>[add], sp<span class="op">=</span><span class="st">'Use the add tool.'</span>)   <span class="co"># or Chat('claude/claude-sonnet-5')</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(cc(<span class="st">'What is 2 + 3?'</span>)))</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>cc.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="go-deeper" class="level2">
+<h2 class="anchored" data-anchor-id="go-deeper">Go deeper</h2>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>notebook</th>
+<th>topics</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><a href="core.html"><code>00_core.ipynb</code></a></td>
+<td>callbacks, context compression, <a href="https://vedicreader.github.io/rishi/core.html#slidingwindowcallback"><code>SlidingWindowCallback</code></a>, shared engines, skill install, grading judges</td>
+</tr>
+<tr class="even">
+<td><a href="llama.html"><code>01_llama.ipynb</code></a></td>
+<td>GGUF models, GPU offload, parallel tools, audio via mtmd</td>
+</tr>
+<tr class="odd">
+<td><a href="litert.html"><code>02_litert.ipynb</code></a></td>
+<td>Gemma <code>.litertlm</code>, GPU/NPU, <a href="https://vedicreader.github.io/rishi/litert.html#bench"><code>bench()</code></a></td>
+</tr>
+<tr class="even">
+<td><a href="mlx.html"><code>03_mlx.ipynb</code></a></td>
+<td>vision/audio routing, speculative decoding, cache save/load</td>
+</tr>
+<tr class="odd">
+<td><a href="remote.html"><code>04_remote.ipynb</code></a></td>
+<td>provider tools, server-side search</td>
+</tr>
+<tr class="even">
+<td><a href="cursor.html"><code>05_cursor.ipynb</code></a></td>
+<td>CLI vs SDK, model ids, agent modes</td>
+</tr>
+<tr class="odd">
+<td><a href="claude.html"><code>06_claude.ipynb</code></a></td>
+<td>SDK vs CLI, tools as prompt tags, MCP under a managed policy</td>
+</tr>
+</tbody>
+</table>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vedicreader\.github\.io\/rishi");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
