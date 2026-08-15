@@ -6,17 +6,18 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['tool_reminder_', 'TAG_TOOLS_SP', 'CHARS_PER_TOKEN', 'runtimes', 'dflt_runtime', 'MODALITIES', 'CAPS_FALLBACK',
-           'budget_msg_', 'dflt_final_prompt_', 'qa_sp_', 'CHAT_CACHE', 'KEY_VERSION', 'UsageStats', 'ChatCallback',
-           'run_cbs', 'resp_text', 'thought', 'quote_', 'Resp', 'tc_summary_', 'mk_tr_details', 'StreamFormatter',
-           'display_stream', 'truncated', 'TruncationCallback', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs',
-           'is_media', 'mk_toolspec', 'split_think', 'mk_tag_tc', 'parse_tool_tags', 'tag_tools_sp', 'est_tokens',
-           'render_prompt', 'parse_args', 'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit',
-           'acc_tc', 'UsageCallback', 'ToolReminderCallback', 'common_prefix_len', 'split_runtime', 'infer_runtime',
-           'resolve_runtime', 'get_runtime', 'Caps', 'model_caps', 'ToolCall', 'tc_name', 'mk_tool_res_msg',
-           'mk_tool_res_msgs', 'ContextWindowExceededError', 'is_ctx_error', 'Chat', 'ToolLoopMixin', 'msg_groups',
-           'evict_middle', 'SlidingWindowCallback', 'AsyncChat', 'adisplay_stream', 'browser_approval', 'hitl_policy',
-           'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'sync_iter', 'task_complete',
-           'output_matches', 'PyFenceCallback', 'is_transient', 'RecordCache', 'CachedChat', 'repo_root', 'mv_skill_md']
+           'ENDPOINT_TOOLS', 'budget_msg_', 'dflt_final_prompt_', 'qa_sp_', 'CHAT_CACHE', 'KEY_VERSION', 'UsageStats',
+           'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'quote_', 'Resp', 'tc_summary_', 'mk_tr_details',
+           'StreamFormatter', 'display_stream', 'truncated', 'TruncationCallback', 'mk_oai_content', 'mk_oai_msg',
+           'mk_oai_msgs', 'is_media', 'mk_toolspec', 'split_think', 'mk_tag_tc', 'parse_tool_tags', 'tag_tools_sp',
+           'est_tokens', 'render_prompt', 'parse_args', 'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media',
+           'StreamSplit', 'acc_tc', 'UsageCallback', 'ToolReminderCallback', 'common_prefix_len', 'split_runtime',
+           'infer_runtime', 'resolve_runtime', 'get_runtime', 'Caps', 'model_caps', 'ToolCall', 'tc_name',
+           'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError', 'is_ctx_error', 'Chat', 'ToolLoopMixin',
+           'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'AsyncChat', 'adisplay_stream', 'browser_approval',
+           'hitl_policy', 'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'sync_iter',
+           'task_complete', 'output_matches', 'PyFenceCallback', 'is_transient', 'RecordCache', 'CachedChat',
+           'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #655b2174ec1d6506
 import json, re, os, asyncio, io, ast, inspect, warnings, uuid
@@ -530,13 +531,14 @@ MODALITIES = ('text', 'image', 'audio', 'video')
 class Caps:
     "What a model can be sent, and what it can send back."
     inp: tuple = ('text',)      # modalities it accepts
-    out: tuple = ('text',)      # modalities it returns
+    out: tuple = ('text',)      # modalities it returns unprompted
+    tools: tuple = ()           # modalities it returns when given a server-side generation tool
     source: str = 'default'     # who answered: litellm|mmproj|config|runtime|fallback|default
 
     @property
-    def gen_image(self): return 'image' in self.out
+    def gen_image(self): return 'image' in self.out or 'image' in self.tools
     @property
-    def gen_video(self): return 'video' in self.out
+    def gen_video(self): return 'video' in self.out or 'video' in self.tools
     @property
     def known(self): return self.source != 'default'
     def accepts(self, kind): return kind in self.inp
@@ -546,8 +548,11 @@ class Caps:
         bits = []
         if self.inp != ('text',): bits.append('in: ' + ' '.join(self.inp))
         if self.out != ('text',): bits.append('out: ' + ' '.join(self.out))
+        if self.tools: bits.append('via tool: ' + ' '.join(self.tools))
         return ' \u00b7 '.join(bits)
-    def __repr__(self): return f"Caps(in={'+'.join(self.inp)}, out={'+'.join(self.out)}, {self.source})"
+    def __repr__(self):
+        t = f", tools={'+'.join(self.tools)}" if self.tools else ''
+        return f"Caps(in={'+'.join(self.inp)}, out={'+'.join(self.out)}{t}, {self.source})"
 
 #: `mode` values that describe a generator rather than a chat, and what they return.
 _gen_modes = {'image_generation': ('image',), 'video_generation': ('video',), 'audio_speech': ('audio',)}
@@ -555,6 +560,14 @@ _gen_modes = {'image_generation': ('image',), 'video_generation': ('video',), 'a
 #: Modalities for vendors litellm's table leaves blank. Prefix -> (inp, out).
 CAPS_FALLBACK = {p: (('text', 'image'), ('text',)) for p in
                  ('claude', 'anthropic/', 'sonnet', 'opus', 'haiku', 'fable')}
+
+#: Server-side generation tools, by the endpoint that offers them and what they produce.
+ENDPOINT_TOOLS = {'/v1/responses': ('image',)}
+
+def _tool_modalities(info):
+    "What a model can generate when handed a server-side tool, which `supported_output_modalities` never says."
+    eps = info.get('supported_endpoints') or ()
+    return tuple(dict.fromkeys(m for e, ms in ENDPOINT_TOOLS.items() if e in eps for m in ms))
 
 def _tbl_caps(model):
     "Modalities from litellm's model table (through fastllm), or `None` when the table says nothing."
@@ -567,13 +580,13 @@ def _tbl_caps(model):
     out = tuple(out) if out else _gen_modes.get(info.get('mode'))
     if not inp: inp = ('text', 'image') if info.get('supports_vision') else None
     if not inp and not out: return None
-    return Caps(tuple(inp or ('text',)), tuple(out or ('text',)), 'litellm')
+    return Caps(tuple(inp or ('text',)), tuple(out or ('text',)), _tool_modalities(info), 'litellm')
 
 def _fallback_caps(model):
     "Modalities from `CAPS_FALLBACK`, for the vendors litellm's table leaves empty."
     s = str(model).lower()
     hit = first(CAPS_FALLBACK.items(), lambda kv: kv[0] in s)
-    return Caps(hit[1][0], hit[1][1], 'fallback') if hit else None
+    return Caps(hit[1][0], hit[1][1], (), 'fallback') if hit else None
 
 def _hub_files(repo):
     "Every already-cached file path for hub repo `repo`; never touches the network."
@@ -589,7 +602,7 @@ def _mmproj_caps(model, model_path=None):
     for p in (model_path, model):
         d = Path(p).parent if p else None
         if d and d.is_dir(): fs += [str(x) for x in d.glob('*.gguf')]
-    if any('mmproj' in Path(f).name.lower() for f in fs): return Caps(('text', 'image'), ('text',), 'mmproj')
+    if any('mmproj' in Path(f).name.lower() for f in fs): return Caps(('text', 'image'), ('text',), (), 'mmproj')
     return None
 
 #: `config.json` keys that mark a second tower, by the modality it reads (as `rishi.mlx.is_vlm` sniffs).
@@ -611,7 +624,7 @@ def _cfg_caps(model, model_path=None):
     cfg = _read_cfg(model, model_path)
     if not cfg: return None
     inp = ('text',) + tuple(k for k, ks in _tower_keys.items() if any(x in cfg for x in ks))
-    return Caps(inp, ('text',), 'config')
+    return Caps(inp, ('text',), (), 'config')
 
 def model_caps(model=None, runtime=None, model_path=None):
     "What `model` accepts and what it returns, resolved without loading it."
@@ -619,7 +632,7 @@ def model_caps(model=None, runtime=None, model_path=None):
     except Exception: nm, mid = runtime, model
     mid = str(mid if mid is not None else (model or ''))
     # LitertChat(multimodal=True) builds vision and audio backends
-    if nm == 'litert': return Caps(('text', 'image', 'audio'), ('text',), 'runtime')
+    if nm == 'litert': return Caps(('text', 'image', 'audio'), ('text',), (), 'runtime')
     if nm == 'llama': return _mmproj_caps(mid, model_path) or Caps()
     if nm == 'mlx': return _cfg_caps(mid, model_path) or Caps()
     return _tbl_caps(mid) or _fallback_caps(mid) or Caps()
