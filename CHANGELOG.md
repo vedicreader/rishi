@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.14
+bug fix
+
 ## 0.1.13
 support image and video generation
 
