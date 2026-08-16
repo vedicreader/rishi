@@ -118,7 +118,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     @property
     def tool_channel(self):
-        "Where this chat's tool schemas travel. Always the prompt, for now to bypass MCP blocks in eneterprise"
+        "Where this chat's tool schemas travel. Always the prompt, for now to bypass MCP blocks in enterprise"
         return 'tags'
 
     @property
