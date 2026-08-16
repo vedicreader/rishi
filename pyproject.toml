@@ -38,10 +38,13 @@ llama = [
     "numpy",
 ]
 cursor = ["cursor-sdk>=0.1",]
+# Copilot's endpoint is OpenAI-shaped, so it rides on the same fastllm transport as `remote`; the
+# only thing it adds is the token exchange, which needs an HTTP client of its own.
+copilot = ["rishi[remote]", "httpx",]
 # Only the SDK path needs this; the `claude` CLI path drives a binary and needs nothing installed.
 claude = ["claude-agent-sdk>=0.2",]
 record = ["diskcache>=5.6.3",]
-all = ["rishi[litert,remote,mlx,mlx-vlm,llama,cursor,claude,record]",]
+all = ["rishi[litert,remote,mlx,mlx-vlm,llama,cursor,claude,copilot,record]",]
 dev = ["rishi[all]",]
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"

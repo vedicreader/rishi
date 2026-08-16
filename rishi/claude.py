@@ -1,4 +1,4 @@
-"""Claude Code's models through the Agent SDK or the `claude` CLI - an agent with its own harness, not a completion endpoint.
+"""Claude Code's models through the Agent SDK or the `claude` CLI. An agent with its own harness, not a completion endpoint.
 
 Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 
@@ -12,7 +12,7 @@ __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'f
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import json, shutil, subprocess
-from fastcore.all import Path, store_attr, patch, ifnone
+from fastcore.all import store_attr, patch, ifnone
 from . import core
 from .core import *
 
@@ -21,9 +21,9 @@ _all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp'
          'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_wire
-CLAUDE_BIN = 'claude'   #: the CLI rishi drives; override per chat with `bin=`
+CLAUDE_BIN = 'claude'   #: the CLI rishi drives, overridden per chat with `bin=`
 
-# Claude Code's own aliases resolve to the latest build of each; the dated ids work too.
+# Claude Code's own aliases resolve to the latest build of each. The dated ids work too.
 opus5    = 'claude-opus-5'
 opus48   = 'claude-opus-4-8'
 sonnet5  = 'claude-sonnet-5'
@@ -35,15 +35,13 @@ fable5   = 'claude-fable-5'
 CLAUDE_MODELS = {'opus5': opus5, 'opus48': opus48, 'sonnet5': sonnet5, 'sonnet46': sonnet46,
                  'haiku45': haiku45, 'fable5': fable5}
 
-#: Claude Code's own tools this backend refuses by default. The agent gets its tools from the caller;
-#: letting the harness shell out as well is a second, ungoverned way to touch the machine.
+#: Claude Code's own tools this backend refuses by default. The agent gets its tools from the caller,
+#: and letting the harness shell out as well is a second, ungoverned way to touch the machine.
 CLAUDE_DISALLOWED = ('Bash', 'Write', 'Edit', 'NotebookEdit')
 
 #: Declared on every turn, and deliberately empty. A managed configuration forbids *adding* a
-#: dynamic MCP server, so this backend adds none - and it must not reach for `--strict-mcp-config`
-#: to say so, because that flag is itself refused when an enterprise config is present ("You cannot
-#: use --strict-mcp-config when an enterprise MCP config is present"). Declaring nothing and
-#: claiming nothing is the only shape a managed machine accepts.
+#: dynamic MCP server, and refuses `--strict-mcp-config` as well. Declaring nothing and claiming
+#: nothing is the only shape it accepts.
 NO_MCP = '{"mcpServers":{}}'
 
 def claude_bin(bin=CLAUDE_BIN):
@@ -51,7 +49,7 @@ def claude_bin(bin=CLAUDE_BIN):
     if (p := shutil.which(bin)): return p
     raise FileNotFoundError(
         f'{bin!r} is not on $PATH. Install Claude Code (https://claude.com/claude-code) and run '
-        f'`{bin} /login`; rishi drives it as a subprocess and never reads your credentials.')
+        f'`{bin} /login`. rishi drives it as a subprocess and never reads your credentials.')
 
 def sdk_available():
     "Is the Claude Agent SDK importable here?"
@@ -65,7 +63,7 @@ def claude_via(via=None):
     if via not in (None, 'sdk', 'cli'): raise ValueError(f"via must be 'sdk', 'cli' or None, not {via!r}")
     if via == 'sdk' and not sdk_available(): raise ImportError(
         'via=\'sdk\' needs the Claude Agent SDK: pip install \'rishi[claude]\'. The CLI path needs '
-        'none of it - leave via=None and rishi takes whichever is here.')
+        'none of it. Leave via=None and rishi takes whichever is here.')
     return via or ('sdk' if sdk_available() else 'cli')
 
 def norm_claude_usage(u, model=None):
@@ -89,7 +87,7 @@ def norm_claude(d, model=None):
 
 # %% ../nbs/06_claude.ipynb #cl_chat
 class ClaudeChat(ToolLoopMixin, Chat):
-    "Chat against a Claude Code model - the same `rishi.core.Chat` API, over the Agent SDK or the CLI."
+    "Chat against a Claude Code model, with the same `rishi.core.Chat` API over the Agent SDK or the CLI."
     _runtime = 'claude'
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(mk_oai_content), staticmethod(mk_oai_msg), staticmethod(mk_oai_msgs)
@@ -98,13 +96,13 @@ class ClaudeChat(ToolLoopMixin, Chat):
     def __init__(self, model=None, *, runtime=None, model_path=None, sp='', messages=None, tools=None,
                  ctx_limit=None, approve=None, tool_max_len=None, max_steps=10, parallel_tools=False,
                  max_parallel_tools=None, final_prompt=dflt_final_prompt_,
-                 permission_mode='auto',    # Claude Code's gate on its *own* tools; yours are rishi's
-                 claude_tools=None,         # Claude Code's own tools, allowlisted; None -> none at all when this chat carries tools
+                 permission_mode='auto',    # Claude Code's gate on its *own* tools. Yours are rishi's
+                 claude_tools=None,         # Claude Code's own tools, allowlisted. None -> none at all when this chat carries tools
                  claude_disallowed=CLAUDE_DISALLOWED,   # ...and the ones it may never use
-                 workspace=None,            # directory Claude Code works in; None -> the cwd
-                 effort=None,               # 'low'/'medium'/'high'/'xhigh'/'max'; None -> the default
+                 workspace=None,            # directory Claude Code works in. None -> the cwd
+                 effort=None,               # 'low'/'medium'/'high'/'xhigh'/'max'. None -> the default
                  bare=True,                 # answer as a model: no CLAUDE.md, skills, plugins or hooks. See `_cmd`
-                 via=None,                  # 'sdk' or 'cli'; None -> the SDK when it is installed
+                 via=None,                  # 'sdk' or 'cli'. None -> the SDK when it is installed
                  bin=CLAUDE_BIN, timeout=600, settings=None, cbs=None, default_cbs=True, **opts):
         self.model_id = core.split_runtime(model)[1] or opus5
         self._set_tools(tools)
@@ -118,7 +116,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     @property
     def tool_channel(self):
-        "Where this chat's tool schemas travel. Always the prompt, for now to bypass MCP blocks in enterprise"
+        "Where this chat's tool schemas travel. Always the prompt, to get past a managed MCP policy."
         return 'tags'
 
     @property
@@ -128,7 +126,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     @property
     def token_count(self):
-        "the prompt this chat would send next. claude code doesn't give you usage. we estimate"
+        "An estimate of the prompt this chat would send next. Claude Code reports no live usage."
         return est_tokens(self._prompt()) + est_tokens(self._sp())
 
     def _sp(self):
@@ -136,20 +134,20 @@ class ClaudeChat(ToolLoopMixin, Chat):
         return tag_tools_sp(self.toolspecs, self.sp)
 
     def _prompt(self):
-        "This turn's whole conversation as text. The briefing is not in here - it has its own channel."
+        "This turn's whole conversation as text. The briefing has a channel of its own."
         return render_prompt(self.hist)
 
     def _note_usage(self, r):
-        "Remember what the turn cost. This is billing volume, not occupancy -- see `token_count`."
+        "Remember what the turn cost. This is billing volume, not occupancy. See `token_count`."
         self._ctx_tokens = (r.get('usage') or {}).get('total_tokens') or self._ctx_tokens
         return r
 
     def _recreate_conv(self):
-        "rishi's history moved - eviction, `reconfigure`. Nothing to invalidate: every turn re-sends it."
+        "Nothing to invalidate when rishi's history moves. Every turn re-sends the whole thing."
         pass
 
     def close(self):
-        "Nothing to release: a turn is a process or a `query`, and neither outlives it."
+        "Nothing to release. A turn is a process or a `query`, and neither outlives it."
         pass
 
 # %% ../nbs/06_claude.ipynb #cl_cli
@@ -172,7 +170,7 @@ def _cmd(self:ClaudeChat, fmt):
 
 @patch
 def _run(self:ClaudeChat, fmt, prompt=None):
-    """Run one turn and return the finished process; a non-zero exit is the CLI's message, not a traceback."""
+    "Run one turn and return the finished process. A non-zero exit is the CLI's message, not a traceback."
     r = subprocess.run(self._cmd(fmt), input=ifnone(prompt, self._prompt()), capture_output=True,
                        text=True, timeout=self.timeout, cwd=str(self.workspace) if self.workspace else None)
     if r.returncode != 0: raise RuntimeError(f'claude exited {r.returncode}: {(r.stderr or r.stdout).strip()[:400]}')
@@ -221,7 +219,7 @@ def _model_step(self:ClaudeChat, max_output_tokens=None):
 
 @patch
 def _stream_step(self:ClaudeChat, max_output_tokens=None):
-    "The same turn, streamed: thinking on its own channel, and tag calls never rendered as prose."
+    "The same turn, streamed. Thinking gets its own channel, and tag calls are never rendered as prose."
     split, out = StreamSplit(), None
     if self.use_sdk:
         for kind, v in self._sdk_events(self._prompt(), self._sp()):
@@ -233,7 +231,7 @@ def _stream_step(self:ClaudeChat, max_output_tokens=None):
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 text=True, cwd=str(self.workspace) if self.workspace else None)
         with proc:
-            proc.stdin.write(self._prompt()); proc.stdin.close()   # stdin, not argv - see `_run`
+            proc.stdin.write(self._prompt()); proc.stdin.close()   # stdin, not argv: see `_run`
             for line in proc.stdout:
                 if not (line := line.strip()): continue
                 try: o = json.loads(line)
@@ -249,7 +247,7 @@ def _stream_step(self:ClaudeChat, max_output_tokens=None):
 
 @patch
 def _oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None):
-    """Stateless one-shot text, through whichever path this chat uses."""
+    "Stateless one-shot text, through whichever path this chat uses."
     if self.use_sdk:
         out = next(v for k, v in self._sdk_events(prompt, sp) if k == 'result')
         return resp_text(norm_claude(out, self.model_id))

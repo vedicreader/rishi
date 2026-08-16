@@ -1,4 +1,4 @@
-"""Hosted models through [fastllm](https://github.com/AnswerDotAI/fastllm) — same `Chat` API with API keys in the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, …).
+"""Hosted models through [fastllm](https://github.com/AnswerDotAI/fastllm). The same `Chat` API, with API keys in the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, ...).
 
 Docs: https://vedicreader.github.io/rishi/remote.html.md"""
 
@@ -10,13 +10,12 @@ __all__ = ['NO_THINK_EFFORT', 'to_msg', 'to_hist', 'norm_usage', 'gen_media', 'n
            'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall', 'mk_tool_res_msg']
 
 # %% ../nbs/04_remote.ipynb #rm_imports
-import json, os, asyncio
-from base64 import b64encode, b64decode
+import json
+from base64 import b64decode
 from fastllm.acomplete import acomplete
-from fastllm.types import Completion, Usage
+from fastllm.types import Completion
 from aidialog.msg_parts import Msg, Part, PartType, data_url
-from fastcore.funccall import mk_ns
-from fastcore.all import Path, store_attr, patch, L, ifnone, first, listify
+from fastcore.all import store_attr, ifnone, listify
 from . import core
 from .core import *
 
@@ -135,7 +134,7 @@ def _d(o):
     return getattr(o, '__dict__', {}) or {}
 
 def _media_from(o):
-    "Generated media in one raw response node, as `(mime, bytes)` pairs; `[]` when there is none."
+    "Generated media in one raw response node, as `(mime, bytes)` pairs."
     d, out = _d(o), []
     for k, mk in _inline_keys:
         if (inl := d.get(k)):
@@ -160,7 +159,7 @@ def _walk(o, depth=0):
         if isinstance(v, (dict, list, tuple)) or hasattr(v, '__dict__'): yield from _walk(v, depth+1)
 
 def gen_media(raw):
-    "Images a model generated, dug out of `Completion.raw` (fastllm's `PartType` is input-only)."
+    "Images a model generated, dug out of `Completion.raw`. fastllm's `PartType` is input-only."
     if raw is None: return []
     seen, out = set(), []
     for node in _walk(raw):
@@ -170,7 +169,7 @@ def gen_media(raw):
     return out
 
 def norm_completion(comp):
-    "fastllm `Completion` -> rishi `Resp`, with `<tool_call>` tags read out of the text as `core.norm_resp` does."
+    "fastllm `Completion` -> rishi `Resp`, reading `<tool_call>` tags out of the text as `core.norm_resp` does."
     res = to_hist(comp.message)[0]
     res.setdefault('role', 'assistant')
     tag_tcs = []
@@ -185,11 +184,11 @@ def norm_completion(comp):
     return Resp(res)
 
 # %% ../nbs/04_remote.ipynb #rm_chat
-#: What `think=False` asks a hosted model for - a name, not a literal, so a deployment whose
-#: provider spells the lowest reasoning effort differently can say so.
+#: What `think=False` asks a hosted model for. A name, not a literal, so a deployment whose provider
+#: spells the lowest reasoning effort differently can say so.
 NO_THINK_EFFORT = 'minimal'
 class RemoteChat(ToolLoopMixin, Chat):
-    "Chat against a hosted model through fastllm - the same `rishi.core.Chat` API as the local backends."
+    "Chat against a hosted model through fastllm, with the same `rishi.core.Chat` API as the local backends."
     _runtime = 'remote'
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(mk_oai_content), staticmethod(mk_oai_msg), staticmethod(mk_oai_msgs)
@@ -202,7 +201,7 @@ class RemoteChat(ToolLoopMixin, Chat):
         return out
     @staticmethod
     def hist2fmt(msgs):
-        "Canonical rishi history dicts -> fastllm `Msg`s (media carried through, not stripped)."
+        "Canonical rishi history dicts -> fastllm `Msg`s, media carried through rather than stripped."
         return [to_msg(m) for m in listify(msgs) if m.get('role') != 'system']
 
     def __init__(self, model=None, *, runtime=None, model_path=None, api_key=None, base_url=None,
@@ -210,7 +209,7 @@ class RemoteChat(ToolLoopMixin, Chat):
                  approve=None, tool_max_len=None, max_steps=10, parallel_tools=False,
                  max_parallel_tools=None, final_prompt=dflt_final_prompt_, tool_choice=None, reasoning_effort=None,
                  temp=None, max_output_tokens=4096, retries=2, comp_kw=None, cbs=None, default_cbs=True,
-                 tool_mode='native'):   # 'native' sends schemas on the wire; 'tags' puts them in the system prompt
+                 tool_mode='native'):   # 'native' sends schemas on the wire, 'tags' puts them in the system prompt
         model = core.split_runtime(model)[1]
         self.tool_mode = tool_mode
         self.model_id = model or 'gpt-5.1'
@@ -225,7 +224,7 @@ class RemoteChat(ToolLoopMixin, Chat):
 
     @property
     def token_count(self):
-        "Tokens the last turn reported (prompt + completion); hosted APIs have no live context read-out."
+        "Tokens the last turn reported. Hosted APIs have no live context read-out."
         return self._ctx_tokens
 
     def _kw(self, stream=False, max_output_tokens=None):
@@ -236,8 +235,8 @@ class RemoteChat(ToolLoopMixin, Chat):
         tags = self.tool_mode == 'tags'
         sp = tag_tools_sp(self.toolspecs, self.sp) if tags else self.sp
         if sp: kw['system'] = sp
-        # In tag mode the schemas have already gone out in the system prompt, and putting them
-        # on the wire as well is the thing the transport cannot do.
+        # in tag mode the schemas already went out in the system prompt, and sending them on the
+        # wire as well is the one thing the transport cannot do
         if self.toolspecs and not tags: kw['tools'] = self.toolspecs
         if self.tool_choice is not None and not tags: kw['tool_choice'] = self.tool_choice
         if self.reasoning_effort is not None: kw['reasoning_effort'] = self.reasoning_effort
@@ -249,11 +248,11 @@ class RemoteChat(ToolLoopMixin, Chat):
         return await acomplete(self.hist2fmt(msgs), self.model_id, **self._kw(stream, max_output_tokens))
 
     def _model_step(self, max_output_tokens=None):
-        "One completion, normalized to a `Resp` - the wire call `ToolLoopMixin` drives."
+        "One completion, normalized to a `Resp`. The wire call `ToolLoopMixin` drives."
         return norm_completion(run_coro(self._acomplete(self.hist, False, max_output_tokens)))
 
     def _stream_step(self, max_output_tokens=None):
-        "Stream one completion; yields chunk dicts and leaves the merged `Resp` on `self._step_res`."
+        "Stream one completion, yielding chunk dicts and leaving the merged `Resp` on `self._step_res`."
         async def _agen():
             agen = await self._acomplete(self.hist, True, max_output_tokens)
             async for o in agen: yield o
@@ -265,9 +264,8 @@ class RemoteChat(ToolLoopMixin, Chat):
                     yield {'content': [{'type': 'tool_call', 'name': o.data.get('name', ''),
                                         'arguments': o.data.get('arguments') or {}}]}
             elif isinstance(o, dict):
-                # In tag mode the calls arrive as text, so the text is split on the way past --
-                # otherwise a `<tool_call>` block renders in the transcript as prose before the
-                # final `Resp` quietly turns it into a call.
+                # in tag mode the calls arrive as text, so split it on the way past: otherwise the
+                # `<tool_call>` block renders as prose before the final `Resp` turns it into a call
                 if (t := o.get('text')): yield from (split.feed(t) if split else
                                                      [{'content': [{'type': 'text', 'text': t}]}])
                 if (th := o.get('thinking')): yield {'channels': {'thought': th}}
@@ -276,7 +274,7 @@ class RemoteChat(ToolLoopMixin, Chat):
         self._step_res = norm_completion(comp)
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
-        "Stateless one-shot completion text (no history, no tools); `think=False` asks for `NO_THINK_EFFORT`."
+        "Stateless completion text, with no history and no tools. `think=False` asks for `NO_THINK_EFFORT`."
         msgs = [to_msg({'role': 'user', 'content': prompt})]
         kw = {**self._kw(max_output_tokens=max_tokens), 'system': sp or None, 'tools': None, 'tool_choice': None}
         send = lambda k: resp_text(norm_completion(run_coro(acomplete(msgs, self.model_id, **k))))
@@ -285,7 +283,7 @@ class RemoteChat(ToolLoopMixin, Chat):
         except Exception: return send(kw)   # a provider that spells the effort differently
 
     def _structured_call(self, prompt, schema, sp):
-        "Force the tool call for `schema` and return its arguments; falls back to parsing JSON from prose."
+        "Force the tool call for `schema` and return its arguments, falling back to JSON found in prose."
         spec = mk_toolspec(schema)
         name = spec['function']['name']
         kw = {**self._kw(), 'system': sp or None, 'tools': [spec], 'tool_choice': name}
@@ -298,5 +296,5 @@ class RemoteChat(ToolLoopMixin, Chat):
             raise ValueError(f"model neither called the tool nor returned JSON; reply: {txt[:200]!r}")
 
     def close(self):
-        "Nothing to release - the HTTP client is fastllm's, and cached across chats."
+        "Nothing to release. The HTTP client is fastllm's, and cached across chats."
         pass

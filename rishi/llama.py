@@ -1,4 +1,4 @@
-"""`Chat` over [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) GGUF models — prefix KV cache, GPU offload, and mtmd multimodal (image + audio via patched `MTMDChatHandler`).
+"""`Chat` over [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) GGUF models: prefix KV cache, GPU offload, and mtmd multimodal with image and audio through a patched `MTMDChatHandler`.
 
 Docs: https://vedicreader.github.io/rishi/llama.html.md"""
 
@@ -130,7 +130,7 @@ def _init_mtmd_context(self:MTMDChatHandler, llama_model):
 
 @patch
 def get_image_urls(self:MTMDChatHandler, messages):
-    "Media data-URIs in document order - audio as well as images (upstream collects images only)."
+    "Media data-URIs in document order, audio as well as images. Upstream collects images only."
     urls = []
     for m in messages:
         for p in (m.get('content') if isinstance(m.get('content'), list) else []):
@@ -144,7 +144,7 @@ def get_image_urls(self:MTMDChatHandler, messages):
 
 @patch
 def _get_template_messages(self:MTMDChatHandler, messages, media_marker):
-    "Swap media parts for the marker, then collapse an all-text content list to a string; templates that render `content` directly (Llama/Voxtral-style) would otherwise emit the list's Python repr."
+    "Swap media parts for the marker, then collapse an all-text content list to a string. Templates that render `content` directly, Llama and Voxtral style, would otherwise emit the list's Python repr."
     def _conv(m):
         c = m.get('content')
         if not isinstance(c, list): return dict(m)
@@ -156,7 +156,7 @@ def _get_template_messages(self:MTMDChatHandler, messages, media_marker):
 
 @patch
 def _create_bitmap_from_bytes(self:MTMDChatHandler, image_bytes):
-    "Audio bytes become an mtmd audio bitmap; anything else takes the original image path untouched."
+    "Audio bytes become an mtmd audio bitmap. Anything else takes the original image path untouched."
     if not (detect_mime(image_bytes) or '').startswith('audio/'): return _orig_bitmap(self, image_bytes)
     sr = self._mtmd_cpp.mtmd_get_audio_sample_rate(self.mtmd_ctx)
     a = read_audio(image_bytes, sr if sr and sr > 0 else 16000)
@@ -166,14 +166,14 @@ def _create_bitmap_from_bytes(self:MTMDChatHandler, image_bytes):
 
 # %% ../nbs/01_llama.ipynb #62bf39bf
 class LlamaChat(ToolLoopMixin, Chat):
-    "Sync chat over a local llama.cpp model - the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
+    "Sync chat over a local llama.cpp model: the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
     _runtime = 'llama'
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(_mk_content), staticmethod(_mk_msg), staticmethod(_mk_msgs)
 
     @staticmethod
     def fmt2hist(msgs):
-        "llama's messages are already canonical; just normalize to rishi history dicts."
+        "llama's messages are already canonical, so just normalize to rishi history dicts."
         return _mk_msgs(msgs)
     @staticmethod
     def hist2fmt(msgs):
@@ -183,7 +183,7 @@ class LlamaChat(ToolLoopMixin, Chat):
     @classmethod
     def create_engine(cls, model_id=qwen3_06b, model_path=None, quant='Q4_K_M', n_ctx=8192,
                       n_gpu_layers=0, mmproj=None, verbose=False, **kw):
-        'Build a `llama_cpp.Llama`; `mmproj` adds the projector needed for image/audio input. Override/`@patch` to customize.'
+        'Build a `llama_cpp.Llama`. `mmproj` adds the projector that image and audio input need. `@patch` to customize.'
         ch = None
         if mmproj:
             from llama_cpp.llama_chat_format import MTMDChatHandler
@@ -216,7 +216,7 @@ class LlamaChat(ToolLoopMixin, Chat):
                     max_parallel_tools=max_parallel_tools, final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
 
     def close(self):
-        "Release the engine (only if this Chat created it); idempotent."
+        "Release the engine, if this Chat created it. Idempotent."
         if getattr(self, 'engine', None) is not None and getattr(self.engine, '_rishi_cache_owner', None) is self:
             self.engine._rishi_cache_owner = None
         if self._own_engine and getattr(self, 'engine', None) is not None:
@@ -234,13 +234,13 @@ class LlamaChat(ToolLoopMixin, Chat):
 
         llama.cpp does this itself: `Llama.generate` compares the incoming prompt against the tokens
         already in the context and evaluates only the divergent tail, so an appended turn reuses the
-        whole conversation. What it can't tell us is *how much* it reused - so rishi tracks the one
+        whole conversation. What it cannot tell us is *how much* it reused, so rishi tracks the one
         thing it knows, which is whether it invalidated the prefix itself."""
         owner = getattr(self.engine, '_rishi_cache_owner', None)
         return 0 if self._cache_dirty or owner is not self else getattr(self.engine, 'n_tokens', 0) or 0
 
     def _recreate_conv(self):
-        "llama re-sends the whole message list, so there is no conversation to rebuild - but a rewritten history (eviction, context recovery) no longer matches the cached prefix."
+        "llama re-sends the whole message list, so there is no conversation to rebuild. A rewritten history, after eviction or context recovery, no longer matches the cached prefix."
         self._cache_dirty = True
         if getattr(self.engine, '_rishi_cache_owner', None) is self: self.engine._rishi_cache_owner = None
 
@@ -258,9 +258,9 @@ class LlamaChat(ToolLoopMixin, Chat):
     def _isolated(self, f):
         """Run `f` on the shared engine, optionally without losing the conversation's KV cache.
 
-        A `Llama` has one context, so any completion overwrites it: a `classify`/`structured`/`check`
+        A `Llama` has one context, so any completion overwrites it. A `classify`, `structured` or `check`
         call costs the next real turn a full re-prefill. `preserve_cache=True` saves and restores the
-        whole llama state around it instead - a large copy, so it only pays off on big contexts."""
+        whole llama state around it instead. That is a large copy, so it only pays off on big contexts."""
         if not self.preserve_cache:
             self._cache_dirty = True
             if getattr(self.engine, '_rishi_cache_owner', None) is self: self.engine._rishi_cache_owner = None
@@ -307,7 +307,7 @@ class LlamaChat(ToolLoopMixin, Chat):
         return [{'role': 'system', 'content': sp}] if sp else []
 
     def _msgs(self):
-        "OpenAI-style messages; media in earlier turns is stripped to a placeholder so only the live turn is re-encoded (llama.cpp re-tokenizes the whole list each call)."
+        "OpenAI-style messages. Media in earlier turns is stripped to a placeholder so only the live turn is re-encoded, because llama.cpp re-tokenizes the whole list each call."
         return self._sys_msgs() + [_oai_msg(m if m is self.turn_msg else _strip_media(m)) for m in self.hist]
 
     def _step(self, max_output_tokens=None, stream=False):
@@ -315,7 +315,7 @@ class LlamaChat(ToolLoopMixin, Chat):
             max_tokens=ifnone(max_output_tokens, self.max_output_tokens), **self._samp, **self.comp_kw)
 
     def _model_step(self, max_output_tokens=None):
-        "One completion, normalized to a `Resp` - the single wire call `ToolLoopMixin` drives."
+        "One completion, normalized to a `Resp`. The single wire call `ToolLoopMixin` drives."
         cached = self.cached_tokens          # read before the call: it overwrites the context
         r = norm_resp(self._step(max_output_tokens))
         r['usage'] = self._note_cache(r.get('usage'), cached)
@@ -329,13 +329,13 @@ class LlamaChat(ToolLoopMixin, Chat):
         if max_tokens is not None: kw['max_tokens'] = int(max_tokens)
         return self._isolated(lambda: resp_text(norm_resp(self.engine.create_chat_completion(msgs, **kw))))
     def _structured_call(self, prompt, schema, sp):
-        "Grammar-constrained JSON reply; returns the decoded argument dict."
+        "Grammar-constrained JSON reply, returning the decoded argument dict."
         rf = {'type':'json_object','schema': get_schema(schema)['input_schema']}
         msgs = ([{'role':'system','content':sp}] if sp else []) + [{'role':'user','content':prompt}]
         return self._isolated(lambda: json.loads(resp_text(norm_resp(
             self.engine.create_chat_completion(msgs, response_format=rf, **self._samp)))))
     def _stream_step(self, max_output_tokens=None):
-        "Stream one completion; yields chunk dicts and leaves the merged `Resp` on `self._step_res`."
+        "Stream one completion, yielding chunk dicts and leaving the merged `Resp` on `self._step_res`."
         cached = self.cached_tokens          # read before the call: it overwrites the context
         split, tcs, fin = StreamSplit(), [], None
         for r in self._step(max_output_tokens, stream=True):
@@ -360,6 +360,6 @@ class LlamaChat(ToolLoopMixin, Chat):
 
 # %% ../nbs/01_llama.ipynb #e31eee10
 class LlamaBroker(ChatBroker):
-    'Shared llama.cpp engine broker; each client gets an isolated `LlamaChat` history.'
+    'Shared llama.cpp engine broker. Each client gets an isolated `LlamaChat` history.'
     def __init__(self, address, engine=None, model_id=qwen3_06b, **engine_kw):
         super().__init__(address, LlamaChat, engine, model_id, **engine_kw)

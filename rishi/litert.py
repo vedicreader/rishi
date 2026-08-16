@@ -1,4 +1,4 @@
-"""Google's [litert_lm](https://github.com/google-ai-edge/litert-lm) backend for `.litertlm` Gemma builds — litert message helpers, GPU/NPU backends, KV-cache usage, and `bench()`.
+"""Google's [litert_lm](https://github.com/google-ai-edge/litert-lm) backend for `.litertlm` Gemma builds: litert message helpers, GPU and NPU backends, KV-cache usage, and `bench()`.
 
 Docs: https://vedicreader.github.io/rishi/litert.html.md"""
 
@@ -50,7 +50,7 @@ def _call_id(): return f"call_{uuid.uuid4().hex[:8]}"
 
 _ph = {'image': '[image]', 'audio': '[audio]'}
 def _canon_content(c):
-    "litert content (str or list of parts) -> a canonical string; media -> `[image]`/`[audio]`."
+    "litert content (str or list of parts) -> a canonical string, with media as `[image]`/`[audio]`."
     if c is None or isinstance(c, str): return c
     return '\n'.join(p.get('text', '') if p.get('type') == 'text' else _ph.get(p.get('type'), '[media]')
                      for p in c if isinstance(p, dict))
@@ -237,7 +237,7 @@ class LitertChat(core.Chat):
     @classmethod
     def create_engine(cls, model_id=gemma4_e2b, model_path=None, be=None, vbe=None, abe=None,
                       multimodal=True, cache_dir=None, enable_speculative_decoding=None, **kw):
-        'Build a litert `Engine` on the GPU unless told otherwise; creates `cache_dir` if given. Override/`@patch` to customize.'
+        'Build a litert `Engine` on the GPU unless told otherwise, creating `cache_dir` if given. `@patch` to customize.'
         be, vbe, abe = kw.pop('backend', be), kw.pop('vision_backend', vbe), kw.pop('audio_backend', abe)
         if cache_dir: Path(cache_dir).mkdir(parents=True, exist_ok=True)
         mod = _get_model(model_id, model_path)
@@ -370,7 +370,7 @@ class LitertChat(core.Chat):
         for _ in run_cbs(self, 'after_response'): pass
         return self.turn_res
     def _stream(self, msg, max_output_tokens=None, cbs=None):
-        'Stream a turn as markdown chunks; per-call `cbs` live only for this turn.'
+        'Stream a turn as markdown chunks. Per-call `cbs` live only for this turn.'
         added = self.add_cbs(cbs); prev = getattr(self, '_streaming', False); self._streaming = True
         try:
             self.turn_msg = _mk_msg(msg)
@@ -391,7 +391,7 @@ class LitertChat(core.Chat):
         with self.engine.create_conversation(messages=pre, **kw) as conv:
             return resp_text(conv.send_message(prompt))
     def _structured_call(self, prompt, schema, sp):
-        "Forced tool call; falls back to parsing a JSON reply when the model answers in prose."
+        "Forced tool call, falling back to parsing a JSON reply when the model answers in prose."
         pre = [{'role': 'system', 'content': sp}] if sp else None
         with self.engine.create_conversation(messages=pre, tools=[schema], automatic_tool_calling=False) as conv:
             r = conv.send_message(prompt)
@@ -415,6 +415,6 @@ def bench(model_id=gemma4_e2b, model_path=None, backend=Backend.CPU(), prefill_t
 
 # %% ../nbs/02_litert.ipynb #90e13724
 class LitertBroker(ChatBroker):
-    'Shared LiteRT engine broker; each client gets an isolated `LitertChat` conversation.'
+    'Shared LiteRT engine broker. Each client gets an isolated `LitertChat` conversation.'
     def __init__(self, address, engine=None, model_id=gemma4_e2b, **engine_kw):
         super().__init__(address, LitertChat, engine, model_id, **engine_kw)

@@ -90,12 +90,12 @@ class UsageStats:
 
 # %% ../nbs/00_core.ipynb #6903dd339674673f
 class ChatCallback(GetAttr):
-    "Base chat callback; reads chat state via `GetAttr` (`self.turn_msg` -> `chat.turn_msg`)."
+    "Base chat callback. Reads chat state via `GetAttr`, so `self.turn_msg` is `chat.turn_msg`."
     order, _default, chat, run = 0, 'chat', None, True
     def __repr__(self): return type(self).__name__
 
 def run_cbs(chat, event):
-    "Dispatch `event` to enabled callbacks in `order`; forward any yielded stream items."
+    "Dispatch `event` to enabled callbacks in `order`, forwarding any yielded stream items."
     for cb in chat.cbs.sorted('order'):
         if cb.run and hasattr(cb, event):
             r = getattr(cb, event)()
@@ -142,7 +142,7 @@ def mk_tr_details(name, args, result, mx=2000):
     return f"\n\n<details><summary>{tc_summary_(name, args, result)}</summary>\n\n```json\n{body}\n```\n\n</details>\n\n"
 
 class StreamFormatter:
-    "Format a litert response stream to markdown; thinking streams as a blockquote."
+    "Format a litert response stream to markdown. Thinking streams as a blockquote."
     def __init__(self, mx=2000, showthink=True): self.outp = ''; self._inthink = False; store_attr()
     def format_item(self, o):
         "Format one litert chunk dict (thinking, text, or a tool call)."
@@ -159,12 +159,12 @@ class StreamFormatter:
         self.outp += res
         return res
     def format_stream(self, rs):
-        "Yield markdown strings for each chunk; end any open thinking blockquote."
+        "Yield markdown strings for each chunk, and end any open thinking blockquote."
         for o in rs: yield self.format_item(o)
         if self._inthink: self._inthink = False; yield '\n\n'
 
 def display_stream(chunks):
-    "Progressively render a markdown-chunk stream (e.g. `chat(msg, stream=True)`) live in a notebook; returns the full markdown."
+    "Render a markdown-chunk stream such as `chat(msg, stream=True)` live in a notebook, and return the full markdown."
     from IPython.display import display, Markdown
     h, md = display(Markdown(''), display_id=True), ''
     for c in chunks:
@@ -224,7 +224,7 @@ def is_media(p):
 
 # %% ../nbs/00_core.ipynb #3f2b3d4940ad273f
 def mk_toolspec(f):
-    'OpenAI-style tool spec for callable `f` (via `fastcore.funccall.get_schema`); spec dicts pass through.'
+    'OpenAI-style tool spec for callable `f`, built by `fastcore.funccall.get_schema`. Spec dicts pass through.'
     if isinstance(f, dict): return f
     sc = get_schema(f, pname='parameters')
     sc.get('parameters', {}).pop('title', None)   # get_schema adds a stray title for classes/dataclasses
@@ -235,7 +235,7 @@ _think_re = re.compile(r'<think>(.*?)</think>', re.DOTALL)
 _toolcall_re = re.compile(r'<tool_call>\s*(.*?)\s*</tool_call>', re.DOTALL)
 
 def split_think(text):
-    "Split `<think>...</think>` blocks out of `text`; returns `(clean_text, thought)`."
+    "Split `<think>...</think>` blocks out of `text`, returning `(clean_text, thought)`."
     text = text or ''
     ths = [m.strip() for m in _think_re.findall(text)]
     text = _think_re.sub('', text)
@@ -253,7 +253,7 @@ def mk_tag_tc(s):
             'function': {'name': d.get('name', ''), 'arguments': d.get('arguments') or {}}}
 
 def parse_tool_tags(text):
-    "Parse Hermes/Qwen-style `<tool_call>{json}</tool_call>` blocks; returns `(clean_text, tool_calls)`."
+    "Parse Hermes and Qwen style `<tool_call>{json}</tool_call>` blocks, returning `(clean_text, tool_calls)`."
     tcs = [tc for m in _toolcall_re.findall(text or '') if (tc := mk_tag_tc(m))]
     return _toolcall_re.sub('', text or '').strip('\n'), tcs
 
@@ -343,7 +343,7 @@ def to_oai_msg(m):
     return out
 
 def sum_usage(us):
-    "Sum OpenAI usage dicts (ignoring Nones); None if nothing to sum. A `model` name, if any, is carried through rather than summed."
+    "Sum OpenAI usage dicts, ignoring Nones, or None if there is nothing to sum. A `model` name is carried through rather than summed."
     us = [u for u in us if u]
     if not us: return None
     out = {k: sum(u.get(k, 0) for u in us) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'cached_tokens')}
@@ -378,7 +378,7 @@ class StreamSplit:
         self._strip = False; self.text += out
         return {'content': [{'type': 'text', 'text': out}]}
     def feed(self, s):
-        "Consume a text delta; yield litert-style chunk dicts."
+        "Consume a text delta and yield litert-style chunk dicts."
         self.buf += s
         while True:
             if self.state == 'text':
@@ -412,7 +412,7 @@ class StreamSplit:
                 if (tc := mk_tag_tc(self._tc_buf)): self.tool_calls.append(tc)
                 self._tc_buf = ''
     def finish(self):
-        "Flush leftovers: unterminated think becomes thought; an unclosed tool block is parsed if possible."
+        "Flush leftovers. Unterminated think becomes thought, and an unclosed tool block is parsed if possible."
         s, self.buf = self.buf, ''
         if self.state == 'think':
             if s: self.thought += s; yield {'channels': {'thought': s}}
@@ -463,19 +463,21 @@ def common_prefix_len(a, b):
 #: Runtime name -> (module, Chat class) for `get_runtime`.
 runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat'),
             'mlx': ('rishi.mlx','MlxChat'), 'remote': ('rishi.remote','RemoteChat'),
-            'cursor': ('rishi.cursor','CursorChat'), 'claude': ('rishi.claude','ClaudeChat')}
+            'cursor': ('rishi.cursor','CursorChat'), 'claude': ('rishi.claude','ClaudeChat'),
+            'copilot': ('rishi.copilot','CopilotChat')}
 dflt_runtime = 'litert'
 # checked in order, so the local file/repo shapes win over the hosted model-name patterns
 _pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'), 'llama': ('.gguf','gguf'),
          'mlx': ('mlx-community','mlx_lm','-mlx','mlx-'),
          # cursor before remote: Cursor accepts both decorated and plain `grok-...` ids
          'cursor': ('cursor-', 'grok-'),
-         # `claude` is not inferred: `claude-...` has always meant the hosted API through
-         # `remote`, and moving it would reroute every existing caller. Ask by prefix.
+         # `claude` and `copilot` are not inferred: `claude-...` has always meant the hosted API
+         # through `remote`, and Copilot serves other vendors' models under their own names, so
+         # either one would reroute existing callers. Ask for those by prefix.
          'remote': ('claude-','gpt-','gemini-','kimi-','deepseek-','grok-','sonnet','opus','haiku','fable')}
 
 def split_runtime(model):
-    "Split `'runtime/model'` into `(runtime, model)`; the prefix must name a known runtime, else `(None, model)`."
+    "Split `'runtime/model'` into `(runtime, model)`. The prefix must name a known runtime, else `(None, model)`."
     if isinstance(model, str) and '/' in model:
         b, m = model.split('/', 1)
         if b in runtimes: return b, m
@@ -514,7 +516,7 @@ def _is_path(model):
     return bool(model) and (str(model).lower().endswith(('.gguf', '.litertlm')) or Path(model).exists())
 
 def _mk_obj(schema, d):
-    "Build `schema` from json-decoded `d`, rebuilding nested dataclasses; non-dict values pass through."
+    "Build `schema` from json-decoded `d`, rebuilding nested dataclasses. Non-dict values pass through."
     if not isinstance(d, dict): return d
     if is_dataclass(schema):
         hints = get_type_hints(schema)
@@ -543,7 +545,7 @@ class Caps:
     def known(self): return self.source != 'default'
     def accepts(self, kind): return kind in self.inp
     def fmt(self):
-        "One line for a status bar; silent about a plain text-in/text-out model."
+        "One line for a status bar, silent about a plain text-in, text-out model."
         if not self.known: return 'modalities unknown'
         bits = []
         if self.inp != ('text',): bits.append('in: ' + ' '.join(self.inp))
@@ -589,7 +591,7 @@ def _fallback_caps(model):
     return Caps(hit[1][0], hit[1][1], (), 'fallback') if hit else None
 
 def _hub_files(repo):
-    "Every already-cached file path for hub repo `repo`; never touches the network."
+    "Every already-cached file path for hub repo `repo`. Never touches the network."
     try:
         from huggingface_hub import scan_cache_dir
         r = first(scan_cache_dir().repos, lambda r: r.repo_id == str(repo))
@@ -705,7 +707,7 @@ class Chat:
         return sub.__new__(sub, model, runtime=runtime, model_path=model_path, **kw)
 
     def fmt2hist(self, msgs):
-        "Backend messages -> canonical rishi history dicts (backends override; the base just normalizes)."
+        "Backend messages -> canonical rishi history dicts. Backends override this, and the base just normalizes."
         return self.mk_msgs(msgs)
 
     def _setup(self, model=None, sp='', messages=None, tools=None, approve=None, tool_max_len=None,
@@ -729,11 +731,11 @@ class Chat:
     def pct_full(self): return self.token_count / self.ctx_limit
 
     def add_cb(self, cb):
-        'Register a callback (class or instance); binds `cb.chat` and returns the instance.'
+        'Register a callback, class or instance. Binds `cb.chat` and returns the instance.'
         if isinstance(cb, type): cb = cb()
         cb.chat = self; self.cbs.append(cb); return cb
     def add_cbs(self, cbs):
-        'Register multiple callbacks; returns the `L` of registered instances.'
+        'Register several callbacks and return the `L` of registered instances.'
         return L(cbs).map(self.add_cb)
     def remove_cb(self, cb):
         'Remove a callback by instance, or by class to drop every callback of that type.'
@@ -773,19 +775,19 @@ class Chat:
         return r
 
     def _recreate_conv(self):
-        "Rebuild whatever conversation state the backend holds from `self.hist`. A no-op for backends that re-send the whole message list every call (llama, remote); mlx drops its KV cache, litert recreates its `Conversation`."
+        "Rebuild whatever conversation state the backend holds from `self.hist`. A no-op for backends that re-send the whole message list every call, such as llama and remote. mlx drops its KV cache, and litert recreates its `Conversation`."
         pass
 
     def _set_sp(self, sp):
-        "Note a new system prompt wherever the backend keeps one of its own; `_recreate_conv` applies it."
+        "Note a new system prompt wherever the backend keeps one of its own. `_recreate_conv` applies it."
         pass
 
     def _set_tools(self, tools):
-        "Rebuild whatever tool state the backend holds - wire schemas, a call namespace."
+        "Rebuild whatever tool state the backend holds: wire schemas, a call namespace."
         pass
 
     def reconfigure(self, sp=None, tools=None):
-        "Change `sp` and/or `tools` on a live conversation, keeping `hist`; `None` leaves that half alone, `tools=()` removes every tool."
+        "Change `sp` or `tools` on a live conversation, keeping `hist`. `None` leaves that half alone, and `tools=()` removes every tool."
         if sp is not None: self.sp = sp; self._set_sp(sp)
         if tools is not None: self.tools = L(tools); self._set_tools(self.tools)
         self._recreate_conv()
@@ -796,11 +798,11 @@ class Chat:
         return self._oneshot(prompt, sp, think=think, max_tokens=max_tokens)
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
-        "One stateless completion's text; every backend implements it, `oneshot` is the public door."
+        "One stateless completion's text. Every backend implements it, and `oneshot` is the public door."
         raise NotImplementedError
 
     def recover_context(self, error, max_output_tokens=None):
-        "Backend contract for recovering from a full context window; backends override this."
+        "Backend contract for recovering from a full context window. Backends override this."
         raise ContextWindowExceededError(f'context recovery is not implemented for {type(self).__name__}') from error
 
     def close(self):
@@ -820,9 +822,9 @@ class Chat:
 class ToolLoopMixin:
     """The Python-side tool loop, for backends that get tool calls back as data (llama, mlx).
 
-    The backend supplies one wire call - `_model_step(max_output_tokens) -> Resp` and
+    The backend supplies one wire call, `_model_step(max_output_tokens) -> Resp` and
     `_stream_step(max_output_tokens)`, a generator of chunk dicts that leaves the merged `Resp` on
-    `self._step_res` - plus a `ns` tool namespace. Backends holding conversation state of their own
+    `self._step_res`, plus a `ns` tool namespace. Backends holding conversation state of their own
     also override `_recreate_conv`."""
     _ctx_tokens = 0
 
@@ -832,7 +834,7 @@ class ToolLoopMixin:
         self.ns = mk_ns([t for t in L(tools) if callable(t)])
 
     def call_tool(self, tc):
-        "Run one approved tool call against `self.ns`; an exception comes back as an error string."
+        "Run one approved tool call against `self.ns`. An exception comes back as an error string."
         # a server-side tool is the provider's to run, not ours - record it, never execute it
         if tc.get('server'): return '(run by the provider)'
         try: return call_func(tc_name(tc), (tc.get('function') or {}).get('arguments') or {}, ns=self.ns)
@@ -913,7 +915,7 @@ class ToolLoopMixin:
         return self.turn_res
 
     def _stream(self, msg, max_output_tokens=None, cbs=None):
-        'Stream a turn as markdown chunks; per-call `cbs` live only for this turn.'
+        'Stream a turn as markdown chunks. Per-call `cbs` live only for this turn.'
         added = self.add_cbs(cbs); prev = getattr(self, '_streaming', False); self._streaming = True
         try:
             self.turn_msg = self.mk_msg(msg)
@@ -971,7 +973,7 @@ _sum_sp = 'Summarize the conversation extract faithfully and briefly. Reply with
 class SlidingWindowCallback(ChatCallback):
     """Evict the middle of `hist` before a turn that would overflow the context window.
 
-    Needs `chat.ctx_limit` to be set - without a limit there is nothing to measure `pct_full` against,
+    Needs `chat.ctx_limit` to be set. Without a limit there is nothing to measure `pct_full` against,
     and the callback stays out of the way."""
     order = 5
     def __init__(self,
@@ -1004,7 +1006,7 @@ class SlidingWindowCallback(ChatCallback):
 
 # %% ../nbs/00_core.ipynb #f0b4a3ddc90fc502
 class AsyncChat(GetAttr):
-    "Async twin of `Chat` for either backend; blocking calls run in a worker thread."
+    "Async twin of `Chat` for either backend. Blocking calls run in a worker thread."
     _default = 'chat'
     def __init__(self, model=None, *, runtime=None, **kw):
         self.chat = model if hasattr(model, '_send') else Chat(model, runtime=runtime, **kw)
@@ -1014,7 +1016,7 @@ class AsyncChat(GetAttr):
         return await asyncio.to_thread(self.chat, msg, False, max_output_tokens, cbs)
     @asave_iter
     async def _astream(it, self, msg, max_output_tokens=None, cbs=None):
-        "Drive the sync stream in a worker thread; the returned iterator's `.value` holds the turn's final `Resp`."
+        "Drive the sync stream in a worker thread. The returned iterator's `.value` holds the turn's final `Resp`."
         g = SaveReturn(self.chat(msg, stream=True, max_output_tokens=max_output_tokens, cbs=cbs))
         gi, done = iter(g), object()
         while (o := await asyncio.to_thread(next, gi, done)) is not done: yield o
@@ -1024,7 +1026,7 @@ class AsyncChat(GetAttr):
     async def __aexit__(self, *exc): self.close()
 
 async def adisplay_stream(chunks):
-    "Async twin of `display_stream`: drive an async chunk stream - or the awaitable that yields one (`achat(msg, stream=True)`) - to completion, live-rendering in a notebook when possible; returns the full markdown."
+    "Async twin of `display_stream`. Drives an async chunk stream, or the awaitable that yields one, to completion. Renders live in a notebook where it can, and returns the full markdown."
     if not hasattr(chunks, '__aiter__'): chunks = await chunks
     from IPython.display import display, Markdown
     h, md = display(Markdown(''), display_id=True),''
@@ -1053,7 +1055,7 @@ def browser_approval(url=None, timeout=300):
     return ask
 
 def hitl_policy(modes, ask=None, browser=False):
-    'Build an `approve(tool_call)` from per-tool modes; optionally ask in the Leela browser.'
+    'Build an `approve(tool_call)` from per-tool modes, optionally asking in the Leela browser.'
     ask = browser_approval(browser if isinstance(browser, str) else None) if browser else (ask or _ask_console)
     def approve(tc):
         mode = modes.get(tc['function']['name'], 'check') if modes else 'check'
@@ -1111,7 +1113,7 @@ def sync_iter(agen_fn):
 
 @patch
 def run_py(self:Chat, code, ban_defs=False, g=None):
-    'Run `code` in this chat\'s sandboxed, persistent namespace; return stdout + last-expr repr.'
+    'Run `code` in this chat\'s sandboxed, persistent namespace, and return stdout plus the last expression\'s repr.'
     if not hasattr(self, '_pyrun'): self._pyrun = RunPython(g=g, ban_defs=ban_defs)
     buf = io.StringIO()
     try:
@@ -1136,7 +1138,7 @@ class PyFenceCallback(ChatCallback):
     def __init__(self, max_rounds=5, done=None, pyrun:callable=None):
         store_attr(); self._depth = 0; self._warned = False
     def _active(self):
-        "Only the last-registered `PyFenceCallback` drives a turn; earlier ones yield so a per-call `done` isn't defeated by a persistent one."
+        "Only the last-registered `PyFenceCallback` drives a turn. Earlier ones yield, so a per-call `done` is not defeated by a persistent one."
         cbs = getattr(self.chat, 'cbs', L())
         later = self in cbs and any(isinstance(cb, PyFenceCallback) for cb in cbs[cbs.index(self)+1:])
         if later and not self._warned:
@@ -1144,7 +1146,7 @@ class PyFenceCallback(ChatCallback):
             self._warned = True
         return not later
     def _run_code(self):
-        "Run the last python fence; returns `(output, done)`, or `(None, False)` at the cap or with no fence."
+        "Run the last python fence. Returns `(output, done)`, or `(None, False)` at the cap or with no fence."
         if self._depth >= self.max_rounds: return None, False
         code = extract_code(resp_text(self.chat.turn_res))
         if not code: return None, False
@@ -1154,7 +1156,7 @@ class PyFenceCallback(ChatCallback):
         self.chat.turn_code_out = out
         return out, bool(self.done and self.done(self.chat))
     def after_response(self):
-        "Feed the fence result back; re-queries synchronously, or returns a chunk generator during a streamed turn."
+        "Feed the fence result back. Re-queries synchronously, or returns a chunk generator during a streamed turn."
         if not self._active(): return
         if getattr(self.chat, '_streaming', False): return self._after_stream()
         out, done = self._run_code()
@@ -1185,7 +1187,7 @@ def classify(self:Chat, text, labels, sp='Reply with only the single best label 
 
 @patch
 def structured(self:Chat, prompt, schema, sp='Reply with only a JSON object matching the schema.'):
-    "One-shot structured output; returns `schema(...)`, rebuilding nested dataclasses."
+    "One-shot structured output. Returns `schema(...)`, rebuilding nested dataclasses."
     return _mk_obj(schema, self._structured_call(prompt, schema, sp))
 
 # %% ../nbs/00_core.ipynb #b7e7d57fc1af5337
@@ -1220,7 +1222,7 @@ def is_transient(e):
     return isinstance(e, (ConnectionError, TimeoutError, OSError)) or bool(_transient_re.search(str(e)))
 
 class RecordCache:
-    "Record what a call returned the first time and replay it every time after; the primitive under `CachedChat`."
+    "Record what a call returned the first time and replay it every time after. The primitive under `CachedChat`."
     def __init__(self,
                  path=None,      # the diskcache directory; None -> `CHAT_CACHE`
                  record=None,    # let a miss run for real; None -> the environment
@@ -1239,7 +1241,7 @@ class RecordCache:
         return sha256(json.dumps([self.version, *parts], sort_keys=True, default=str).encode()).hexdigest()
 
     def __call__(self, key, f, what=''):
-        "Replay `key`, else run `f()` and record what it did - including how it failed."
+        "Replay `key`, else run `f()` and record what it did, including how it failed."
         if key in self.cache:
             got, val = self.cache[key]
             if got == 'exc': raise RuntimeError(val)
@@ -1265,7 +1267,7 @@ def _canon_msg(m):
     return [m.get('role', ''), resp_text(m), media, tcs]
 
 class CachedChat:
-    "A `Chat` whose replies are recorded to disk and replayed on a second ask; a replay builds no engine."
+    "A `Chat` whose replies are recorded to disk and replayed on a second ask. A replay builds no engine."
     def __init__(self,
                  model=None,    # anything `Chat` takes; part of the key
                  path=None,     # the diskcache directory; None -> `CHAT_CACHE`
@@ -1288,7 +1290,7 @@ class CachedChat:
     def _key(self, kind, *args, hist=True):
         """What a reply is recorded under: the model, how it was built, the briefing, the tools, the conversation.
 
-        `hist=False` is for the asks that are stateless by definition - a one-shot, a label - which
+        `hist=False` is for the asks that are stateless by definition, a one-shot or a label. They
         would otherwise miss every time the conversation around them grew by a turn.
         """
         return self.rec.key(self.model, kind, self.sp, self.kw,
@@ -1331,7 +1333,7 @@ class CachedChat:
                          f=lambda: self.chat.classify(text, labels, **kw))
 
     def reconfigure(self, sp=None, tools=None):
-        "Change `sp`/`tools` for the asks that follow; both are part of the key, so a replay stays honest."
+        "Change `sp` or `tools` for the asks that follow. Both are part of the key, so a replay stays honest."
         if sp is not None: self.sp = sp
         if tools is not None: self.tools = L(tools)
         if self._chat is not None: self._chat.reconfigure(sp=sp, tools=tools)
@@ -1396,7 +1398,7 @@ class ChatBroker:
         self.clients, self.handlers, self.stopping, self._bound = set(), set(), False, False
 
     def _mk_engine(self):
-        "The shared engine from the backend's own `create_engine`; `model_id=None` leaves that choice to it."
+        "The shared engine from the backend's own `create_engine`. `model_id=None` leaves that choice to it."
         return self.chat_cls.create_engine(**({'model_id': self.model_id} if self.model_id is not None else {}), **self.engine_kw)
 
     def _shut_engine(self):
@@ -1404,7 +1406,7 @@ class ChatBroker:
         if self._own_engine and (c := getattr(self.engine, 'close', None)): c(); self.engine = None
 
     def _free_socket(self):
-        'Clear a socket file a dead broker left behind; a live one is never taken over.'
+        'Clear a socket file a dead broker left behind. A live one is never taken over.'
         if not Path(self.address).exists(): return
         probe = socket.socket(socket.AF_UNIX)
         try: probe.connect(self.address)
@@ -1508,7 +1510,7 @@ class BrokerChat:
         with self.lock: return Resp(self._call({'op': 'send', 'msg': msg, 'max_output_tokens': max_output_tokens})['response'])
 
     def close(self):
-        'Let the broker drop this conversation; idempotent.'
+        'Let the broker drop this conversation. Idempotent.'
         with self.lock:
             if getattr(self, 'conn', None) is None: return
             try: self._call({'op': 'close'})

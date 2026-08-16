@@ -1,4 +1,4 @@
-"""[mlx-lm](https://github.com/ml-explore/mlx-lm) on Apple Silicon — explicit prompt cache, speculative decoding, quantized KV, and mlx-vlm routing for vision/audio.
+"""[mlx-lm](https://github.com/ml-explore/mlx-lm) on Apple Silicon: an explicit prompt cache, speculative decoding, quantized KV, and mlx-vlm routing for vision and audio.
 
 Docs: https://vedicreader.github.io/rishi/mlx.html.md"""
 
@@ -46,7 +46,7 @@ gemma4_e4b = 'mlx-community/gemma-4-e4b-it-4bit'         # vision + audio, needs
 qwen3omni_30b = 'mlx-community/Qwen3-Omni-30B-A3B-Instruct-4bit'   # audio in, needs `rishi[mlx-vlm]`
 
 def read_config(model):
-    "A model's `config.json` as a dict - from a local directory or the hub - or `{}` if it can't be read."
+    "A model's `config.json` as a dict, from a local directory or the hub, or `{}` if it cannot be read."
     try:
         if (p := Path(model)/'config.json').exists(): return json.loads(p.read_text())
     except OSError: pass
@@ -89,14 +89,14 @@ class MlxEngine:
 
 # %% ../nbs/03_mlx.ipynb #c9878e3a40848985
 class MlxChat(ToolLoopMixin, Chat):
-    "Sync chat over a local MLX model - the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
+    "Sync chat over a local MLX model: the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
     _runtime = 'mlx'
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     _media_ok = False    # text-only; `MlxVlmChat` flips this
     mk_content, mk_msg, mk_msgs = staticmethod(mk_oai_content), staticmethod(mk_oai_msg), staticmethod(mk_oai_msgs)
 
     def __new__(cls, model=None, *, runtime=None, model_path=None, vlm=None, **kw):
-        "Send a vision/audio repo to `MlxVlmChat`; `vlm=True`/`False` overrides the config sniff."
+        "Send a vision or audio repo to `MlxVlmChat`. `vlm=True` or `vlm=False` overrides the config sniff."
         if cls is MlxChat:
             tgt = model_path or core.split_runtime(model)[1] or ''
             if vlm if vlm is not None else (bool(tgt) and is_vlm(tgt)): return object.__new__(MlxVlmChat)
@@ -104,7 +104,7 @@ class MlxChat(ToolLoopMixin, Chat):
 
     @staticmethod
     def fmt2hist(msgs):
-        "MLX speaks the canonical format already; just normalize to rishi history dicts."
+        "MLX speaks the canonical format already, so just normalize to rishi history dicts."
         return mk_oai_msgs(msgs)
     @staticmethod
     def hist2fmt(msgs):
@@ -167,17 +167,17 @@ class MlxChat(ToolLoopMixin, Chat):
         return len(self.engine.tokenize(text))
 
     def _reset_cache(self):
-        "Start fresh main/draft KV caches; the next step re-prefills the whole conversation."
+        "Start fresh main and draft KV caches. The next step re-prefills the whole conversation."
         self._cache = make_prompt_cache(self.engine.model, self.max_kv_size)
         if self.engine.draft_model is not None:
             self._cache += make_prompt_cache(self.engine.draft_model, self.max_kv_size)
         self._cache_ids = []
     def _recreate_conv(self):
-        "History was rewritten (context recovery), so the cache no longer matches it; drop it."
+        "History was rewritten by context recovery, so the cache no longer matches it. Drop it."
         if self._cache is not None: self._reset_cache()
 
     def _trim(self, n):
-        "Drop the last `n` tokens from the KV cache; on a cache that can't be trimmed, reset it and return False."
+        "Drop the last `n` tokens from the KV cache. On a cache that cannot be trimmed, reset it and return False."
         if can_trim_prompt_cache(self._cache) and trim_prompt_cache(self._cache, n) == n:
             self._cache_ids = self._cache_ids[:len(self._cache_ids) - n]
             return True
@@ -185,7 +185,7 @@ class MlxChat(ToolLoopMixin, Chat):
         return False
 
     def _check_media(self):
-        "Text-only models can't take image/audio parts; say so rather than silently dropping them."
+        "Text-only models cannot take image or audio parts. Say so rather than dropping them in silence."
         c = (self.turn_msg or {}).get('content')
         if isinstance(c, list) and any(is_media(p) for p in c): raise TypeError(
             "this MLX model is text-only. Install `pip install 'rishi[mlx-vlm]'` and use a vision model "
@@ -204,7 +204,7 @@ class MlxChat(ToolLoopMixin, Chat):
         return list(self.tokenizer.apply_chat_template(self._msgs(), **kw, **self.tmpl_kw))
 
     def _feed_ids(self):
-        "`(all_ids, ids_still_to_prefill, n_cached)` - reuse however much of the prompt the KV cache already covers."
+        "`(all_ids, ids_still_to_prefill, n_cached)`, reusing however much of the prompt the KV cache covers."
         ids = self._prompt_ids()
         if self._cache is None: return ids, ids, 0
         n = common_prefix_len(ids, self._cache_ids)
@@ -227,7 +227,7 @@ class MlxChat(ToolLoopMixin, Chat):
         return stream_generate(self.engine.model, self.tokenizer, feed, **self._gen_kw(max_output_tokens))
 
     def _stream_step(self, max_output_tokens=None):
-        "Stream one completion; yields chunk dicts and leaves the merged `Resp` on `self._step_res`."
+        "Stream one completion, yielding chunk dicts and leaving the merged `Resp` on `self._step_res`."
         ids, feed, cached = self._feed_ids()
         split, fin, gen, pt, gt = StreamSplit(), None, [], 0, 0
         for r in self._generate(feed, max_output_tokens):
@@ -266,7 +266,7 @@ class MlxChat(ToolLoopMixin, Chat):
         save_prompt_cache(str(fn), self._cache, self._cache_metadata())
         return self
     def load_cache(self, fn):
-        "Restore a compatible KV cache written by `save_cache`; reject model/setting mismatches."
+        "Restore a compatible KV cache written by `save_cache`, rejecting model and setting mismatches."
         cache, md = load_prompt_cache(str(fn), return_metadata=True)
         got = md.get('rishi_mlx_cache')
         if not got: raise ValueError('not a rishi MLX cache (missing compatibility metadata)')
@@ -277,7 +277,7 @@ class MlxChat(ToolLoopMixin, Chat):
         return self
 
     def _raw(self, msgs, max_output_tokens=None, think=None):
-        "Stateless completion text for `msgs` - no history, no prompt cache."
+        "Stateless completion text for `msgs`, with no history and no prompt cache."
         tkw = {} if think is None else dict(enable_thinking=think)
         ids = list(self.tokenizer.apply_chat_template(msgs, add_generation_prompt=True, **tkw))
         kw = dict(max_tokens=ifnone(max_output_tokens, self.max_output_tokens))
@@ -290,7 +290,7 @@ class MlxChat(ToolLoopMixin, Chat):
         return split_think(self._raw(msgs, max_output_tokens=max_tokens, think=think))[0]
 
     def _structured_call(self, prompt, schema, sp):
-        "JSON reply for `schema`, parsed out of the model's text - mlx-lm has no grammar constraint built in, so this asks and then parses."
+        "JSON reply for `schema`, parsed out of the model's text. mlx-lm has no grammar constraint built in, so this asks and then parses."
         p = f"{prompt}\n\nReply with only a JSON object matching this schema:\n{json.dumps(get_schema(schema)['input_schema'])}"
         txt = self._oneshot(p, sp, think=False)
         try: return json.loads(extract_fence(txt, 'json'))
@@ -299,7 +299,7 @@ class MlxChat(ToolLoopMixin, Chat):
         except Exception as e: raise ValueError(f"model did not return JSON; reply: {txt[:200]!r}") from e
 
     def close(self):
-        "Release the model (only if this Chat loaded it) and drop the cache; idempotent."
+        "Release the model, if this Chat loaded it, and drop the cache. Idempotent."
         if getattr(self, '_own_engine', False) and getattr(self, 'engine', None) is not None:
             self.engine.close()
             self.engine = None
@@ -316,12 +316,12 @@ def _media_bytes(p):
     return b64decode(p['input_audio']['data'])
 
 class MlxVlmChat(MlxChat):
-    "MLX chat for vision/audio models, via `mlx-vlm`. Same API as `MlxChat`; media in the live turn reaches the model."
+    "MLX chat for vision and audio models, via `mlx-vlm`. Same API as `MlxChat`, and media in the live turn reaches the model."
     _media_ok = True
 
     @classmethod
     def create_engine(cls, model_id=qwen3vl_4b, model_path=None, adapter_path=None, draft_model=None, **kw):
-        'Load a vision/audio model with `mlx_vlm.load`; the "tokenizer" here is a HF processor.'
+        'Load a vision or audio model with `mlx_vlm.load`. The "tokenizer" here is a HF processor.'
         try: from mlx_vlm import load as vlm_load
         except ImportError as e:
             raise ImportError(f"vision/audio MLX models need mlx-vlm ({e}). "
@@ -368,7 +368,7 @@ class MlxVlmChat(MlxChat):
         return vlm_tmpl(self.tokenizer, self.engine.cfg, self._msgs(), **{**kw, **self.tmpl_kw})
 
     def _stream_step(self, max_output_tokens=None):
-        "Stream one completion through mlx-vlm; leaves the merged `Resp` on `self._step_res`."
+        "Stream one completion through mlx-vlm, leaving the merged `Resp` on `self._step_res`."
         from mlx_vlm import stream_generate as vlm_stream
         imgs, auds = self._turn_media()
         kw = dict(max_tokens=ifnone(max_output_tokens, self.max_output_tokens), **self.gen_kw)
@@ -392,6 +392,6 @@ class MlxVlmChat(MlxChat):
 
 # %% ../nbs/03_mlx.ipynb #2d1feab0
 class MlxBroker(ChatBroker):
-    'Shared MLX model broker; each client gets an isolated `MlxChat` prompt cache.'
+    'Shared MLX model broker. Each client gets an isolated `MlxChat` prompt cache.'
     def __init__(self, address, engine=None, model_id=qwen3_4b, **engine_kw):
         super().__init__(address, MlxChat, engine, model_id, **engine_kw)

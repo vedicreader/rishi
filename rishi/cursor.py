@@ -1,4 +1,4 @@
-"""Cursor's models via the `cursor-agent` CLI or SDK — not a completion endpoint but an agent with its own prompt overhead (~16k input tokens/turn).
+"""Cursor's models via the `cursor-agent` CLI or SDK. Not a completion endpoint but an agent with its own prompt overhead, around 16k input tokens a turn.
 
 Docs: https://vedicreader.github.io/rishi/cursor.html.md"""
 
@@ -89,7 +89,7 @@ def cursor_via(via=None, api_key=None):
     return via or ('sdk' if sdk_available(api_key) else 'cli')
 
 def sdk_available(api_key=None):
-    "Can the Python SDK be used here - installed, with a key to use it with?"
+    "Is the Python SDK usable here: installed, with a key to use it with?"
     if not (api_key or os.getenv('CURSOR_API_KEY')): return False
     try:
         from cursor_sdk import Cursor # noqa: F401
@@ -97,11 +97,11 @@ def sdk_available(api_key=None):
     except ImportError: return False
 
 def cursor_models(bin=CURSOR_BIN, api_key=None, via=None):
-    """The model ids this account can actually reach; Cursor is the source of truth, not a table in here.
+    """The model ids this account can reach. Cursor is the source of truth, not a table in here.
 
-    Asked through whichever credential there is - `Cursor.models.list` when the SDK has a key, and
+    Asked through whichever credential there is: `Cursor.models.list` when the SDK has a key, and
     `cursor-agent models` otherwise. The SDK path has no business shelling out to a CLI it does not
-    otherwise need, and a machine with a key but no CLI installed is a perfectly ordinary machine.
+    otherwise need, and a machine with a key but no CLI installed is an ordinary machine.
     """
     if cursor_via(via, api_key) == 'sdk':
         from cursor_sdk import Cursor
@@ -122,7 +122,7 @@ def sdk_mode(mode):
     return _sdk_modes[mode]
 
 def cli_mode(mode):
-    "rishi's mode in the CLI's: `--mode` takes `ask` and `plan` only, and the full agent is its default."
+    "rishi's mode in the CLI's vocabulary. `--mode` takes `ask` and `plan` only, and the agent is the default."
     if mode in (None, 'agent'): return None
     if mode not in _sdk_modes: raise ValueError(f'unknown mode {mode!r}; use {", ".join(_sdk_modes)} or None')
     return mode
@@ -130,7 +130,7 @@ def cli_mode(mode):
 def cursor_model(model, effort=None, fast=None, via='cli'):
     """A model id with its effort and speed attached, spelled the way the active path spells them.
 
-    The SDK carries both as model *parameters* on a `ModelSelection`; the CLI takes the bracket form
+    The SDK carries both as model *parameters* on a `ModelSelection`. The CLI takes the bracket form
     (`grok-4.5[effort=high,fast=true]`) it documents. Same two arguments either way, so a chat that
     moves between paths asks for the same thing rather than being rewritten.
     """
@@ -185,7 +185,7 @@ class CursorToolHandler:
 
 # %% ../nbs/05_cursor.ipynb #cu_chat
 class CursorChat(ToolLoopMixin, Chat):
-    "Chat against a Cursor CLI model - the same `rishi.core.Chat` API, driving `cursor-agent` headless."
+    "Chat against a Cursor CLI model, with the same `rishi.core.Chat` API, driving `cursor-agent` headless."
     _runtime = 'cursor'
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(mk_oai_content), staticmethod(mk_oai_msg), staticmethod(mk_oai_msgs)
@@ -253,19 +253,19 @@ class CursorChat(ToolLoopMixin, Chat):
         return render_prompt(self.hist, self._sp())
 
     def _run(self, fmt, prompt=None):
-        "Run one turn and return the finished process; a non-zero exit is the CLI's message, not a traceback."
+        "Run one turn and return the finished process. A non-zero exit is the CLI's message, not a traceback."
         r = subprocess.run(self._cmd(fmt) + [ifnone(prompt, self._prompt())],
                            capture_output=True, text=True, timeout=self.timeout)
         if r.returncode != 0: raise RuntimeError(f'cursor-agent exited {r.returncode}: {(r.stderr or r.stdout).strip()[:400]}')
         return r
 
     def _note_usage(self, r):
-        "Remember what the turn cost. This is billing volume, not occupancy -- see `token_count`."
+        "Remember what the turn cost. This is billing volume, not occupancy. See `token_count`."
         self._ctx_tokens = (r.get('usage') or {}).get('total_tokens') or self._ctx_tokens
         return r
 
     def _recreate_conv(self):
-        "rishi's history moved - eviction, `reconfigure` - so the live agent's memory of it is now wrong."
+        "rishi's history moved under eviction or `reconfigure`, so the live agent's memory of it is wrong."
         self.close()
 
     def _model_step(self, max_output_tokens=None):
@@ -357,7 +357,7 @@ def _sdk_step(self:CursorChat, max_output_tokens=None):
 
 @patch
 def _sdk_stream_step(self:CursorChat, max_output_tokens=None):
-    "The same turn, streamed; thinking has its own channel and tag calls never render as prose."
+    "The same turn, streamed. Thinking has its own channel, and tag calls never render as prose."
     msg, n = self._tail()
     run, split = self.agent.send(msg), StreamSplit()
     self._sent = n
