@@ -7,8 +7,8 @@ Docs: https://vedicreader.github.io/rishi/mlx.html.md"""
 # %% auto #0
 __all__ = ['qwen3_06b', 'qwen3_17b', 'qwen3_4b', 'qwen3_8b', 'qwen3_30b', 'gemma3_4b', 'llama32_3b', 'qwen3vl_4b', 'gemma4_e4b',
            'qwen3omni_30b', 'read_config', 'is_vlm', 'ctx_len', 'cached_models', 'MlxEngine', 'MlxChat', 'MlxVlmChat',
-           'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream',
-           'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'split_think',
+           'MlxBroker', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
+           'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'split_think',
            'parse_tool_tags', 'StreamSplit']
 
 # %% ../nbs/03_mlx.ipynb #cf11fc103db8abae
@@ -389,3 +389,13 @@ class MlxVlmChat(MlxChat):
         "Release the model and clean up any staged media files."
         if getattr(self, '_td', None) is not None: self._td.cleanup(); self._td = None
         super().close()
+
+# %% ../nbs/03_mlx.ipynb #2d1feab0
+from .core import ChatBroker
+
+class MlxBroker(ChatBroker):
+    'Shared MLX model broker; each client gets an isolated `MlxChat` prompt cache.'
+    def __init__(self, address, engine=None, model_id=qwen3_4b, **engine_kw):
+        super().__init__(address, MlxChat, engine, model_id, **engine_kw)
+# Shared model weights; each client keeps its own prompt cache.
+

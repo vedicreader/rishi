@@ -6,9 +6,10 @@ Docs: https://vedicreader.github.io/rishi/llama.html.md"""
 
 # %% auto #0
 __all__ = ['qwen3_06b', 'qwen3_17b', 'qwen3_4b', 'gemma3_1b', 'gemma3_4b', 'qwen3_6_fusion', 'ornith_9b', 'ornith_31b',
-           'get_mmproj', 'gpu_offload_supported', 'read_audio', 'LlamaChat', 'UsageStats', 'ChatCallback', 'run_cbs',
-           'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'mk_tr_details', 'truncated',
-           'hitl_policy', 'extract_fence', 'mk_toolspec', 'split_think', 'parse_tool_tags', 'norm_resp', 'StreamSplit']
+           'get_mmproj', 'gpu_offload_supported', 'read_audio', 'LlamaChat', 'LlamaBroker', 'UsageStats',
+           'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream',
+           'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'split_think',
+           'parse_tool_tags', 'norm_resp', 'StreamSplit']
 
 # %% ../nbs/01_llama.ipynb #10a30d78
 import json, re, os, io, uuid, ctypes, asyncio
@@ -356,3 +357,13 @@ class LlamaChat(ToolLoopMixin, Chat):
         res['usage'] = self._note_cache({'prompt_tokens': max(n - out, 0), 'completion_tokens': out,
                                          'total_tokens': n}, cached)
         self._step_res = Resp(res)
+
+# %% ../nbs/01_llama.ipynb #e31eee10
+from .core import ChatBroker
+
+class LlamaBroker(ChatBroker):
+    'Shared llama.cpp engine broker; each client gets an isolated `LlamaChat` history.'
+    def __init__(self, address, engine=None, model_id=qwen3_06b, **engine_kw):
+        super().__init__(address, LlamaChat, engine, model_id, **engine_kw)
+# Shared model weights; each client rebuilds its own prompt context.
+

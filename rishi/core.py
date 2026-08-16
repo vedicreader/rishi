@@ -17,7 +17,7 @@ __all__ = ['tool_reminder_', 'TAG_TOOLS_SP', 'CHARS_PER_TOKEN', 'runtimes', 'dfl
            'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'AsyncChat', 'adisplay_stream', 'browser_approval',
            'hitl_policy', 'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'sync_iter',
            'task_complete', 'output_matches', 'PyFenceCallback', 'is_transient', 'RecordCache', 'CachedChat',
-           'repo_root', 'mv_skill_md']
+           'repo_root', 'mv_skill_md', 'ChatBroker', 'BrokerChat']
 
 # %% ../nbs/00_core.ipynb #655b2174ec1d6506
 import json, re, os, asyncio, io, ast, inspect, warnings, uuid
@@ -1355,3 +1355,129 @@ def mv_skill_md(dry_run=True, dir=None):
     else:
         for p in ts: p.mk_write(src.read_text(encoding='utf-8'))
         print(f'Installed -> {list(map(str, ts))}')
+
+# %% ../nbs/00_core.ipynb #e34c528d
+import socket, threading
+
+def _send_json(sock, obj):
+    data = json.dumps(obj).encode()
+    sock.sendall(len(data).to_bytes(4, 'big') + data)
+
+def _recv_json(sock):
+    def read(n):
+        out = bytearray()
+        while len(out) < n:
+            if not (part := sock.recv(n - len(out))): raise EOFError
+            out.extend(part)
+        return bytes(out)
+    n = int.from_bytes(read(4), 'big')
+    if n > 1_000_000: raise ValueError('broker request too large')
+    return json.loads(read(n))
+
+class ChatBroker:
+    'Serve isolated text chats backed by one local model engine.'
+    def __init__(self, address, chat_cls, engine=None, model_id=None, **engine_kw):
+        self.address, self.chat_cls, self.engine = str(address), chat_cls, engine
+        self.model_id, self.engine_kw, self._own_engine = model_id, engine_kw, engine is None
+        self.lock, self.state_lock, self.listener, self.thread = threading.Lock(), threading.Lock(), None, None
+        self.clients, self.handlers, self.stopping = set(), set(), False
+
+    def _free_socket(self):
+        if not Path(self.address).exists(): return
+        probe = socket.socket(socket.AF_UNIX)
+        try: probe.connect(self.address)
+        except ConnectionRefusedError: Path(self.address).unlink()
+        else: raise RuntimeError(f'broker already running at {self.address}')
+        finally: probe.close()
+
+    def start(self):
+        with self.state_lock:
+            if self.listener is not None: return self
+            self._free_socket(); listener = None
+            try:
+                if self.engine is None: self.engine = self.chat_cls.create_engine(self.model_id, **self.engine_kw)
+                listener = socket.socket(socket.AF_UNIX)
+                listener.bind(self.address); listener.listen()
+            except Exception:
+                if listener is not None: listener.close()
+                if self._own_engine and hasattr(self.engine, 'close'): self.engine.close(); self.engine = None
+                Path(self.address).unlink(missing_ok=True)
+                raise
+            self.stopping, self.listener = False, listener
+            self.thread = threading.Thread(target=self._serve, args=(listener,), daemon=True)
+            self.thread.start()
+        return self
+
+    def _serve(self, listener):
+        while True:
+            try: conn, _ = listener.accept()
+            except OSError: break
+            with self.state_lock:
+                if self.stopping: conn.close(); break
+                self.clients.add(conn)
+            thread = threading.Thread(target=self._handle, args=(conn,), daemon=True)
+            with self.state_lock: self.handlers.add(thread)
+            thread.start()
+
+    def _handle(self, conn):
+        chat = None
+        try:
+            while not self.stopping:
+                req = _recv_json(conn)
+                if not isinstance(req, dict) or req.get('op') not in {'open', 'send', 'close'}: raise ValueError('invalid broker request')
+                if req['op'] == 'open':
+                    if chat is not None or not isinstance(req.get('messages', []), list) or not all(isinstance(m, str) for m in req['messages']): raise ValueError('invalid conversation')
+                    with self.lock: chat = self.chat_cls(engine=self.engine, messages=req['messages'], tools=(), default_cbs=True)
+                    _send_json(conn, {'ok': True})
+                elif req['op'] == 'send':
+                    if chat is None or not isinstance(req.get('msg'), str): raise ValueError('invalid message')
+                    with self.lock: res = chat(req['msg'], max_output_tokens=req.get('max_output_tokens'))
+                    _send_json(conn, {'response': res})
+                else: _send_json(conn, {'ok': True}); break
+        except (EOFError, OSError): pass
+        except Exception as e:
+            try: _send_json(conn, {'error': f'{type(e).__name__}: {e}'})
+            except OSError: pass
+        finally:
+            if chat is not None: chat.close()
+            conn.close()
+            with self.state_lock:
+                self.clients.discard(conn); self.handlers.discard(threading.current_thread())
+
+    def close(self):
+        with self.state_lock:
+            listener, thread, handlers = self.listener, self.thread, list(self.handlers)
+            self.stopping, self.listener, self.thread, clients = True, None, None, list(self.clients)
+        if listener is not None: listener.close()
+        for conn in clients: conn.close()
+        for thread in [thread, *handlers]:
+            if thread is not None and thread is not threading.current_thread(): thread.join()
+        with self.lock:
+            if self._own_engine and hasattr(self.engine, 'close'): self.engine.close(); self.engine = None
+        Path(self.address).unlink(missing_ok=True)
+
+class BrokerChat:
+    'One isolated text conversation on a `ChatBroker`.'
+    def __init__(self, address, messages=None):
+        messages = messages or []
+        if not all(isinstance(m, str) for m in messages): raise TypeError('broker messages must be strings')
+        self.conn, self.lock = socket.socket(socket.AF_UNIX), threading.Lock()
+        try: self.conn.connect(str(address)); self._call({'op': 'open', 'messages': messages})
+        except Exception: self.conn.close(); raise
+
+    def _call(self, req):
+        _send_json(self.conn, req); res = _recv_json(self.conn)
+        if 'error' in res: raise RuntimeError(res['error'])
+        return res
+
+    def __call__(self, msg, max_output_tokens=None):
+        if not isinstance(msg, str): raise TypeError('broker messages must be strings')
+        with self.lock: return Resp(self._call({'op': 'send', 'msg': msg, 'max_output_tokens': max_output_tokens})['response'])
+
+    def close(self):
+        with self.lock:
+            if getattr(self, 'conn', None) is None: return
+            try: self._call({'op': 'close'})
+            except (OSError, EOFError): pass
+            self.conn.close(); self.conn = None
+
