@@ -2,6 +2,29 @@
 
 <!-- do not remove -->
 
+## Unreleased
+
+Fixed
+
+- Tools registered on `ClaudeChat` were almost never called. The schemas go out as `<tool_call>`
+  tags in the system prompt, but the harness was still offering the model its own tools over a real
+  tool-use API; given both, the model took the API, was told the caller's tool did not exist there,
+  and reported it as broken without ever emitting a tag. `parse_tool_tags` had nothing to read and
+  `Backend._check_reply` nothing to warn about, so it failed silently. `claude_builtins` is new and
+  defaults to `()`, sending `--tools ''` on the CLI and `tools=[]` on the SDK: the harness keeps no
+  tools, so a tag is the only way the model can act. Pass `None` for the old toolset. Measured over
+  both paths and haiku/sonnet/opus, 1 tool call in 10 became 19 in 19, and at 41 registered tools
+  the prompt fell from ~68k tokens to ~9.8k because the harness's own schemas leave with it.
+
+- `claude_tools=[]` meant "allow nothing" on the SDK path and was silently dropped on the CLI one.
+  Both now read it as unset; an empty toolset is `claude_builtins=()`, which both paths honour.
+
+- `CursorChat` had the same two-channel problem, and `cursor_tools`/`cursor_disallowed` were read
+  only on the SDK path - the documented `cursor_disallowed=('shell',)` default did nothing under the
+  CLI. `cursor_tools` now defaults to `()` (the SDK's "no built-in tools; the model can only respond
+  with text"), and constructing a CLI chat that has tools now raises rather than accept a
+  restriction that path cannot apply; `cursor_tools=None` opts back in to Cursor's own toolset.
+
 ## 0.1.14
 bug fix
 

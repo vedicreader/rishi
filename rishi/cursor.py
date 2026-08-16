@@ -9,10 +9,10 @@ __all__ = ['CURSOR_BIN', 'cursor_default', 'grok45', 'composer25', 'opus5', 'opu
            'sonnet5', 'sonnet46', 'sonnet45', 'sonnet4', 'haiku45', 'gpt56_sol', 'gpt56_terra', 'gpt56_luna', 'gpt55',
            'gpt54', 'gpt54_mini', 'gpt54_nano', 'gpt53_codex', 'gpt52', 'gpt51', 'gpt5_mini', 'gemini36_flash',
            'gemini35_flash', 'gemini31_pro', 'gemini3_flash', 'gemini25_flash', 'kimi_k3', 'kimi_k27_code', 'glm52',
-           'CURSOR_MODELS', 'cursor_bin', 'cursor_via', 'sdk_available', 'cursor_models', 'sdk_mode', 'cursor_model',
-           'norm_cursor', 'norm_cursor_usage', 'CursorChat', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text',
-           'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy', 'extract_fence',
-           'mk_toolspec', 'ToolCall']
+           'CURSOR_MODELS', 'CURSOR_BUILTINS', 'cursor_bin', 'cursor_via', 'sdk_available', 'cursor_models', 'sdk_mode',
+           'cursor_model', 'norm_cursor', 'norm_cursor_usage', 'CursorChat', 'UsageStats', 'ChatCallback', 'run_cbs',
+           'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy',
+           'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/05_cursor.ipynb #cu_imports
 import json, os, shutil, subprocess
@@ -75,6 +75,14 @@ CURSOR_MODELS = {'cursor_default': cursor_default, 'grok45': grok45, 'composer25
                  'gpt5_mini': gpt5_mini, 'gemini36_flash': gemini36_flash, 'gemini35_flash': gemini35_flash,
                  'gemini31_pro': gemini31_pro, 'gemini3_flash': gemini3_flash, 'gemini25_flash': gemini25_flash,
                  'kimi_k3': kimi_k3, 'kimi_k27_code': kimi_k27_code, 'glm52': glm52}
+
+#: Cursor's own toolset, and why the default is none of it. Your tools reach the model as tags in
+#: the prompt; Cursor's reach it as a real tool-use API, and a model offered both takes the real one
+#: and never emits a tag. `()` is the SDK's documented "no built-in tools; the model can only respond
+#: with text", which leaves a tag as the only way to act. `None` restores Cursor's default toolset.
+#: Note `'mcp'` is a capability group covering `LocalAgentOptions.custom_tools`, so a future native
+#: channel wants `('mcp',)` here rather than `()`.
+CURSOR_BUILTINS = ()
 
 def cursor_bin(bin=CURSOR_BIN):
     "Absolute path to the `cursor-agent` binary, or a `FileNotFoundError` that says how to get one."
@@ -171,13 +179,20 @@ class CursorChat(ToolLoopMixin, Chat):
                  fast=None,           # ask for the fast build of the model; None -> the model's own default
                  via=None,            # 'sdk' or 'cli'; None -> the SDK when there is a key and the package
                  api_key=None,        # SDK key; None -> $CURSOR_API_KEY. The CLI path needs none of this
-                 cursor_tools=None,        # Cursor's *own* tools, allowlisted; None -> whatever `mode` allows
+                 cursor_tools=CURSOR_BUILTINS,  # Cursor's *own* toolset; () -> none, None -> whatever `mode` allows
                  cursor_disallowed=('shell',),  # ...and the ones it may never use, whatever `mode` says
                  bin=CURSOR_BIN, timeout=600, cbs=None, default_cbs=True):
         self.model_id = core.split_runtime(model)[1] or grok45
         self._set_tools(tools)
         store_attr('mode,sandbox,trust,workspace,bin,timeout,api_key,cursor_tools,cursor_disallowed,effort,fast')
         self.via = cursor_via(via, api_key)
+        # Restricting Cursor's own toolset is an SDK option with no CLI flag, so on that path this
+        # is a request rishi cannot carry out. Saying so beats a chat that looks configured and
+        # then never calls a tool; `cursor_tools=None` accepts the harness's tools and proceeds.
+        if self.toolspecs and not self.use_sdk and cursor_tools is not None: raise ValueError(
+            "the cursor-agent CLI cannot be told to drop its own tools, and a model that has them "
+            "answers with them instead of emitting a <tool_call> tag. Use via='sdk' to pass "
+            "cursor_tools, or cursor_tools=None to accept Cursor's toolset and the unreliable tags.")
         self._agent, self._sent = None, 0
         self.ctx_limit, self._ctx_tokens = ctx_limit, 0
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
@@ -278,7 +293,8 @@ def _mk_agent(self:CursorChat):
                               SandboxOptions(enabled=self.sandbox not in (False, 'disabled')))
     opts = AgentOptions(model=cursor_model(self.model_id, self.effort, self.fast, via='sdk'),
                         api_key=self.api_key, mode=sdk_mode(self.mode),
-                        tools=self.cursor_tools, disallowed_tools=self.cursor_disallowed, local=local)
+                        tools=None if self.cursor_tools is None else list(self.cursor_tools),
+                        disallowed_tools=self.cursor_disallowed, local=local)
     return Agent.create(opts)
 
 @patch(as_prop=True)

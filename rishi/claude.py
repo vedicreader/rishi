@@ -6,9 +6,9 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_DISALLOWED',
-           'NO_MCP', 'claude_bin', 'sdk_available', 'claude_via', 'norm_claude_usage', 'norm_claude', 'ClaudeChat',
-           'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream',
-           'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
+           'CLAUDE_BUILTINS', 'NO_MCP', 'claude_bin', 'sdk_available', 'claude_via', 'norm_claude_usage', 'norm_claude',
+           'ClaudeChat', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
+           'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import json, shutil, subprocess
@@ -38,6 +38,14 @@ CLAUDE_MODELS = {'opus5': opus5, 'opus48': opus48, 'sonnet5': sonnet5, 'sonnet46
 #: Claude Code's own tools this backend refuses by default. The agent gets its tools from the caller;
 #: letting the harness shell out as well is a second, ungoverned way to touch the machine.
 CLAUDE_DISALLOWED = ('Bash', 'Write', 'Edit', 'NotebookEdit')
+
+#: Claude Code's own toolset, and why the default is none of it. Your tools reach the model as
+#: tags in the system prompt; the harness's reach it as a real tool-use API. Offered both, a model
+#: takes the real channel, is told your tool does not exist there, and reports it as broken without
+#: ever emitting a tag - 1 call in 10 with the harness's toolset, 19 in 19 without it, across
+#: haiku/sonnet/opus and both paths. `()` is `--tools ''`: nothing built in, so a tag is the only
+#: way to act. `None` restores the default toolset, and with it the failure.
+CLAUDE_BUILTINS = ()
 
 #: Declared on every turn, and deliberately empty. A managed configuration forbids *adding* a
 #: dynamic MCP server, so this backend adds none - and it must not reach for `--strict-mcp-config`
@@ -99,7 +107,8 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  ctx_limit=None, approve=None, tool_max_len=None, max_steps=10, parallel_tools=False,
                  max_parallel_tools=None, final_prompt=dflt_final_prompt_,
                  permission_mode='auto',    # Claude Code's gate on its *own* tools; yours are rishi's
-                 claude_tools=None,         # Claude Code's own tools, allowlisted; None -> its default
+                 claude_builtins=CLAUDE_BUILTINS,   # the harness's own toolset; () -> none, None -> its default
+                 claude_tools=None,         # of what `claude_builtins` leaves, what it may use; None -> all
                  claude_disallowed=CLAUDE_DISALLOWED,   # ...and the ones it may never use
                  workspace=None,            # directory Claude Code works in; None -> the cwd
                  effort=None,               # 'low'/'medium'/'high'/'xhigh'/'max'; None -> the default
@@ -107,7 +116,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  bin=CLAUDE_BIN, timeout=600, settings=None, cbs=None, default_cbs=True, **opts):
         self.model_id = core.split_runtime(model)[1] or opus5
         self._set_tools(tools)
-        store_attr('permission_mode,claude_tools,claude_disallowed,workspace,effort,bin,timeout,settings,opts')
+        store_attr('permission_mode,claude_builtins,claude_tools,claude_disallowed,workspace,effort,bin,timeout,settings,opts')
         self.via = claude_via(via)
         self.ctx_limit, self._ctx_tokens = ctx_limit, 0
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
@@ -157,6 +166,9 @@ def _cmd(self:ClaudeChat, fmt):
     if self.effort: cmd += ['--effort', self.effort]
     if self.settings: cmd += ['--settings', str(self.settings)]
     if self.workspace: cmd += ['--add-dir', str(self.workspace)]
+    # `['']` rather than nothing: `--tools` is variadic, and the empty name is how it is told
+    # to offer no built-in tools at all. An empty allowlist is `claude_builtins=()`, not this.
+    if self.claude_builtins is not None: cmd += ['--tools', *(self.claude_builtins or [''])]
     if self.claude_tools: cmd += ['--allowed-tools', *self.claude_tools]
     if self.claude_disallowed: cmd += ['--disallowed-tools', *self.claude_disallowed]
     return cmd
@@ -187,7 +199,8 @@ def _opts(self:ClaudeChat, sp):
               permission_mode=self.permission_mode, settings=self.settings,
               mcp_servers={}, strict_mcp_config=False,   # see `NO_MCP`
               disallowed_tools=list(self.claude_disallowed or ()))
-    if self.claude_tools is not None: kw['allowed_tools'] = list(self.claude_tools)
+    if self.claude_builtins is not None: kw['tools'] = list(self.claude_builtins)
+    if self.claude_tools: kw['allowed_tools'] = list(self.claude_tools)
     if self.effort: kw['effort'] = self.effort
     return ClaudeAgentOptions(**{**kw, **self.opts})
 
