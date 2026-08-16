@@ -103,17 +103,23 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  claude_disallowed=CLAUDE_DISALLOWED,   # ...and the ones it may never use
                  workspace=None,            # directory Claude Code works in; None -> the cwd
                  effort=None,               # 'low'/'medium'/'high'/'xhigh'/'max'; None -> the default
+                 bare=True,                 # answer as a model: no CLAUDE.md, skills, plugins or hooks. See `_cmd`
                  via=None,                  # 'sdk' or 'cli'; None -> the SDK when it is installed
                  bin=CLAUDE_BIN, timeout=600, settings=None, cbs=None, default_cbs=True, **opts):
         self.model_id = core.split_runtime(model)[1] or opus5
         self._set_tools(tools)
-        store_attr('permission_mode,claude_tools,claude_disallowed,workspace,effort,bin,timeout,settings,opts')
+        store_attr('permission_mode,claude_tools,claude_disallowed,workspace,effort,bare,bin,timeout,settings,opts')
         self.via = claude_via(via)
         self.ctx_limit, self._ctx_tokens = ctx_limit, 0
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
                     tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
                     max_parallel_tools=max_parallel_tools, final_prompt=final_prompt, cbs=cbs,
                     default_cbs=default_cbs)
+
+    @property
+    def tool_channel(self):
+        "Where this chat's tool schemas travel. Always the prompt, for now to bypass MCP blocks in eneterprise"
+        return 'tags'
 
     @property
     def use_sdk(self):
@@ -153,6 +159,7 @@ def _cmd(self:ClaudeChat, fmt):
     cmd = [claude_bin(self.bin), '-p', '--output-format', fmt, '--model', self.model_id,
            '--mcp-config', NO_MCP]   # no `--strict-mcp-config`: see `NO_MCP`
     if fmt == 'stream-json': cmd += ['--verbose']   # `-p` refuses stream-json without it
+    if self.bare: cmd += ['--safe-mode']
     if (sp := self._sp()): cmd += ['--system-prompt', sp]
     if self.permission_mode: cmd += ['--permission-mode', self.permission_mode]
     if self.effort: cmd += ['--effort', self.effort]
@@ -184,6 +191,7 @@ def _opts(self:ClaudeChat, sp):
     if self.claude_tools is not None: kw['allowed_tools'] = list(self.claude_tools)
     elif self.toolspecs: kw['tools'] = []   # rishi's tools are the only channel - see `_cmd`
     if self.effort: kw['effort'] = self.effort
+    if self.bare: kw.update(setting_sources=[], skills=[])   # the SDK's `--safe-mode`; see `_cmd`
     return ClaudeAgentOptions(**{**kw, **self.opts})
 
 @patch
@@ -199,9 +207,7 @@ def _sdk_events(self:ClaudeChat, prompt, sp):
                     elif isinstance(b, TextBlock) and b.text: text.append(b.text); yield 'text', b.text
             elif isinstance(m, ResultMessage): res = m
         if res is None: raise RuntimeError('the Agent SDK ended without a result')
-        # `res.result` is the final answer; the accumulated text is the fallback when it is empty
-        yield 'result', {'result': res.result or ''.join(text), 'usage': res.usage,
-                         'is_error': res.is_error, 'subtype': res.subtype}
+        yield 'result', {'result': res.result or ''.join(text), 'usage': res.usage, 'is_error': res.is_error, 'subtype': res.subtype}
     return sync_iter(_agen)
 
 # %% ../nbs/06_claude.ipynb #cl_steps

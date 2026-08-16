@@ -10,9 +10,9 @@ __all__ = ['CURSOR_BIN', 'cursor_default', 'grok45', 'composer25', 'opus5', 'opu
            'gpt54', 'gpt54_mini', 'gpt54_nano', 'gpt53_codex', 'gpt52', 'gpt51', 'gpt5_mini', 'gemini36_flash',
            'gemini35_flash', 'gemini31_pro', 'gemini3_flash', 'gemini25_flash', 'kimi_k3', 'kimi_k27_code', 'glm52',
            'CURSOR_MODELS', 'cursor_bin', 'cursor_via', 'sdk_available', 'cursor_models', 'sdk_mode', 'cli_mode',
-           'cursor_model', 'norm_cursor', 'norm_cursor_usage', 'CursorChat', 'UsageStats', 'ChatCallback', 'run_cbs',
-           'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy',
-           'extract_fence', 'mk_toolspec', 'ToolCall']
+           'cursor_model', 'norm_cursor', 'norm_cursor_usage', 'CursorToolHandler', 'CursorChat', 'UsageStats',
+           'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated',
+           'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/05_cursor.ipynb #cu_imports
 import json, os, shutil, subprocess, warnings
@@ -158,6 +158,31 @@ def norm_cursor_usage(u, model=None):
     return {'prompt_tokens': pt, 'completion_tokens': ct, 'total_tokens': pt + ct,
             'cached_tokens': u.get('cacheReadTokens', 0), 'model': model}
 
+# %% ../nbs/05_cursor.ipynb #cu_native
+class CursorToolHandler:
+    "Bridge Cursor's custom tools to Chat callbacks, HITL approval, the tool-call budget, and history."
+    def __init__(self, chat): self.chat = chat
+
+    def custom_tools(self):
+        "rishi's tools as Cursor `CustomTool`s, or `None` when this chat is on the tags channel."
+        from cursor_sdk import CustomTool
+        if self.chat.tool_channel != 'native': return None
+        return {(fn := ts['function'])['name']: CustomTool(execute=self._exec(fn['name']),
+                    description=fn.get('description', ''), input_schema=fn.get('parameters') or {})
+                for ts in self.chat.toolspecs}
+
+    def _exec(self, name):
+        "The callback Cursor runs for `name`: approve, run, record, hand the result back."
+        def call(args, ctx=None):
+            c = self.chat
+            tc = ToolCall(name, dict(args or {}))
+            ok, denial = c._approve1(tc)
+            c.hist.append({'role': 'assistant', 'content': '', 'tool_calls': [tc]})
+            out = c.call_tool(tc) if ok else denial
+            c._record_tool(tc, out)
+            return str(out)
+        return call
+
 # %% ../nbs/05_cursor.ipynb #cu_chat
 class CursorChat(ToolLoopMixin, Chat):
     "Chat against a Cursor CLI model - the same `rishi.core.Chat` API, driving `cursor-agent` headless."
@@ -182,6 +207,7 @@ class CursorChat(ToolLoopMixin, Chat):
                  bin=CURSOR_BIN, timeout=600, cbs=None, default_cbs=True):
         self.model_id = core.split_runtime(model)[1] or grok45
         self._set_tools(tools)
+        self.tool_handler = CursorToolHandler(self)
         store_attr('mode,sandbox,trust,workspace,bin,timeout,api_key,cursor_tools,cursor_disallowed,effort,fast')
         self.via = cursor_via(via, api_key)
         if not self.use_sdk and cli_mode(self.mode) is None and (cursor_tools is not None or cursor_disallowed):
@@ -192,6 +218,11 @@ class CursorChat(ToolLoopMixin, Chat):
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
                     tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
                     max_parallel_tools=max_parallel_tools, final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
+
+    @property
+    def tool_channel(self):
+        "Where this chat's tool schemas travel: Cursor's own custom tools, or tags in the prompt."
+        return 'native' if self.use_sdk and self.toolspecs and sdk_mode(self.mode) == 'agent' else 'tags'
 
     @property
     def use_sdk(self):
@@ -213,9 +244,13 @@ class CursorChat(ToolLoopMixin, Chat):
         if self.workspace: cmd += ['--workspace', str(self.workspace)]
         return cmd
 
+    def _sp(self):
+        "The briefing, plus the tool schemas when this chat has no native channel to carry them."
+        return self.sp if self.tool_channel == 'native' else tag_tools_sp(self.toolspecs, self.sp)
+
     def _prompt(self):
         "This turn's whole conversation as text, with the tool schemas in it when there are any."
-        return render_prompt(self.hist, tag_tools_sp(self.toolspecs, self.sp))
+        return render_prompt(self.hist, self._sp())
 
     def _run(self, fmt, prompt=None):
         "Run one turn and return the finished process; a non-zero exit is the CLI's message, not a traceback."
@@ -261,12 +296,7 @@ class CursorChat(ToolLoopMixin, Chat):
         self._step_res = self._note_usage(norm_cursor(res, self.model_id))
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
-        """Stateless one-shot text, through whichever path this chat uses.
-
-        `think` and `max_tokens` have no switch on either path - Cursor decides how much a model
-        deliberates and how long it may answer for - so they are accepted and ignored rather than
-        quietly changing the meaning of a cheap job.
-        """
+        "Stateless one-shot text, through whichever path this chat uses."
         msg = f'{sp}\n\n{prompt}' if sp else prompt
         if self.use_sdk:
             agent = self._mk_agent()
@@ -284,9 +314,10 @@ def _mk_agent(self:CursorChat):
     from cursor_sdk import Agent, AgentOptions, LocalAgentOptions, SandboxOptions
     local = LocalAgentOptions(cwd=str(self.workspace or Path.cwd()),
                               sandbox_options=None if self.sandbox is None else
-                              SandboxOptions(enabled=self.sandbox not in (False, 'disabled')))
+                              SandboxOptions(enabled=self.sandbox not in (False, 'disabled')),
+                              custom_tools=self.tool_handler.custom_tools())
     opts = AgentOptions(model=cursor_model(self.model_id, self.effort, self.fast, via='sdk'),
-                        api_key=self.api_key, mode=sdk_mode(self.mode),
+                        api_key=self.api_key, mode=sdk_mode(self.mode), mcp_servers={},
                         tools=self.cursor_tools, disallowed_tools=self.cursor_disallowed, local=local)
     return Agent.create(opts)
 
@@ -298,17 +329,11 @@ def agent(self:CursorChat):
 
 @patch
 def _tail(self:CursorChat):
-    """The part of the conversation the live agent has not seen; the briefing rides on the first one.
-
-    A continuing agent remembers its own replies, so they are left out - what it needs is what
-    happened since: the question, and any tool result the loop has produced for it. A rebuilt agent
-    remembers nothing and gets everything.
-    """
+    'The part of the conversation the live agent has not seen.'
     new = self.hist[self._sent:]
-    if self._sent: new = [m for m in new if m.get('role') != 'assistant']
-    pre = tag_tools_sp(self.toolspecs, self.sp) if not self._sent else ''
-    # the caller marks it sent once the agent has taken it: a send that raises must not leave the
-    # briefing behind, or every turn after a network blip goes out unbriefed and short a message
+    skip = ('assistant', 'tool') if self.tool_channel == 'native' else ('assistant',)
+    if self._sent: new = [m for m in new if m.get('role') not in skip]
+    pre = self._sp() if not self._sent else ''
     return render_prompt(new, pre), len(self.hist)
 
 @patch

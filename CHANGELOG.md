@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.16
+cursor and claude sdk to bypass mcp
+
 ## 0.1.15
 litert, mlx, llama share the same engine and fixes for cursor and claude
 
