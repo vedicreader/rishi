@@ -9,7 +9,7 @@
     "jupyter", "nbconvert",
     "ls", "cat", "head", "tail", "grep", "find", "wc", "sort", "uniq",
     "mkdir", "touch", "cp", "mv",
-    "claude",
+    "claude", "cursor-agent",
     "make", "cargo",
     "echo", "printf", "sed", "awk", "cut", "tr",
     "curl", "wget"

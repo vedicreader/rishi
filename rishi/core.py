@@ -1374,15 +1374,37 @@ def _recv_json(sock):
     if n > 1_000_000: raise ValueError('broker request too large')
     return json.loads(read(n))
 
+def _brok_msgs(req):
+    "An `open` request's `messages`: a list of strings, checked before the engine sees it."
+    msgs = req.get('messages') or []
+    if not isinstance(msgs, list) or not all(isinstance(m, str) for m in msgs): raise ValueError('invalid conversation')
+    return msgs
+
+def _brok_limit(req):
+    "A `send` request's `max_output_tokens`: a positive int, or nothing."
+    n = req.get('max_output_tokens')
+    if n is None: return None
+    if isinstance(n, bool) or not isinstance(n, int) or n < 1: raise ValueError('invalid token limit')
+    return n
+
 class ChatBroker:
-    'Serve isolated text chats backed by one local model engine.'
+    'Serve isolated text chats over a Unix socket, all sharing one local model engine.'
     def __init__(self, address, chat_cls, engine=None, model_id=None, **engine_kw):
         self.address, self.chat_cls, self.engine = str(address), chat_cls, engine
         self.model_id, self.engine_kw, self._own_engine = model_id, engine_kw, engine is None
         self.lock, self.state_lock, self.listener, self.thread = threading.Lock(), threading.Lock(), None, None
-        self.clients, self.handlers, self.stopping = set(), set(), False
+        self.clients, self.handlers, self.stopping, self._bound = set(), set(), False, False
+
+    def _mk_engine(self):
+        "The shared engine from the backend's own `create_engine`; `model_id=None` leaves that choice to it."
+        return self.chat_cls.create_engine(**({'model_id': self.model_id} if self.model_id is not None else {}), **self.engine_kw)
+
+    def _shut_engine(self):
+        'Release the engine, but only one this broker built itself.'
+        if self._own_engine and (c := getattr(self.engine, 'close', None)): c(); self.engine = None
 
     def _free_socket(self):
+        'Clear a socket file a dead broker left behind; a live one is never taken over.'
         if not Path(self.address).exists(): return
         probe = socket.socket(socket.AF_UNIX)
         try: probe.connect(self.address)
@@ -1391,47 +1413,52 @@ class ChatBroker:
         finally: probe.close()
 
     def start(self):
+        'Build the engine if this broker owns one, then serve `address` until `close`.'
         with self.state_lock:
             if self.listener is not None: return self
             self._free_socket(); listener = None
             try:
-                if self.engine is None: self.engine = self.chat_cls.create_engine(self.model_id, **self.engine_kw)
+                if self.engine is None: self.engine = self._mk_engine()
                 listener = socket.socket(socket.AF_UNIX)
-                listener.bind(self.address); listener.listen()
+                listener.bind(self.address)
+                os.chmod(self.address, 0o600)   # this socket drives a model: its owner and nobody else
+                listener.listen()
             except Exception:
                 if listener is not None: listener.close()
-                if self._own_engine and hasattr(self.engine, 'close'): self.engine.close(); self.engine = None
-                Path(self.address).unlink(missing_ok=True)
+                self._shut_engine(); Path(self.address).unlink(missing_ok=True)
                 raise
-            self.stopping, self.listener = False, listener
+            self.stopping, self.listener, self._bound = False, listener, True
             self.thread = threading.Thread(target=self._serve, args=(listener,), daemon=True)
             self.thread.start()
         return self
 
     def _serve(self, listener):
+        'Accept clients until the listener closes, one handler thread each.'
         while True:
             try: conn, _ = listener.accept()
             except OSError: break
+            handler = threading.Thread(target=self._handle, args=(conn,), daemon=True)
             with self.state_lock:
                 if self.stopping: conn.close(); break
-                self.clients.add(conn)
-            thread = threading.Thread(target=self._handle, args=(conn,), daemon=True)
-            with self.state_lock: self.handlers.add(thread)
-            thread.start()
+                self.clients.add(conn); self.handlers.add(handler)
+            handler.start()
 
     def _handle(self, conn):
+        'One client: `open` its chat, run `send` turns through it, drop it on `close`.'
         chat = None
         try:
             while not self.stopping:
                 req = _recv_json(conn)
-                if not isinstance(req, dict) or req.get('op') not in {'open', 'send', 'close'}: raise ValueError('invalid broker request')
-                if req['op'] == 'open':
-                    if chat is not None or not isinstance(req.get('messages', []), list) or not all(isinstance(m, str) for m in req['messages']): raise ValueError('invalid conversation')
-                    with self.lock: chat = self.chat_cls(engine=self.engine, messages=req['messages'], tools=(), default_cbs=True)
+                if not isinstance(req, dict) or (op := req.get('op')) not in {'open', 'send', 'close'}: raise ValueError('invalid broker request')
+                if op == 'open':
+                    if chat is not None: raise ValueError('conversation already open')
+                    msgs = _brok_msgs(req)
+                    with self.lock: chat = self.chat_cls(engine=self.engine, messages=msgs, tools=(), default_cbs=True)
                     _send_json(conn, {'ok': True})
-                elif req['op'] == 'send':
+                elif op == 'send':
                     if chat is None or not isinstance(req.get('msg'), str): raise ValueError('invalid message')
-                    with self.lock: res = chat(req['msg'], max_output_tokens=req.get('max_output_tokens'))
+                    limit = _brok_limit(req)
+                    with self.lock: res = chat(req['msg'], max_output_tokens=limit)
                     _send_json(conn, {'response': res})
                 else: _send_json(conn, {'ok': True}); break
         except (EOFError, OSError): pass
@@ -1439,27 +1466,32 @@ class ChatBroker:
             try: _send_json(conn, {'error': f'{type(e).__name__}: {e}'})
             except OSError: pass
         finally:
-            if chat is not None: chat.close()
+            if chat is not None:
+                with self.lock: chat.close()
             conn.close()
             with self.state_lock:
                 self.clients.discard(conn); self.handlers.discard(threading.current_thread())
 
     def close(self):
+        'Stop serving, drop every client, and release the engine this broker built.'
         with self.state_lock:
             listener, thread, handlers = self.listener, self.thread, list(self.handlers)
-            self.stopping, self.listener, self.thread, clients = True, None, None, list(self.clients)
+            clients, bound = list(self.clients), self._bound
+            self.stopping, self.listener, self.thread, self._bound = True, None, None, False
         if listener is not None: listener.close()
         for conn in clients: conn.close()
-        for thread in [thread, *handlers]:
-            if thread is not None and thread is not threading.current_thread(): thread.join()
-        with self.lock:
-            if self._own_engine and hasattr(self.engine, 'close'): self.engine.close(); self.engine = None
-        Path(self.address).unlink(missing_ok=True)
+        for t in [thread, *handlers]:
+            if t is not None and t is not threading.current_thread(): t.join()
+        with self.lock: self._shut_engine()
+        if bound: Path(self.address).unlink(missing_ok=True)   # never a socket this broker did not bind
+
+    def __enter__(self): return self.start()
+    def __exit__(self, *a): self.close()
 
 class BrokerChat:
-    'One isolated text conversation on a `ChatBroker`.'
+    'One isolated conversation on a `ChatBroker`: strings out, a `Resp` back.'
     def __init__(self, address, messages=None):
-        messages = messages or []
+        messages = list(messages or [])
         if not all(isinstance(m, str) for m in messages): raise TypeError('broker messages must be strings')
         self.conn, self.lock = socket.socket(socket.AF_UNIX), threading.Lock()
         try: self.conn.connect(str(address)); self._call({'op': 'open', 'messages': messages})
@@ -1471,13 +1503,17 @@ class BrokerChat:
         return res
 
     def __call__(self, msg, max_output_tokens=None):
+        'Send one turn through the shared engine.'
         if not isinstance(msg, str): raise TypeError('broker messages must be strings')
         with self.lock: return Resp(self._call({'op': 'send', 'msg': msg, 'max_output_tokens': max_output_tokens})['response'])
 
     def close(self):
+        'Let the broker drop this conversation; idempotent.'
         with self.lock:
             if getattr(self, 'conn', None) is None: return
             try: self._call({'op': 'close'})
             except (OSError, EOFError): pass
             self.conn.close(); self.conn = None
 
+    def __enter__(self): return self
+    def __exit__(self, *a): self.close()

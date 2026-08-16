@@ -99,7 +99,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  ctx_limit=None, approve=None, tool_max_len=None, max_steps=10, parallel_tools=False,
                  max_parallel_tools=None, final_prompt=dflt_final_prompt_,
                  permission_mode='auto',    # Claude Code's gate on its *own* tools; yours are rishi's
-                 claude_tools=None,         # Claude Code's own tools, allowlisted; None -> its default
+                 claude_tools=None,         # Claude Code's own tools, allowlisted; None -> none at all when this chat carries tools
                  claude_disallowed=CLAUDE_DISALLOWED,   # ...and the ones it may never use
                  workspace=None,            # directory Claude Code works in; None -> the cwd
                  effort=None,               # 'low'/'medium'/'high'/'xhigh'/'max'; None -> the default
@@ -152,24 +152,20 @@ def _cmd(self:ClaudeChat, fmt):
     "The `claude` command line for one turn, minus the prompt."
     cmd = [claude_bin(self.bin), '-p', '--output-format', fmt, '--model', self.model_id,
            '--mcp-config', NO_MCP]   # no `--strict-mcp-config`: see `NO_MCP`
+    if fmt == 'stream-json': cmd += ['--verbose']   # `-p` refuses stream-json without it
     if (sp := self._sp()): cmd += ['--system-prompt', sp]
     if self.permission_mode: cmd += ['--permission-mode', self.permission_mode]
     if self.effort: cmd += ['--effort', self.effort]
     if self.settings: cmd += ['--settings', str(self.settings)]
     if self.workspace: cmd += ['--add-dir', str(self.workspace)]
     if self.claude_tools: cmd += ['--allowed-tools', *self.claude_tools]
+    elif self.toolspecs: cmd += ['--tools', '']
     if self.claude_disallowed: cmd += ['--disallowed-tools', *self.claude_disallowed]
     return cmd
 
 @patch
 def _run(self:ClaudeChat, fmt, prompt=None):
-    """Run one turn and return the finished process; a non-zero exit is the CLI's message, not a traceback.
-
-    The prompt goes in on stdin rather than as the trailing argument. Two reasons, and the first one
-    is a bug this had: `--allowed-tools` and `--disallowed-tools` are variadic, so a trailing
-    positional is read as one more tool name and the CLI then reports no prompt at all. The second is
-    that a rendered conversation outgrows `ARG_MAX` long before it outgrows the context window.
-    """
+    """Run one turn and return the finished process; a non-zero exit is the CLI's message, not a traceback."""
     r = subprocess.run(self._cmd(fmt), input=ifnone(prompt, self._prompt()), capture_output=True,
                        text=True, timeout=self.timeout, cwd=str(self.workspace) if self.workspace else None)
     if r.returncode != 0: raise RuntimeError(f'claude exited {r.returncode}: {(r.stderr or r.stdout).strip()[:400]}')
@@ -180,14 +176,13 @@ def _run(self:ClaudeChat, fmt, prompt=None):
 def _opts(self:ClaudeChat, sp):
     "Agent SDK options for one turn, with no MCP server for a managed policy to refuse."
     from claude_agent_sdk import ClaudeAgentOptions
-    # no `max_turns`: it counts the *harness* turns and raises at the cap, and the loop that matters
-    # is rishi's own. With no tools the harness can call, one answer is one turn anyway.
     kw = dict(model=self.model_id, system_prompt=sp or None,
               cwd=str(self.workspace) if self.workspace else None,
               permission_mode=self.permission_mode, settings=self.settings,
               mcp_servers={}, strict_mcp_config=False,   # see `NO_MCP`
               disallowed_tools=list(self.claude_disallowed or ()))
     if self.claude_tools is not None: kw['allowed_tools'] = list(self.claude_tools)
+    elif self.toolspecs: kw['tools'] = []   # rishi's tools are the only channel - see `_cmd`
     if self.effort: kw['effort'] = self.effort
     return ClaudeAgentOptions(**{**kw, **self.opts})
 
@@ -237,10 +232,10 @@ def _stream_step(self:ClaudeChat, max_output_tokens=None):
                 if not (line := line.strip()): continue
                 try: o = json.loads(line)
                 except json.JSONDecodeError: continue
-                if o.get('type') == 'assistant':
-                    for b in (o.get('message') or {}).get('content') or []:
-                        if b.get('type') == 'thinking' and (t := b.get('thinking')): yield {'channels': {'thought': t}}
-                        elif (t := b.get('text')): yield from split.feed(t)
+                if o.get('type') == 'stream_event':
+                    dl = (o.get('event') or {}).get('delta') or {}
+                    if (t := dl.get('thinking')): yield {'channels': {'thought': t}}
+                    elif (t := dl.get('text')): yield from split.feed(t)
                 elif o.get('type') == 'result': out = o
         if out is None: raise RuntimeError(f'claude ended without a result: {proc.stderr.read()[:400]}')
     yield from split.finish()
@@ -248,12 +243,7 @@ def _stream_step(self:ClaudeChat, max_output_tokens=None):
 
 @patch
 def _oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None):
-    """Stateless one-shot text, through whichever path this chat uses.
-
-    `think` and `max_tokens` have no switch on either path - Claude Code decides how much a model
-    deliberates and how long it may answer for - so they are accepted and ignored rather than
-    quietly changing the meaning of a cheap job.
-    """
+    """Stateless one-shot text, through whichever path this chat uses."""
     if self.use_sdk:
         out = next(v for k, v in self._sdk_events(prompt, sp) if k == 'result')
         return resp_text(norm_claude(out, self.model_id))

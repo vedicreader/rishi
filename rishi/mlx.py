@@ -391,11 +391,7 @@ class MlxVlmChat(MlxChat):
         super().close()
 
 # %% ../nbs/03_mlx.ipynb #2d1feab0
-from .core import ChatBroker
-
 class MlxBroker(ChatBroker):
     'Shared MLX model broker; each client gets an isolated `MlxChat` prompt cache.'
     def __init__(self, address, engine=None, model_id=qwen3_4b, **engine_kw):
         super().__init__(address, MlxChat, engine, model_id, **engine_kw)
-# Shared model weights; each client keeps its own prompt cache.
-

@@ -9,13 +9,13 @@ __all__ = ['CURSOR_BIN', 'cursor_default', 'grok45', 'composer25', 'opus5', 'opu
            'sonnet5', 'sonnet46', 'sonnet45', 'sonnet4', 'haiku45', 'gpt56_sol', 'gpt56_terra', 'gpt56_luna', 'gpt55',
            'gpt54', 'gpt54_mini', 'gpt54_nano', 'gpt53_codex', 'gpt52', 'gpt51', 'gpt5_mini', 'gemini36_flash',
            'gemini35_flash', 'gemini31_pro', 'gemini3_flash', 'gemini25_flash', 'kimi_k3', 'kimi_k27_code', 'glm52',
-           'CURSOR_MODELS', 'cursor_bin', 'cursor_via', 'sdk_available', 'cursor_models', 'sdk_mode', 'cursor_model',
-           'norm_cursor', 'norm_cursor_usage', 'CursorChat', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text',
-           'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy', 'extract_fence',
-           'mk_toolspec', 'ToolCall']
+           'CURSOR_MODELS', 'cursor_bin', 'cursor_via', 'sdk_available', 'cursor_models', 'sdk_mode', 'cli_mode',
+           'cursor_model', 'norm_cursor', 'norm_cursor_usage', 'CursorChat', 'UsageStats', 'ChatCallback', 'run_cbs',
+           'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy',
+           'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/05_cursor.ipynb #cu_imports
-import json, os, shutil, subprocess
+import json, os, shutil, subprocess, warnings
 from fastcore.all import Path, store_attr, patch, ifnone
 from . import core
 from .core import *
@@ -121,6 +121,12 @@ def sdk_mode(mode):
     if mode not in _sdk_modes: raise ValueError(f'unknown mode {mode!r}; use {", ".join(_sdk_modes)} or None')
     return _sdk_modes[mode]
 
+def cli_mode(mode):
+    "rishi's mode in the CLI's: `--mode` takes `ask` and `plan` only, and the full agent is its default."
+    if mode in (None, 'agent'): return None
+    if mode not in _sdk_modes: raise ValueError(f'unknown mode {mode!r}; use {", ".join(_sdk_modes)} or None')
+    return mode
+
 def cursor_model(model, effort=None, fast=None, via='cli'):
     """A model id with its effort and speed attached, spelled the way the active path spells them.
 
@@ -171,13 +177,16 @@ class CursorChat(ToolLoopMixin, Chat):
                  fast=None,           # ask for the fast build of the model; None -> the model's own default
                  via=None,            # 'sdk' or 'cli'; None -> the SDK when there is a key and the package
                  api_key=None,        # SDK key; None -> $CURSOR_API_KEY. The CLI path needs none of this
-                 cursor_tools=None,        # Cursor's *own* tools, allowlisted; None -> whatever `mode` allows
-                 cursor_disallowed=('shell',),  # ...and the ones it may never use, whatever `mode` says
+                 cursor_tools=None,        # Cursor's *own* tools, allowlisted; the SDK path only
+                 cursor_disallowed=('shell',),  # ...and the ones it may never use; the SDK path only
                  bin=CURSOR_BIN, timeout=600, cbs=None, default_cbs=True):
         self.model_id = core.split_runtime(model)[1] or grok45
         self._set_tools(tools)
         store_attr('mode,sandbox,trust,workspace,bin,timeout,api_key,cursor_tools,cursor_disallowed,effort,fast')
         self.via = cursor_via(via, api_key)
+        if not self.use_sdk and cli_mode(self.mode) is None and (cursor_tools is not None or cursor_disallowed):
+            warnings.warn('the cursor-agent CLI has no tool allowlist: cursor_tools/cursor_disallowed are '
+                          "the SDK's. On this path `mode` and `sandbox` are what hold the agent back.")
         self._agent, self._sent = None, 0
         self.ctx_limit, self._ctx_tokens = ctx_limit, 0
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
@@ -198,7 +207,7 @@ class CursorChat(ToolLoopMixin, Chat):
         "The `cursor-agent` command line for one turn, minus the prompt."
         cmd = [cursor_bin(self.bin), '-p', '--output-format', fmt,
                '--model', cursor_model(self.model_id, self.effort, self.fast)]
-        if self.mode: cmd += ['--mode', self.mode]
+        if (m := cli_mode(self.mode)): cmd += ['--mode', m]
         if self.sandbox: cmd += ['--sandbox', self.sandbox]
         if self.trust: cmd += ['--trust']
         if self.workspace: cmd += ['--workspace', str(self.workspace)]

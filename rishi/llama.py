@@ -359,11 +359,7 @@ class LlamaChat(ToolLoopMixin, Chat):
         self._step_res = Resp(res)
 
 # %% ../nbs/01_llama.ipynb #e31eee10
-from .core import ChatBroker
-
 class LlamaBroker(ChatBroker):
     'Shared llama.cpp engine broker; each client gets an isolated `LlamaChat` history.'
     def __init__(self, address, engine=None, model_id=qwen3_06b, **engine_kw):
         super().__init__(address, LlamaChat, engine, model_id, **engine_kw)
-# Shared model weights; each client rebuilds its own prompt context.
-
