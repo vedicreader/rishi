@@ -17,7 +17,6 @@ import json, os, time
 import httpx
 from dataclasses import dataclass, replace
 from fastcore.all import L, Path, store_attr, first
-from . import core
 from .core import *
 from .remote import RemoteChat
 
