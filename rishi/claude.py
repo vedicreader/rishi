@@ -6,9 +6,9 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_DISALLOWED',
-           'CLAUDE_BUILTINS', 'NO_MCP', 'claude_bin', 'sdk_available', 'claude_via', 'norm_claude_usage', 'norm_claude',
-           'ClaudeChat', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
-           'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
+           'CLAUDE_BUILTINS', 'NO_MCP', 'MCP_NAME', 'claude_bin', 'sdk_available', 'claude_via', 'norm_claude_usage',
+           'norm_claude', 'ClaudeChat', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp',
+           'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import json, shutil, subprocess
@@ -53,6 +53,9 @@ CLAUDE_BUILTINS = ()
 #: use --strict-mcp-config when an enterprise MCP config is present"). Declaring nothing and
 #: claiming nothing is the only shape a managed machine accepts.
 NO_MCP = '{"mcpServers":{}}'
+
+#: The MCP server rishi's own tools are served under, so a name arrives as `mcp__rishi__<tool>`.
+MCP_NAME = 'rishi'
 
 def claude_bin(bin=CLAUDE_BIN):
     "Absolute path to the `claude` binary, or a `FileNotFoundError` that says how to get one."
@@ -113,11 +116,16 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  workspace=None,            # directory Claude Code works in; None -> the cwd
                  effort=None,               # 'low'/'medium'/'high'/'xhigh'/'max'; None -> the default
                  via=None,                  # 'sdk' or 'cli'; None -> the SDK when it is installed
+                 native=None,               # carry tools natively; None -> yes on the SDK path, no on the CLI
                  bin=CLAUDE_BIN, timeout=600, settings=None, cbs=None, default_cbs=True, **opts):
         self.model_id = core.split_runtime(model)[1] or opus5
         self._set_tools(tools)
         store_attr('permission_mode,claude_builtins,claude_tools,claude_disallowed,workspace,effort,bin,timeout,settings,opts')
         self.via = claude_via(via)
+        if native and not self.use_sdk: raise ValueError(
+            "native=True needs via='sdk': the CLI declares an MCP server through a config file, "
+            'which is the thing a managed policy refuses. Leave native=None to take the SDK here.')
+        self._native, self._mcp_off = native, False
         self.ctx_limit, self._ctx_tokens = ctx_limit, 0
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
                     tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
@@ -130,13 +138,23 @@ class ClaudeChat(ToolLoopMixin, Chat):
         return self.via == 'sdk'
 
     @property
+    def native(self):
+        "Are this chat's tools going out on Claude Code's own channel rather than as tags?"
+        return bool(self.toolspecs) and self.use_sdk and self._native is not False and not self._mcp_off
+
+    @property
+    def tool_channel(self):
+        "`'native'` when the harness carries the schemas, `'tags'` when the system prompt does."
+        return 'native' if self.native else 'tags'
+
+    @property
     def token_count(self):
         "the prompt this chat would send next. claude code doesn't give you usage. we estimate"
         return est_tokens(self._prompt()) + est_tokens(self._sp())
 
     def _sp(self):
-        "The briefing plus the tool schemas, for the one channel a managed MCP policy cannot close."
-        return tag_tools_sp(self.toolspecs, self.sp)
+        "The briefing, plus the tool schemas when nothing else is carrying them."
+        return self.sp if self.native else tag_tools_sp(self.toolspecs, self.sp)
 
     def _prompt(self):
         "This turn's whole conversation as text. The briefing is not in here - it has its own channel."
@@ -189,6 +207,26 @@ def _run(self:ClaudeChat, fmt, prompt=None):
 
 # %% ../nbs/06_claude.ipynb #cl_sdk
 @patch
+def _mcp_server(self:ClaudeChat):
+    """rishi's tools as an in-process MCP server: no process, no socket, nothing written to disk.
+
+    Each tool is registered under its bare name and reached as `mcp__rishi__<name>`; the callback
+    closes over the bare one because that is what `call_tool` looks up in `ns`.
+    """
+    from claude_agent_sdk import create_sdk_mcp_server, tool
+    def mk(sc):
+        async def run(args, _n=sc['name']):
+            return {'content': [{'type': 'text', 'text': str(run_native(self, _n, args))}]}
+        run.__name__ = sc['name']
+        return tool(sc['name'], sc.get('description') or '', sc.get('parameters') or {})(run)
+    return create_sdk_mcp_server(MCP_NAME, tools=[mk(t['function']) for t in self.toolspecs])
+
+@patch
+def _mcp_names(self:ClaudeChat):
+    "What the model may call, spelled the way Claude Code namespaces an MCP server's tools."
+    return [f"mcp__{MCP_NAME}__{t['function']['name']}" for t in self.toolspecs]
+
+@patch
 def _opts(self:ClaudeChat, sp):
     "Agent SDK options for one turn, with no MCP server for a managed policy to refuse."
     from claude_agent_sdk import ClaudeAgentOptions
@@ -201,6 +239,9 @@ def _opts(self:ClaudeChat, sp):
               disallowed_tools=list(self.claude_disallowed or ()))
     if self.claude_builtins is not None: kw['tools'] = list(self.claude_builtins)
     if self.claude_tools: kw['allowed_tools'] = list(self.claude_tools)
+    # last, and overriding both: an empty `tools` restricts the *built-in* set and leaves an MCP
+    # server's tools reachable, so the harness still carries nothing of its own here
+    if self.native: kw.update(mcp_servers={MCP_NAME: self._mcp_server()}, allowed_tools=self._mcp_names())
     if self.effort: kw['effort'] = self.effort
     return ClaudeAgentOptions(**{**kw, **self.opts})
 
@@ -224,22 +265,50 @@ def _sdk_events(self:ClaudeChat, prompt, sp):
 
 # %% ../nbs/06_claude.ipynb #cl_steps
 @patch
+def _fallback(self:ClaudeChat, e):
+    """A managed policy refused the MCP channel, so move to tags and let the caller try once more.
+
+    Learned from the failure rather than declared up front: a configuration at one of the documented
+    paths could be detected, but one somewhere nobody documented causes exactly the same refusal and
+    is only ever visible here. Setting `_mcp_off` makes `native` false, so the retry goes out as tags
+    and a second refusal cannot match - one turn is the whole cost of finding out.
+    """
+    if not (self.native and mcp_refused(e)): return False
+    self._mcp_off = True
+    return True
+
+@patch
+def _sdk_once(self:ClaudeChat):
+    "One `query` to a finished `Resp`; both the transport and `is_error` can raise the refusal."
+    out = next(v for k, v in self._sdk_events(self._prompt(), self._sp()) if k == 'result')
+    return norm_claude(out, self.model_id)
+
+@patch
 def _model_step(self:ClaudeChat, max_output_tokens=None):
     "One wire call, through whichever path this chat uses."
-    if self.use_sdk:
-        out = next(v for k, v in self._sdk_events(self._prompt(), self._sp()) if k == 'result')
-        return self._note_usage(norm_claude(out, self.model_id))
-    return self._note_usage(norm_claude(json.loads(self._run('json').stdout), self.model_id))
+    if not self.use_sdk: return self._note_usage(norm_claude(json.loads(self._run('json').stdout), self.model_id))
+    try: return self._note_usage(self._sdk_once())
+    except Exception as e:
+        if not self._fallback(e): raise
+    return self._note_usage(self._sdk_once())
 
 @patch
 def _stream_step(self:ClaudeChat, max_output_tokens=None):
     "The same turn, streamed: thinking on its own channel, and tag calls never rendered as prose."
-    split, out = StreamSplit(), None
+    split, out, sent = StreamSplit(), None, False
     if self.use_sdk:
-        for kind, v in self._sdk_events(self._prompt(), self._sp()):
-            if kind == 'thought': yield {'channels': {'thought': v}}
-            elif kind == 'text': yield from split.feed(v)
-            else: out = v
+        # a refusal arrives before any content, so the retry is only safe while nothing has been
+        # yielded - past that the caller has seen half a turn and `_fallback` has to stay out of it
+        try:
+            for kind, v in self._sdk_events(self._prompt(), self._sp()):
+                if kind == 'thought': sent = True; yield {'channels': {'thought': v}}
+                elif kind == 'text': sent = True; yield from split.feed(v)
+                else: out = v
+        except Exception as e:
+            if sent or not self._fallback(e): raise
+            yield from self._stream_step(max_output_tokens); return
+        if (out or {}).get('is_error') and not sent and self._fallback(RuntimeError(out.get('result') or out.get('subtype') or '')):
+            yield from self._stream_step(max_output_tokens); return
     else:
         proc = subprocess.Popen(self._cmd('stream-json') + ['--include-partial-messages'],
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,

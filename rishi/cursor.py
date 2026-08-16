@@ -179,6 +179,7 @@ class CursorChat(ToolLoopMixin, Chat):
                  fast=None,           # ask for the fast build of the model; None -> the model's own default
                  via=None,            # 'sdk' or 'cli'; None -> the SDK when there is a key and the package
                  api_key=None,        # SDK key; None -> $CURSOR_API_KEY. The CLI path needs none of this
+                 native=None,         # carry tools as Cursor's own custom tools; None -> yes on the SDK path
                  cursor_tools=CURSOR_BUILTINS,  # Cursor's *own* toolset; () -> none, None -> whatever `mode` allows
                  cursor_disallowed=('shell',),  # ...and the ones it may never use, whatever `mode` says
                  bin=CURSOR_BIN, timeout=600, cbs=None, default_cbs=True):
@@ -189,6 +190,10 @@ class CursorChat(ToolLoopMixin, Chat):
         # Restricting Cursor's own toolset is an SDK option with no CLI flag, so on that path this
         # is a request rishi cannot carry out. Saying so beats a chat that looks configured and
         # then never calls a tool; `cursor_tools=None` accepts the harness's tools and proceeds.
+        self._native = native
+        if native and not self.use_sdk: raise ValueError(
+            "native=True needs via='sdk': custom tools are an SDK option, and the CLI takes MCP "
+            'servers only from the user\'s own .cursor/mcp.json, which is not rishi\'s to write.')
         if self.toolspecs and not self.use_sdk and cursor_tools is not None: raise ValueError(
             "the cursor-agent CLI cannot be told to drop its own tools, and a model that has them "
             "answers with them instead of emitting a <tool_call> tag. Use via='sdk' to pass "
@@ -203,6 +208,21 @@ class CursorChat(ToolLoopMixin, Chat):
     def use_sdk(self):
         "Is this chat going through the Python SDK rather than the CLI?"
         return self.via == 'sdk'
+
+    @property
+    def native(self):
+        "Are this chat's tools going out as Cursor's own custom tools rather than as tags?"
+        return bool(self.toolspecs) and self.use_sdk and self._native is not False
+
+    @property
+    def tool_channel(self):
+        "`'native'` when Cursor carries the schemas, `'tags'` when the prompt does."
+        return 'native' if self.native else 'tags'
+
+    def _builtins(self):
+        "The built-in toolset to ask for. `'mcp'` covers custom tools, so it has to survive `()`."
+        if self.cursor_tools is None: return None
+        return list(dict.fromkeys([*self.cursor_tools, *(('mcp',) if self.native else ())]))
 
     @property
     def token_count(self):
@@ -290,12 +310,25 @@ def _mk_agent(self:CursorChat):
     from cursor_sdk import Agent, AgentOptions, LocalAgentOptions, SandboxOptions
     local = LocalAgentOptions(cwd=str(self.workspace or Path.cwd()),
                               sandbox_options=None if self.sandbox is None else
-                              SandboxOptions(enabled=self.sandbox not in (False, 'disabled')))
+                              SandboxOptions(enabled=self.sandbox not in (False, 'disabled')),
+                              custom_tools=self._custom_tools() if self.native else None)
     opts = AgentOptions(model=cursor_model(self.model_id, self.effort, self.fast, via='sdk'),
-                        api_key=self.api_key, mode=sdk_mode(self.mode),
-                        tools=None if self.cursor_tools is None else list(self.cursor_tools),
+                        api_key=self.api_key, mode=sdk_mode(self.mode), tools=self._builtins(),
                         disallowed_tools=self.cursor_disallowed, local=local)
     return Agent.create(opts)
+
+@patch
+def _custom_tools(self:CursorChat):
+    """rishi's tools as Cursor's own, which needs no MCP server and writes nothing to the user's config.
+
+    `execute` runs on the callback server's thread, so it can block on an approval the way rishi's
+    own loop does. A plain string comes back as text content; the SDK normalizes it.
+    """
+    from cursor_sdk import CustomTool
+    def mk(sc):
+        return CustomTool(execute=lambda args, ctx, _n=sc['name']: str(run_native(self, _n, args)),
+                          description=sc.get('description') or '', input_schema=sc.get('parameters') or {})
+    return {t['function']['name']: mk(t['function']) for t in self.toolspecs}
 
 @patch(as_prop=True)
 def agent(self:CursorChat):
@@ -313,7 +346,9 @@ def _tail(self:CursorChat):
     """
     new = self.hist[self._sent:]
     if self._sent: new = [m for m in new if m.get('role') != 'assistant']
-    pre = tag_tools_sp(self.toolspecs, self.sp) if not self._sent else ''
+    # the briefing still rides on the first send when Cursor carries the schemas; only the tag
+    # protocol drops out, because there is nothing left for the model to punctuate
+    pre = '' if self._sent else (self.sp if self.native else tag_tools_sp(self.toolspecs, self.sp))
     # the caller marks it sent once the agent has taken it: a send that raises must not leave the
     # briefing behind, or every turn after a network blip goes out unbriefed and short a message
     return render_prompt(new, pre), len(self.hist)
@@ -335,7 +370,11 @@ def _sdk_step(self:CursorChat, max_output_tokens=None):
     msg, n = self._tail()
     run = self.agent.send(msg)
     self._sent = n
-    return self._note_usage(self._sdk_resp(run))
+    res = self._note_usage(self._sdk_resp(run))
+    # the tools ran inside that `wait`, and the agent saw every one of them: `n` was measured before
+    # `run_native` appended them, and re-sending an agent its own tool calls is how a loop starts
+    if self.native: self._sent = len(self.hist)
+    return res
 
 @patch
 def _sdk_stream_step(self:CursorChat, max_output_tokens=None):
@@ -351,6 +390,7 @@ def _sdk_stream_step(self:CursorChat, max_output_tokens=None):
                 if getattr(b, 'type', None) == 'text' and (tx := getattr(b, 'text', '')): yield from split.feed(tx)
     yield from split.finish()
     self._step_res = self._note_usage(self._sdk_resp(run))
+    if self.native: self._sent = len(self.hist)   # as in `_sdk_step`
 
 @patch
 def close(self:CursorChat):

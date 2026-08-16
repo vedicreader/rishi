@@ -6,18 +6,18 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['tool_reminder_', 'TAG_TOOLS_SP', 'CHARS_PER_TOKEN', 'runtimes', 'dflt_runtime', 'MODALITIES', 'CAPS_FALLBACK',
-           'ENDPOINT_TOOLS', 'budget_msg_', 'dflt_final_prompt_', 'qa_sp_', 'CHAT_CACHE', 'KEY_VERSION', 'UsageStats',
-           'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'quote_', 'Resp', 'tc_summary_', 'mk_tr_details',
-           'StreamFormatter', 'display_stream', 'truncated', 'TruncationCallback', 'mk_oai_content', 'mk_oai_msg',
-           'mk_oai_msgs', 'is_media', 'mk_toolspec', 'split_think', 'mk_tag_tc', 'parse_tool_tags', 'tag_tools_sp',
-           'est_tokens', 'render_prompt', 'parse_args', 'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media',
-           'StreamSplit', 'acc_tc', 'UsageCallback', 'ToolReminderCallback', 'common_prefix_len', 'split_runtime',
-           'infer_runtime', 'resolve_runtime', 'get_runtime', 'Caps', 'model_caps', 'ToolCall', 'tc_name',
-           'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError', 'is_ctx_error', 'Chat', 'ToolLoopMixin',
-           'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'AsyncChat', 'adisplay_stream', 'browser_approval',
-           'hitl_policy', 'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'sync_iter',
-           'task_complete', 'output_matches', 'PyFenceCallback', 'is_transient', 'RecordCache', 'CachedChat',
-           'repo_root', 'mv_skill_md']
+           'ENDPOINT_TOOLS', 'budget_msg_', 'dflt_final_prompt_', 'MCP_REFUSED', 'qa_sp_', 'CHAT_CACHE', 'KEY_VERSION',
+           'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'quote_', 'Resp', 'tc_summary_',
+           'mk_tr_details', 'StreamFormatter', 'display_stream', 'truncated', 'TruncationCallback', 'mk_oai_content',
+           'mk_oai_msg', 'mk_oai_msgs', 'is_media', 'mk_toolspec', 'split_think', 'mk_tag_tc', 'parse_tool_tags',
+           'tag_tools_sp', 'est_tokens', 'render_prompt', 'parse_args', 'norm_resp', 'to_oai_msg', 'sum_usage',
+           'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback', 'ToolReminderCallback', 'common_prefix_len',
+           'split_runtime', 'infer_runtime', 'resolve_runtime', 'get_runtime', 'Caps', 'model_caps', 'ToolCall',
+           'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError', 'is_ctx_error', 'Chat',
+           'ToolLoopMixin', 'mcp_refused', 'run_native', 'msg_groups', 'evict_middle', 'SlidingWindowCallback',
+           'AsyncChat', 'adisplay_stream', 'browser_approval', 'hitl_policy', 'extract_code', 'extract_fence',
+           'matches_', 'mk_result_fence', 'run_coro', 'sync_iter', 'task_complete', 'output_matches', 'PyFenceCallback',
+           'is_transient', 'RecordCache', 'CachedChat', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #655b2174ec1d6506
 import json, re, os, asyncio, io, ast, inspect, warnings, uuid
@@ -943,6 +943,27 @@ class ToolLoopMixin:
             yield from run_cbs(self, 'after_response')
             return self.turn_res   # stream's final Resp, captured by SaveReturn / AsyncChat `.value`
         finally: self._streaming = prev; self.remove_cbs(added)
+
+# %% ../nbs/00_core.ipynb #d627c212
+#: What a harness says when a managed configuration will not carry the tool schemas. The wording is
+#: the SDK's and arrives under several of these at once, so this matches loosely - and loosely is the
+#: safe direction, because a false match falls back to a tags channel that works.
+MCP_REFUSED = ('mcp', 'strict_mcp_config', 'allowed_tools', 'disallowed', 'not permitted', 'policy')
+
+def mcp_refused(e):
+    "Is this exception a managed configuration refusing the wire tool channel?"
+    return any(s in f'{e}'.lower() for s in MCP_REFUSED)
+
+def run_native(chat, name, args):
+    "Run one harness-issued tool call through rishi's gates, and record it as rishi's own loop would."
+    tc = {'id': f'call_{uuid.uuid4().hex[:8]}', 'type': 'function',
+          'function': {'name': name, 'arguments': dict(args or {})}}
+    # the assistant message first, as `_run_tools` does: `msg_groups` keeps a call with its result,
+    # and a result whose call is missing is a group it would split in the wrong place
+    chat.hist.append({'role': 'assistant', 'content': '', 'tool_calls': [tc]})
+    ok, denial = chat._approve1(tc)
+    chat._record_tool(tc, chat.call_tool(tc) if ok else denial)
+    return chat.turn_tool_result
 
 # %% ../nbs/00_core.ipynb #71eab7d9589c570c
 def msg_groups(hist):
