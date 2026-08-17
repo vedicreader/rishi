@@ -157,3 +157,4 @@ checklink/cookies.txt
 
 # Quarto
 .quarto
+.claude/

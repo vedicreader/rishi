@@ -104,7 +104,7 @@ class MlxChat(ToolLoopMixin, Chat):
 
     @staticmethod
     def fmt2hist(msgs):
-        "MLX speaks the canonical format already, so just normalize to rishi history dicts."
+        "Normalize MLX messages to rishi history dicts."
         return mk_oai_msgs(msgs)
     @staticmethod
     def hist2fmt(msgs):

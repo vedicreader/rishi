@@ -680,7 +680,7 @@ class ContextWindowExceededError(RuntimeError):
 
 # backends surface an overflow as a plain RuntimeError/ValueError whose text is all we have to go on
 _ctx_err_markers = ('context window', 'context length', 'max number of tokens', 'out of bounds',
-                    'kv cache', 'n_ctx', 'exceed context')
+                    'kv cache', 'n_ctx', 'exceed context', 'available state entries')
 
 def is_ctx_error(chat, e):
     "Best-effort: does `e`, raised from a backend step, look like the context window filling up?"
@@ -747,11 +747,9 @@ class Chat:
 
     def __call__(self, msg=None, stream=False, max_output_tokens=None, cbs=None):
         '''Run one chat turn; a `Resp`, or a generator when `stream` is set.
-
         `stream=True` yields markdown strings, ready to print or hand to `display_stream`.
         `stream='raw'` yields the underlying chunk dicts instead, for programmatic consumers that
         want the text/thinking/tool-call structure rather than rendered markdown.
-
         One `Chat` is one conversation: `hist`, the turn state and the backend cache are all shared
         mutable state, so a single instance is not safe to drive from two threads at once.'''
         self.use, self._steps, self._budget_exceeded, self._final_sent = UsageStats(), 0, False, False
@@ -821,7 +819,6 @@ class Chat:
 # %% ../nbs/00_core.ipynb #8bc4370e76e1985e
 class ToolLoopMixin:
     """The Python-side tool loop, for backends that get tool calls back as data (llama, mlx).
-
     The backend supplies one wire call, `_model_step(max_output_tokens) -> Resp` and
     `_stream_step(max_output_tokens)`, a generator of chunk dicts that leaves the merged `Resp` on
     `self._step_res`, plus a `ns` tool namespace. Backends holding conversation state of their own
@@ -972,7 +969,6 @@ _sum_sp = 'Summarize the conversation extract faithfully and briefly. Reply with
 
 class SlidingWindowCallback(ChatCallback):
     """Evict the middle of `hist` before a turn that would overflow the context window.
-
     Needs `chat.ctx_limit` to be set. Without a limit there is nothing to measure `pct_full` against,
     and the callback stays out of the way."""
     order = 5

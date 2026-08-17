@@ -173,7 +173,7 @@ class LlamaChat(ToolLoopMixin, Chat):
 
     @staticmethod
     def fmt2hist(msgs):
-        "llama's messages are already canonical, so just normalize to rishi history dicts."
+        "Normalize llama messages to rishi history dicts."
         return _mk_msgs(msgs)
     @staticmethod
     def hist2fmt(msgs):

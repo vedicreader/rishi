@@ -39,9 +39,7 @@ CLAUDE_MODELS = {'opus5': opus5, 'opus48': opus48, 'sonnet5': sonnet5, 'sonnet46
 #: and letting the harness shell out as well is a second, ungoverned way to touch the machine.
 CLAUDE_DISALLOWED = ('Bash', 'Write', 'Edit', 'NotebookEdit')
 
-#: Declared on every turn, and deliberately empty. A managed configuration forbids *adding* a
-#: dynamic MCP server, and refuses `--strict-mcp-config` as well. Declaring nothing and claiming
-#: nothing is the only shape it accepts.
+#: Managed configurations accept only an empty declared MCP server list.
 NO_MCP = '{"mcpServers":{}}'
 
 def claude_bin(bin=CLAUDE_BIN):
