@@ -2,9 +2,9 @@
 
 ## Cursor Cloud specific instructions
 
-`rishi` is an [nbdev](https://nbdev.fast.ai/) Python library, a thin `Chat` layer over five local and
-hosted backends (litert, llama.cpp, mlx, ollama, remote) plus cursor-agent, Claude Code and GitHub
-Copilot.
+`rishi` is an [nbdev](https://nbdev.fast.ai/) Python library. It is a thin `Chat` layer over five
+local and hosted backends: litert, llama.cpp, mlx, ollama and remote. Three more wrap cursor-agent,
+Claude Code and GitHub Copilot.
 It is a library, not a web service, so "running the app" means importing `rishi` and driving a model
 through `Chat`.
 
@@ -22,10 +22,13 @@ through `Chat`.
 - On Linux the `mlx` and `mlx-vlm` extras are skipped by platform markers, and `llama-cpp-python`
   installs the CPU wheel from the configured `llama-cpu` index. `rishi.mlx` will not import there,
   which is expected.
-- The `ollama` extra is `httpx`, plus `zstandard` on Linux below Python 3.14, which is what unpacks
-  the `.tar.zst` release archive. Ollama itself is not a Python package: `rishi.ollama` downloads it
-  into `~/.cache/rishi/ollama` and runs `ollama serve` there, needing no root and touching nothing
-  system-wide.
+- `rishi[remote]` tracks fastllm closely. 0.0.41 needs `aidialog>=0.0.10`, whose parts are typed
+  classes (`Text`, `Thinking`, `ToolUse`, `ToolResult`) rather than `Part(type=...)`. A stream now
+  yields those parts and a `Status` marker, not dicts. `rishi.remote` reads that shape.
+- The `ollama` extra is `httpx`, plus `zstandard` on Linux below Python 3.14 to unpack the
+  `.tar.zst` release archive. Ollama itself is not a Python package. `rishi.ollama` downloads it
+  into `~/.cache/rishi/ollama` and runs `ollama serve` there. That needs no root and touches
+  nothing system-wide.
 - Run tooling through the venv, as `uv run <cmd>`. The nbdev console scripts are HYPHENATED
   (`nbdev-export`, `nbdev-test`, `nbdev-prepare`, `nbdev-clean`), not underscored.
 
@@ -36,6 +39,9 @@ through `Chat`.
   `uv run slopometer --path README.md`. Aim for a density in the low teens or below.
 
 ### Tests
+- `nbs/chatcache/cache.db` is a Git LFS object. Without `git lfs pull` it is a text pointer, and the
+  `CachedChat` cells in `00_core.ipynb` and `index.ipynb` die on `sqlite3.DatabaseError: file is not
+  a database`. That is the checkout, not the code.
 - `uv run nbdev-test` executes every notebook. Most pass offline, because model calls are served from
   a record and replay cache (`RecordCache`, backed by `diskcache`) rather than hitting real models.
 - `08_ollama.ipynb` runs its whole backend against an `httpx.MockTransport` daemon, so it passes

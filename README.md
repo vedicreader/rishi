@@ -345,19 +345,17 @@ cc.close()
 
 ## Ollama
 
-`Chat('ollama/qwen3:4b')` runs on a local [Ollama](https://ollama.com) daemon. Ollama is a server
-rather than a library, so `rishi.ollama` drives the daemon as well as the conversation: it finds a
-running one, and if there is none it installs Ollama under `~/.cache/rishi/ollama`, starts
-`ollama serve`, pulls the model, and stops the daemon again at exit. Nothing needs setting up first,
-and nothing is installed system-wide.
+`Chat('ollama/qwen3:4b')` runs on a local [Ollama](https://ollama.com) daemon. Ollama is a server,
+not a library, so `rishi.ollama` drives the daemon as well as the conversation. It uses one already
+listening. If there is none it installs Ollama under `~/.cache/rishi/ollama`, starts `ollama serve`,
+pulls the model, and stops the daemon at exit. Nothing is installed system-wide.
 
-An Ollama id (`qwen3:4b`) works, and so does a hub GGUF repo, which Ollama serves under `hf.co/`.
-The `quant` argument becomes the tag, so the same repo id runs on either local backend.
+An Ollama id (`qwen3:4b`) works. So does a hub GGUF repo, which Ollama serves under `hf.co/`, with
+`quant` as the tag. The same repo id then runs on either local backend.
 
-Ollama takes `think` as a request field rather than a system-prompt hack, including the levels
-`'low'`, `'medium'`, `'high'` and `'max'`. `structured` is constrained by Ollama's own JSON schema
-support. `n_ctx` and `n_gpu_layers` keep their `rishi.llama` names and go out as `num_ctx` and
-`num_gpu`.
+`think` is a request field here rather than a system-prompt hack, and takes the levels `'low'`,
+`'medium'`, `'high'` and `'max'`. `structured` uses Ollama's own JSON schema support. `n_ctx` and
+`n_gpu_layers` keep their `rishi.llama` names and go out as `num_ctx` and `num_gpu`.
 
 ``` python
 from rishi.ollama import ensure_ollama, OllamaServer, stop_ollama
@@ -373,8 +371,9 @@ srv = OllamaServer(models='/data/models', n_ctx=16384, kv_cache_type='q8_0', fla
 srv.start()                                # or configure one yourself and point chats at it
 ```
 
-Ollama carries images but not audio, keeps its KV cache inside the daemon (so it cannot be saved or
-measured), and exposes no tokenizer, so `count_tokens` estimates. `rishi.llama` covers all three.
+Ollama carries images but not audio. Its KV cache lives inside the daemon, which offers no handle to
+save or measure it. There is no tokenizer endpoint either, so `count_tokens` estimates.
+`rishi.llama` covers all three.
 
 ``` python
 from rishi.ollama import qwen3_4b as ol_qwen

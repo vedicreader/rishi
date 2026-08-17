@@ -24,7 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 litert = ["litert-lm-api>=0.14.0"]
-remote = ["python-fastllm==0.0.36", "aidialog==0.0.7"]
+remote = ["python-fastllm==0.0.41", "aidialog>=0.0.10"]
 mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 mlx-vlm = [
     "mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'",

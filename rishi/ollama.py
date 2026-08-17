@@ -99,15 +99,15 @@ class OllamaClient:
         return r
 
     def get(self, path, **kw):
-        "GET `path`, returning the decoded JSON."
+        "GET `path` as JSON."
         return self._check(self.client.get(path, **kw)).json()
 
     def post(self, path, payload, **kw):
-        "POST `payload` to `path`, returning the decoded JSON."
+        "POST `payload` to `path`, as JSON."
         return self._check(self.client.post(path, json=payload, **kw)).json()
 
     def stream(self, path, payload, timeout=None):
-        "POST `payload` and yield the daemon's newline-delimited JSON objects as they arrive."
+        "POST `payload`, yielding the daemon's newline-delimited JSON as it arrives."
         with self.client.stream('POST', path, json=payload, timeout=ifnone(timeout, self.timeout)) as r:
             if r.status_code >= 400:
                 r.read(); raise OllamaError(_err(r))
@@ -128,7 +128,7 @@ class OllamaClient:
         return self.version(timeout) is not None
 
     def models(self):
-        "Every model name in the local store."
+        "Model names in the local store."
         return [m['name'] for m in (self.get('/api/tags').get('models') or [])]
 
     def have(self, model):
@@ -164,8 +164,9 @@ class OllamaClient:
 def fmt_bytes(n):
     "Bytes as a short human string."
     for u in ('B', 'KB', 'MB', 'GB'):
-        if n < 1024 or u == 'GB': return f'{n:.0f}{u}' if u == 'B' else f'{n:.1f}{u}'
+        if n < 1024 or u == 'GB': break
         n /= 1024
+    return f'{n:.0f}B' if u == 'B' else f'{n:.1f}{u}'
 
 def pull_progress(out=None):
     "A `pull` callback printing one rewritten line: the status, and how far the bytes have got."

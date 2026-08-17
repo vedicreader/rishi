@@ -22,14 +22,14 @@ resolution-markers = [
 
 [[package]]
 name = "aidialog"
-version = "0.0.7"
+version = "0.0.21"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastcore" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/91/c5/be88f987221c7005e660c80b80ff359d7f4fad9835d876bccbc611ea0b29/aidialog-0.0.7.tar.gz", hash = "sha256:45d6dc39fdd154da4675ca7e8a87fa935382dc3bd29c95927d1c4fb34253f474", size = 47835, upload-time = "2026-08-04T02:39:06.645Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/be/84deadeb239a9d4e7c0c06f79c82709c363d61007c35e524ae3235cfc132/aidialog-0.0.21.tar.gz", hash = "sha256:e5551967c5577c69ce2cf5b0dff5b272b09a00bd20b8e469f1124face0d39053", size = 55226, upload-time = "2026-08-14T21:35:48.205Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3f/08/58211b8e2e58c00095cb89740c5a73928c05ed3bff7b3422df88b11c9bd7/aidialog-0.0.7-py3-none-any.whl", hash = "sha256:24b8d638bb82ccbec24a4d35435c6b2ac999a06ddcff6a0caba3d04a2016c57f", size = 48680, upload-time = "2026-08-04T02:39:05.141Z" },
+    { url = "https://files.pythonhosted.org/packages/41/7b/d86a22415e639cf5158ecee3870289b81f2c52189a915cf67038b514ac5c/aidialog-0.0.21-py3-none-any.whl", hash = "sha256:15c2f187b9f389cc412004cf7de3ccd89eef96a3ccf1ca975ce9f54918fb1239", size = 56203, upload-time = "2026-08-14T21:35:46.799Z" },
 ]
 
 [[package]]
@@ -963,15 +963,28 @@ wheels = [
 
 [[package]]
 name = "fastspec"
-version = "0.2.0"
+version = "0.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "fastcore" },
-    { name = "httpx" },
+    { name = "fasttransport" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/3f/e4/9b6bff6090dbb2b27f9db715d3d19794db5776e6a47b3391b017d6c53c21/fastspec-0.2.0.tar.gz", hash = "sha256:3ed3be326f2ee2044fb3c6fbe8091c31ca11681a282d7906196b568e4275aac8", size = 33545, upload-time = "2026-08-09T07:02:21.128Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/15/be/5049770908727446414e217cf6bf24d3d64e1ee24590e0c53028d2649b50/fastspec-0.2.1.tar.gz", hash = "sha256:cea3ead207019c7338c275491178a2aff30ba6c049c0744202bc81aece2c5f13", size = 31617, upload-time = "2026-08-13T03:03:01.072Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f6/fc/8a85ddc8c3510c748250cc7c76ec37656ba020a66c4509fb62b1d8976634/fastspec-0.2.0-py3-none-any.whl", hash = "sha256:82fbae8c2bc06b7487d6c529e7f84e0a3e57f5c2465579cb61b1fa6c0d1fe4ce", size = 31623, upload-time = "2026-08-09T07:02:19.907Z" },
+    { url = "https://files.pythonhosted.org/packages/0b/68/d0b1aeb3d5caa943a3249679010823e41e55a1faa709238c8d5463072d0b/fastspec-0.2.1-py3-none-any.whl", hash = "sha256:6304129eef4cb724b43509bed5b8cf31d48aa6299a0c4d6aac9d335e19cac3a2", size = 28874, upload-time = "2026-08-13T03:02:59.829Z" },
+]
+
+[[package]]
+name = "fasttransport"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastcore" },
+    { name = "httpx2" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/92/ca/defba9b5466caafcdc069c74244c1fb27255e7c8574de523c99dec053551/fasttransport-0.0.1.tar.gz", hash = "sha256:c88fc989fb333efb4d3221379178600bac2f0c7156ad6f8d614ba7eafad39e3a", size = 9392, upload-time = "2026-08-13T03:00:45.251Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/45/68/4f69754497b13ba216e11f13d9e3d19ba9aa42c29443ddc4ba948531774d/fasttransport-0.0.1-py3-none-any.whl", hash = "sha256:ab131ac912214e1f39cba0d8fcdbf3ed26a455abb23751f5f6008c2166860d5d", size = 10135, upload-time = "2026-08-13T03:00:43.873Z" },
 ]
 
 [[package]]
@@ -3347,18 +3360,17 @@ wheels = [
 
 [[package]]
 name = "python-fastllm"
-version = "0.0.36"
+version = "0.0.41"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aidialog" },
     { name = "fastcore" },
     { name = "fastspec" },
     { name = "pillow" },
-    { name = "toolslm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/47/db/e3d2df132caf3757235f8dbf892fb2e7cd97a8bb8b4e0839aeda2a23c575/python_fastllm-0.0.36.tar.gz", hash = "sha256:520cbdc62bd962fb684d5c0f4c00b78c9f6ed585dcfddd9af32fb2440b0c0f3a", size = 776495, upload-time = "2026-08-01T01:03:08.851Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/26/03/e5affdc7388d5e686ba3482b06a5085304141ac943db9a5792e0b243cb62/python_fastllm-0.0.41.tar.gz", hash = "sha256:2cad3612d3a7f529daf66c98ab53a802e1861b7adc502b9e9bda14e5397e7013", size = 776648, upload-time = "2026-08-13T03:14:30.211Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5d/30/d98c60b9670f6d945baa5317724e0bed52f35707df86bdc440f24e64372b/python_fastllm-0.0.36-py3-none-any.whl", hash = "sha256:3ea1e1ca02cdfa7154d9f0969d09abde8477fc35b8fbf34a7800ad0ef543183d", size = 789649, upload-time = "2026-08-01T01:03:07.156Z" },
+    { url = "https://files.pythonhosted.org/packages/96/59/40ba6964dee054d33256d99eca1a96252a3f5788c8de20750df14d189257/python_fastllm-0.0.41-py3-none-any.whl", hash = "sha256:597b8440b6ce057a57a8a5e16293e493eac3e1d2c452fde3a29e8a0c88cb2736", size = 789385, upload-time = "2026-08-13T03:14:28.486Z" },
 ]
 
 [[package]]
@@ -3811,10 +3823,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "aidialog", marker = "extra == 'all'", specifier = "==0.0.7" },
-    { name = "aidialog", marker = "extra == 'copilot'", specifier = "==0.0.7" },
-    { name = "aidialog", marker = "extra == 'dev'", specifier = "==0.0.7" },
-    { name = "aidialog", marker = "extra == 'remote'", specifier = "==0.0.7" },
+    { name = "aidialog", marker = "extra == 'all'", specifier = ">=0.0.10" },
+    { name = "aidialog", marker = "extra == 'copilot'", specifier = ">=0.0.10" },
+    { name = "aidialog", marker = "extra == 'dev'", specifier = ">=0.0.10" },
+    { name = "aidialog", marker = "extra == 'remote'", specifier = ">=0.0.10" },
     { name = "claude-agent-sdk", marker = "extra == 'all'", specifier = ">=0.2" },
     { name = "claude-agent-sdk", marker = "extra == 'claude'", specifier = ">=0.2" },
     { name = "claude-agent-sdk", marker = "extra == 'dev'", specifier = ">=0.2" },
@@ -3848,10 +3860,10 @@ requires-dist = [
     { name = "numpy", marker = "extra == 'all'" },
     { name = "numpy", marker = "extra == 'dev'" },
     { name = "numpy", marker = "extra == 'llama'" },
-    { name = "python-fastllm", marker = "extra == 'all'", specifier = "==0.0.36" },
-    { name = "python-fastllm", marker = "extra == 'copilot'", specifier = "==0.0.36" },
-    { name = "python-fastllm", marker = "extra == 'dev'", specifier = "==0.0.36" },
-    { name = "python-fastllm", marker = "extra == 'remote'", specifier = "==0.0.36" },
+    { name = "python-fastllm", marker = "extra == 'all'", specifier = "==0.0.41" },
+    { name = "python-fastllm", marker = "extra == 'copilot'", specifier = "==0.0.41" },
+    { name = "python-fastllm", marker = "extra == 'dev'", specifier = "==0.0.41" },
+    { name = "python-fastllm", marker = "extra == 'remote'", specifier = "==0.0.41" },
     { name = "safepyrun", specifier = ">=0.2.3" },
     { name = "soundfile", marker = "extra == 'all'", specifier = ">=0.14.0" },
     { name = "soundfile", marker = "extra == 'dev'", specifier = ">=0.14.0" },
@@ -4346,21 +4358,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/6b/3f/8267161d70197f25ebe33e01907cac6a427228357b4ff9653900020f0e1a/tokie-0.1.4-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:cbc7b468fba5d5f506b85bb4319ffe825ff2c328aaea3c8ff57a36740af00e6d", size = 3203012, upload-time = "2026-07-24T16:41:11.375Z" },
     { url = "https://files.pythonhosted.org/packages/78/36/b97834b2152c24e6c5a5aaa39b6e4659105b3b3c472877e354d19baf3237/tokie-0.1.4-cp314-cp314-pyemscripten_2026_0_wasm32.whl", hash = "sha256:9b90d2ac37476497b7f5de25df4208b83d6a4a3cf43c790b7b91dcbc5419da8b", size = 958833, upload-time = "2026-07-24T16:41:12.715Z" },
     { url = "https://files.pythonhosted.org/packages/85/9d/d727a3a0d05bb78cc839e77a46b00bf8542769384ac6aa64c953314d5bfc/tokie-0.1.4-cp314-cp314-win_amd64.whl", hash = "sha256:2d4fb5a6b9cd4e137c3e6429129a5901909414552f35236c213668fbeab6cc77", size = 2637400, upload-time = "2026-07-24T16:41:14.288Z" },
-]
-
-[[package]]
-name = "toolslm"
-version = "0.3.48"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "codesigs" },
-    { name = "fastcore" },
-    { name = "ghapi" },
-    { name = "httpx" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/09/2c/ba2cbafdbe70ba65ea0dd7e9c6a1efa32d00ed4a8723e039776d405b4a21/toolslm-0.3.48.tar.gz", hash = "sha256:9bef3d3b570b45c5859688632df08613e68638c2c5b237735d4efcccf714cef3", size = 18829, upload-time = "2026-08-12T01:28:54.848Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/68/d4/8484898918988a07c4f47d27b3c339a9ba4efe1d21f382f9e31a4ed1c12a/toolslm-0.3.48-py3-none-any.whl", hash = "sha256:5e291dca2518d638844ef519205ad6ec9262111c436df639c7f5c51432f7d67c", size = 19894, upload-time = "2026-08-12T01:28:53.812Z" },
 ]
 
 [[package]]

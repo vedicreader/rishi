@@ -84,16 +84,20 @@ system_certs = use_system_certs()
 
 # %% ../nbs/00_core.ipynb #3788433c1dae9bd1
 class UsageStats:
-    "Token usage for a chat turn. `cached_tokens` is the part of the prompt served from a KV/prefix cache. `cost`/`model` are always present (`cost` is 0 for local inference) so a harness merging local and hosted usage can carry one type instead of two."
-    _sums = ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n', 'cached_tokens', 'cost')
-    def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0, cached_tokens=0, cost=0.0, model=None): store_attr()
+    "Token usage for a chat turn. `cached_tokens` is the part of the prompt served from a KV/prefix cache; `reasoning_tokens` and `cache_creation_tokens` are what hosted providers bill separately, and stay 0 elsewhere. `cost`/`model` are always present (`cost` is 0 for local inference) so a harness merging local and hosted usage can carry one type instead of two."
+    _sums = ('prompt_tokens', 'completion_tokens', 'total_tokens', 'n', 'cached_tokens', 'cost',
+             'reasoning_tokens', 'cache_creation_tokens')
+    def __init__(self, prompt_tokens=0, completion_tokens=0, total_tokens=0, n=0, cached_tokens=0, cost=0.0,
+                 model=None, reasoning_tokens=0, cache_creation_tokens=0): store_attr()
     def __add__(self, other):
         if other is None: return self
-        return UsageStats(*[getattr(self, k) + getattr(other, k) for k in self._sums], model=self.model or other.model)
+        return UsageStats(**{k: getattr(self, k) + getattr(other, k) for k in self._sums}, model=self.model or other.model)
     def __radd__(self, other): return self if other in (None, 0) else self.__add__(other)
     def __repr__(self):
         parts = [f'total={self.total_tokens:,}', f'in={self.prompt_tokens:,}', f'out={self.completion_tokens:,}', f'turns={self.n}']
         if self.cached_tokens: parts.append(f'cached={self.cached_tokens:,}')
+        if self.reasoning_tokens: parts.append(f'reasoning={self.reasoning_tokens:,}')
+        if self.cache_creation_tokens: parts.append(f'cache_write={self.cache_creation_tokens:,}')
         if self.cost: parts.append(f'cost=${self.cost:,.4f}')
         if self.model: parts.append(f'model={self.model}')
         return '|'.join(parts)
@@ -361,6 +365,8 @@ def sum_usage(us):
     us = [u for u in us if u]
     if not us: return None
     out = {k: sum(u.get(k, 0) for u in us) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'cached_tokens')}
+    for k in ('reasoning_tokens', 'cache_creation_tokens'):   # hosted-only, so absent rather than 0
+        if (v := sum(u.get(k, 0) for u in us)): out[k] = v
     if (m := first(us, lambda u: u.get('model'))): out['model'] = m['model']
     return out
 
@@ -452,7 +458,9 @@ class UsageCallback(ChatCallback):
     def after_response(self):
         u = self.chat.turn_res.get('usage') or {}
         self.chat.use += UsageStats(u.get('prompt_tokens', 0), u.get('completion_tokens', 0), u.get('total_tokens', 0),
-                                    1, cached_tokens=u.get('cached_tokens', 0), model=u.get('model'))
+                                    1, cached_tokens=u.get('cached_tokens', 0), model=u.get('model'),
+                                    reasoning_tokens=u.get('reasoning_tokens', 0),
+                                    cache_creation_tokens=u.get('cache_creation_tokens', 0))
 
 class ToolReminderCallback(ChatCallback):
     'Inject a tool-summary reminder into the outgoing message when tools are registered.'
