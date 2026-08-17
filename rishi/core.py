@@ -477,11 +477,14 @@ def common_prefix_len(a, b):
 #: Runtime name -> (module, Chat class) for `get_runtime`.
 runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat'),
             'mlx': ('rishi.mlx','MlxChat'), 'remote': ('rishi.remote','RemoteChat'),
-            'cursor': ('rishi.cursor','CursorChat'), 'claude': ('rishi.claude','ClaudeChat'),
-            'copilot': ('rishi.copilot','CopilotChat')}
+            'ollama': ('rishi.ollama','OllamaChat'), 'cursor': ('rishi.cursor','CursorChat'),
+            'claude': ('rishi.claude','ClaudeChat'), 'copilot': ('rishi.copilot','CopilotChat')}
 dflt_runtime = 'litert'
 # checked in order, so the local file/repo shapes win over the hosted model-name patterns
-_pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'), 'llama': ('.gguf','gguf'),
+_pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'),
+         # ollama before llama: `hf.co/...-GGUF` is how Ollama addresses a GGUF repo, and only Ollama
+         # does. A bare `qwen3:4b` is not inferred, because a `name:tag` shape is also a Windows path.
+         'ollama': ('hf.co/','huggingface.co/'), 'llama': ('.gguf','gguf'),
          'mlx': ('mlx-community','mlx_lm','-mlx','mlx-'),
          # cursor before remote: Cursor accepts both decorated and plain `grok-...` ids
          'cursor': ('cursor-', 'grok-'),
@@ -642,6 +645,12 @@ def _cfg_caps(model, model_path=None):
     inp = ('text',) + tuple(k for k, ks in _tower_keys.items() if any(x in cfg for x in ks))
     return Caps(inp, ('text',), (), 'config')
 
+def _ollama_caps(model):
+    "Modalities a running Ollama daemon reports for `model`, or `None` when there is no daemon to ask."
+    try: from rishi.ollama import ollama_caps
+    except ImportError: return None
+    return ollama_caps(model)
+
 def model_caps(model=None, runtime=None, model_path=None):
     "What `model` accepts and what it returns, resolved without loading it."
     try: nm, mid = resolve_runtime(model, runtime, model_path)
@@ -651,6 +660,8 @@ def model_caps(model=None, runtime=None, model_path=None):
     if nm == 'litert': return Caps(('text', 'image', 'audio'), ('text',), (), 'runtime')
     if nm == 'llama': return _mmproj_caps(mid, model_path) or Caps()
     if nm == 'mlx': return _cfg_caps(mid, model_path) or Caps()
+    # ollama is the one runtime that can just be asked: the daemon holds the weights
+    if nm == 'ollama': return _ollama_caps(mid) or Caps()
     return _tbl_caps(mid) or _fallback_caps(mid) or Caps()
 
 

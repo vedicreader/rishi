@@ -1,13 +1,13 @@
 ---
 name: rishi
-description: Run models through rishi's one Chat API. Local engines are Gemma .litertlm over litert_lm (rishi.litert), any GGUF over llama-cpp-python (rishi.llama) and quantized models on Apple silicon over MLX (rishi.mlx). Hosted ones are vendor APIs over fastllm (rishi.remote), Cursor (rishi.cursor), Claude Code (rishi.claude) and GitHub Copilot (rishi.copilot). All of them share tool calling with human approval, a tool-call budget, streaming, thinking, a python sandbox, structured output, classification and graded answers. Use when writing or debugging offline LLM chat, local tool-use agents, or anything mentioning rishi, litert_lm, gemma .litertlm models, local GGUF/llama.cpp chat, mlx-lm/mlx-vlm, cursor-agent, Claude Code or GitHub Copilot.
+description: Run models through rishi's one Chat API. Local engines are Gemma .litertlm over litert_lm (rishi.litert), any GGUF over llama-cpp-python (rishi.llama), quantized models on Apple silicon over MLX (rishi.mlx) and anything an Ollama daemon serves (rishi.ollama). Hosted ones are vendor APIs over fastllm (rishi.remote), Cursor (rishi.cursor), Claude Code (rishi.claude) and GitHub Copilot (rishi.copilot). All of them share tool calling with human approval, a tool-call budget, streaming, thinking, a python sandbox, structured output, classification and graded answers. Use when writing or debugging offline LLM chat, local tool-use agents, or anything mentioning rishi, litert_lm, gemma .litertlm models, local GGUF/llama.cpp chat, mlx-lm/mlx-vlm, ollama, cursor-agent, Claude Code or GitHub Copilot.
 ---
 
 # rishi
 
-rishi wraps seven backends in one callable `Chat`. Three are on-device, so they need no API key and no network once weights are cached. The backend-agnostic API lives in `rishi.core`. The local engines are `rishi.litert` for Gemma `.litertlm` over litert_lm, `rishi.llama` for any GGUF over llama-cpp-python, and `rishi.mlx` for Apple silicon over mlx-lm and mlx-vlm. The hosted ones are `rishi.remote` for vendor APIs over fastllm, `rishi.cursor`, `rishi.claude` and `rishi.copilot`. `Chat(model)` picks one from the model name.
+rishi wraps eight backends in one callable `Chat`. Four are on-device, so they need no API key and no network once weights are cached. The backend-agnostic API lives in `rishi.core`. The local engines are `rishi.litert` for Gemma `.litertlm` over litert_lm, `rishi.llama` for any GGUF over llama-cpp-python, `rishi.mlx` for Apple silicon over mlx-lm and mlx-vlm, and `rishi.ollama` for anything a local Ollama daemon serves. The hosted ones are `rishi.remote` for vendor APIs over fastllm, `rishi.cursor`, `rishi.claude` and `rishi.copilot`. `Chat(model)` picks one from the model name.
 
-The core install is small, and every runtime is an extra: `rishi[litert]`, `rishi[llama]`, `rishi[mlx]`, `rishi[remote]`, `rishi[cursor]`, `rishi[claude]`, `rishi[copilot]`, or `rishi[all]` for everything your platform supports. Backend modules load lazily, and asking for one without its extra raises an ImportError naming it.
+The core install is small, and every runtime is an extra: `rishi[litert]`, `rishi[llama]`, `rishi[mlx]`, `rishi[ollama]`, `rishi[remote]`, `rishi[cursor]`, `rishi[claude]`, `rishi[copilot]`, or `rishi[all]` for everything your platform supports. Backend modules load lazily, and asking for one without its extra raises an ImportError naming it.
 
 ## The one thing to remember
 
@@ -24,7 +24,7 @@ print(resp_text(r))
 
 ## API surface
 
-- `Chat(model=None, *, runtime=None, model_path=None, engine=None, backend=Backend.CPU(), multimodal=True, cache_dir=None, sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None, think=False, filter_think=True, temp=None, top_k=None, top_p=None, seed=None, sampler_config=None, max_output_tokens=None, cbs=None, default_cbs=True)` . `model` comes first, as a repo id or local path. `Chat` dispatches by `runtime` and model shape, and returns a `LitertChat`, `LlamaChat`, `MlxChat`, `RemoteChat`, `CursorChat`, `ClaudeChat` or `CopilotChat`. The litert-specific kwargs are shown here. llama adds `quant`, `n_ctx`, `n_gpu_layers`, `mmproj` and `comp_kw`, and mlx and the hosted backends have their own, in their sections.
+- `Chat(model=None, *, runtime=None, model_path=None, engine=None, backend=Backend.CPU(), multimodal=True, cache_dir=None, sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None, think=False, filter_think=True, temp=None, top_k=None, top_p=None, seed=None, sampler_config=None, max_output_tokens=None, cbs=None, default_cbs=True)` . `model` comes first, as a repo id or local path. `Chat` dispatches by `runtime` and model shape, and returns a `LitertChat`, `LlamaChat`, `MlxChat`, `OllamaChat`, `RemoteChat`, `CursorChat`, `ClaudeChat` or `CopilotChat`. The litert-specific kwargs are shown here. llama adds `quant`, `n_ctx`, `n_gpu_layers`, `mmproj` and `comp_kw`, and mlx and the hosted backends have their own, in their sections.
 - `chat(msg=None, stream=False, max_output_tokens=None, cbs=None)` runs a turn. `stream=True` returns a generator of markdown chunks. `cbs=` registers callbacks for that turn only.
 - State: `chat.hist` (Python-visible history, print with `chat.print_hist()`), `chat.use` (a `UsageStats`: `total`, `in`, `out`, `turns`), `chat.token_count` (live context size), `chat.pct_full` (that over `ctx_limit`).
 - Chat methods: `run_py(code)`, `classify(text, labels)`, `structured(prompt, schema)`, `check(question, expected, ...)`, `grades(question, expected, actual)`, `count_tokens(text)`, `render(msg)`, `cancel()`, `add_cb`/`add_cbs`/`remove_cb`/`remove_cbs`, `close()`.
@@ -123,6 +123,7 @@ A Chat that built its own engine frees it on `close()`. A Chat handed an engine 
 - The log line `WebGPU sampler not available, falling back to statically linked C API` is harmless. Quiet the noise with `set_min_log_severity(3)`.
 - Tool and structured-output arguments arrive as floats (`21.0`) from the model's JSON. Cast inside the tool if you need strict ints.
 - `run_text_scoring` is not available on this runtime, so `classify` and `check` grade by generation, not log-likelihood scoring.
+- TLS behind a re-signing corporate proxy: `certifi` does not know the proxy's root certificate and every hosted backend fails with `CERTIFICATE_VERIFY_FAILED`. Importing rishi calls `use_system_certs()`, which verifies against the OS trust store through `truststore`; `RISHI_SYSTEM_CERTS=0` turns it off. It covers what Python dials (`remote`, `copilot`, the `cursor` and `claude` SDK paths), not the CLI paths, which are separate binaries with trust stores of their own.
 
 ## One interface for every backend
 
@@ -135,6 +136,8 @@ Chat('litert-community/gemma-4-E2B-it-litert-lm')   # -> litert
 Chat('Qwen/Qwen3-4B-GGUF')                          # -> llama.cpp
 Chat('mlx-community/Qwen3-4B-4bit')                 # -> mlx
 Chat('mlx-community/Qwen3-VL-4B-Instruct-4bit')     # -> mlx, and on to MlxVlmChat (vision)
+Chat('ollama/qwen3:4b')                             # -> ollama (prefix only for a bare id)
+Chat('hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M')             # -> ollama (only Ollama addresses hf.co)
 Chat('claude-sonnet-4-5')                           # -> remote (hosted, via fastllm)
 Chat('cursor/grok-4.5')                             # -> cursor (prefix only)
 Chat('claude/claude-sonnet-5')                      # -> claude (Claude Code, prefix only)
@@ -147,7 +150,7 @@ Chat()                                              # nothing to go on -> litert
 achat = AsyncChat('Qwen/Qwen3-4B-GGUF')             # async on any backend
 ```
 
-Resolution order: an explicit `runtime=`, then a `runtime/` prefix if it names a known runtime, so `litert-community/...` is left alone, then the shape of the id or path, then the default of `litert`. The shapes are `.litertlm`, `litert-community` and `litert-lm` against `.gguf` and `GGUF` against `mlx-community` and `-mlx` against hosted names like `claude-*`, `gpt-*` and `gemini-*`. Local shapes are checked before hosted name patterns. `claude` and `copilot` are never inferred, because both serve models under names the hosted vendors also use, so ask for them by prefix. A bare name rishi cannot place raises with instructions rather than guessing. There is no alias table, so pass a full hub repo id or path. `resolve_runtime`, `split_runtime`, `infer_runtime` and `get_runtime` are exported if you want the decision without building anything.
+Resolution order: an explicit `runtime=`, then a `runtime/` prefix if it names a known runtime, so `litert-community/...` is left alone, then the shape of the id or path, then the default of `litert`. The shapes are `.litertlm`, `litert-community` and `litert-lm` against `.gguf` and `GGUF` against `mlx-community` and `-mlx` against hosted names like `claude-*`, `gpt-*` and `gemini-*`. Local shapes are checked before hosted name patterns. `hf.co/...` means ollama, and is checked before `.gguf`. `claude`, `copilot` and a bare Ollama id are never inferred: the first two serve models under names the hosted vendors also use, and a `name:tag` shape is also how Windows spells a path, so ask for those by prefix. A bare name rishi cannot place raises with instructions rather than guessing. There is no alias table, so pass a full hub repo id or path. `resolve_runtime`, `split_runtime`, `infer_runtime` and `get_runtime` are exported if you want the decision without building anything.
 
 The selector is `runtime=`, not `backend=`. `backend=` stays free for litert's hardware backend, `Backend.GPU()`, which passes straight through.
 
@@ -202,6 +205,29 @@ What is different from the other two backends:
 - **Vision and audio** route automatically: `Chat` reads the repo's `config.json`, and a model with a vision/audio tower gets `MlxVlmChat` (mlx-vlm) instead. Force it with `vlm=True`/`False`. Pass media as `bytes` or a `Path` in the message list, exactly as on llama. Two caveats: mlx-vlm has no per-model tool-call parsers, so tool use there depends on the model emitting `<tool_call>` tags, and it manages its own vision-feature cache, so cross-turn token prefix reuse is off on that path. A text-only MLX model raises a `TypeError` pointing at `rishi[mlx-vlm]` rather than silently dropping the image.
 - **Audio in**: `chat([Path('speech.wav'), 'Transcribe this audio.'])` on a model with an audio tower (`gemma4_e4b`, `qwen3omni_30b`). mlx-vlm decodes the file and resamples it to the model's own feature-extractor rate, so don't pass `sampling_rate` yourself. rishi also passes its own `think` to mlx-vlm's chat template rather than letting mlx-vlm default to `enable_thinking=False`. That default prefills an empty `<think></think>` block, and a model handed a finished thought can end the turn immediately. Qwen3-Omni transcribes nothing at all when it happens.
 
+## Ollama backend (rishi.ollama)
+
+`pip install 'rishi[ollama]'`. Ollama is a server, not a library, so this backend drives the daemon as well as the conversation. `Chat('ollama/qwen3:4b')` on a machine with no Ollama installs it under `~/.cache/rishi/ollama`, starts `ollama serve`, pulls the model, answers, and stops the daemon at interpreter exit. A daemon already listening is used as it is and never reconfigured.
+
+```python
+from rishi import Chat
+from rishi.ollama import ensure_ollama, OllamaServer, install_ollama, stop_ollama, qwen3_4b
+
+chat = Chat(f'ollama/{qwen3_4b}', think='low', n_ctx=8192, sp='You are concise.')
+cl = ensure_ollama()                       # the daemon itself
+print(cl.version(), cl.models(), cl.ps())
+cl.pull('gemma3:4b', on_progress=print)    # streamed progress records
+```
+
+- `OllamaChat(model=None, *, host=None, client=None, quant='Q4_K_M', pull=True, install=True, serve=True, srv_kw=None, on_progress=None, n_ctx=None, n_gpu_layers=None, keep_alive=None, options=None, sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None, max_steps=10, parallel_tools=False, final_prompt=..., think=None, temp=None, top_k=None, top_p=None, seed=None, max_output_tokens=None, comp_kw=None, cbs=None, default_cbs=True)`. Model ids are `qwen3_06b`, `qwen3_17b`, `qwen3_4b`, `gemma3_1b`, `gemma3_4b` and `llama32_3b`, or any id from Ollama's library.
+- **Model ids.** `ollama_model` maps a hub GGUF repo onto `hf.co/<repo>:<quant>`, so `Chat('Qwen/Qwen3-4B-GGUF', runtime='ollama')` and the llama backend take the same id. A local `.gguf` path raises, naming `runtime='llama'`: Ollama serves only what is in its own store.
+- **Thinking** is a request field, not a system-prompt switch: `think=True/False`, or `'low'`, `'medium'`, `'high'`, `'max'`. A model with no thinking refuses it, so rishi drops the field, retries once, and stops sending it for that chat.
+- **Sampling.** `n_ctx` and `n_gpu_layers` keep their llama names and go out as `num_ctx` and `num_gpu`; `temp`, `top_k`, `top_p`, `seed` and `max_output_tokens` map onto the rest of `options`; anything else goes in `options=`. `keep_alive=` sets how long the model stays resident, and `chat.unload()` frees it now.
+- **`structured`** uses Ollama's own `format` with the JSON schema, so arguments parse. `classify`, `check` and `grades` work as elsewhere.
+- **The daemon.** `OllamaServer(host=None, bin=None, dir=OLLAMA_DIR, models=None, n_ctx=None, keep_alive=None, flash_attn=None, kv_cache_type=None, num_parallel=None, max_loaded=None, log=None)` wraps `ollama serve` and its environment variables. `install_ollama()` unpacks the release archive for this user with no root. `ensure_ollama()` returns a client, starting one if needed; `stop_ollama()` ends whatever rishi started. `OllamaClient` covers `/api/chat`, `/api/tags`, `/api/show`, `/api/ps`, `/api/pull` and `/api/delete`.
+- **`model_caps(model, runtime='ollama')`** asks `/api/show`, so it reports what the daemon knows rather than guessing from file names, and comes back with `source='runtime'`.
+- **Not available here:** audio in (Ollama carries images only, so use llama or mlx), `save_cache`/`load_cache` and a real `cached_tokens` (the KV cache lives in the daemon, which exposes no handle on it), and an exact `count_tokens` before a turn (there is no tokenizer endpoint, so it estimates; the true count arrives in `use`). There is no broker either, because the daemon already is one: size it with `OLLAMA_NUM_PARALLEL` and `OLLAMA_MAX_LOADED_MODELS`.
+
 ## Hosted models (rishi.remote)
 
 Install `rishi[remote]` for [fastllm](https://github.com/AnswerDotAI/fastllm), then set the vendor's key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and so on) to use the same `Chat` API against Anthropic, OpenAI, Gemini, DeepSeek, Moonshot, OpenRouter and the rest:
@@ -234,8 +260,9 @@ chat = Chat('copilot/gpt-4.1', sp='You are concise.')
 
 - `CopilotChat(model=None, *, oauth_token=None, api_key=None, base_url=None, auth=None, integration_id='vscode-chat', hdrs=None, **kw)`, plus every `RemoteChat` argument. `copilot_default` is `'gpt-4.1'`.
 - Prefix only. `Chat('copilot/claude-sonnet-4.5')` or `CopilotChat(...)`, because a bare `gpt-...` or `claude-...` id still means the hosted API through `remote`.
-- Credentials. `copilot_oauth()` reads `GITHUB_COPILOT_OAUTH_TOKEN`, `GH_COPILOT_TOKEN`, `GH_TOKEN` or `GITHUB_TOKEN`, then the files an editor sign-in leaves behind (`~/.config/rishi/copilot.json`, `~/.config/github-copilot/apps.json` or `hosts.json`, `%LOCALAPPDATA%`, `~/.copilot/config.json`). `copilot_login()` runs GitHub's device flow and saves one. A personal access token will not work, because GitHub only mints Copilot tokens for apps it knows.
+- Credentials. `copilot_oauth()` reads `GITHUB_COPILOT_OAUTH_TOKEN` or `GH_COPILOT_TOKEN`, then the files an editor sign-in leaves behind (`~/.config/rishi/copilot.json`, `~/.config/github-copilot/apps.json` or `hosts.json`, `%LOCALAPPDATA%`, `~/.copilot/config.json`), then `GH_TOKEN` or `GITHUB_TOKEN` last: those two are general-purpose GitHub variables, and a personal access token in one of them would otherwise hide a sign-in that works. `copilot_login()` runs GitHub's device flow and saves one. A personal access token will not work, because GitHub only mints Copilot tokens for apps it knows: the exchange answers it with a 404, which `copilot_exchange` raises as `PermissionError` alongside 401 and 403.
 - Tokens. `copilot_exchange()` trades the OAuth token for a `CopilotToken` (bearer, endpoint, expiry). `CopilotAuth` holds one and re-mints it five minutes before expiry, so a long session does not stop mid-turn on a 401. Share one `CopilotAuth` across chats to share the exchange. `api_key=` uses a Copilot token you got some other way, and rishi cannot renew that one.
+- Catalogue. `copilot_models()` lists the chat ids this plan can reach; `kind=None` adds the completion and embedding ones. `copilot_catalog()` returns the whole `{id: entry}` payload, and `copilot_ctx(entry)` reads the prompt window Copilot reports for one, which beats guessing from a vendor table.
 - Endpoint. The exchange names one per plan, such as `https://api.individual.githubcopilot.com`, and `COPILOT_API` is the fallback.
 - Headers. `copilot_hdrs()` sets `copilot-integration-id`, the editor version strings, `openai-intent` and `x-github-api-version`. Per turn, `x-initiator` is `user` or `agent` depending on whether the model is round-tripping its own tool calls, and `copilot-vision-request` goes on when the history carries an image. `Authorization` is left to fastllm, and there is deliberately no `x-request-id`, because fastllm caches its HTTP client on the arguments it was built from.
 - Everything else is `RemoteChat`: the same tool loop, approval gate, budget, streaming, `structured` and `classify`.
@@ -243,6 +270,6 @@ chat = Chat('copilot/gpt-4.1', sp='You are concise.')
 
 ## Working on rishi itself
 
-It's an nbdev project. Edit the notebooks in `nbs/`, from `00_core.ipynb` through `07_copilot.ipynb`, not the generated files in `rishi/`. Tests are non-exported `#| hide` cells, and model-dependent cells are `#| eval: false` to keep the test run offline. `nbs/03_mlx.ipynb` is also marked `skip_exec: true` in its frontmatter, because CI runs on linux where MLX does not exist. Run it on a Mac. Run `nbdev-prepare`, with a hyphen, after changes.
+It's an nbdev project. Edit the notebooks in `nbs/`, from `00_core.ipynb` through `08_ollama.ipynb`, not the generated files in `rishi/`. Tests are non-exported `#| hide` cells, and model-dependent cells are `#| eval: false` to keep the test run offline. `nbs/03_mlx.ipynb` is also marked `skip_exec: true` in its frontmatter, because CI runs on linux where MLX does not exist. Run it on a Mac. Run `nbdev-prepare`, with a hyphen, after changes.
 
-The tool loop itself lives once, in `rishi.core.ToolLoopMixin`. A backend that receives tool calls as data, such as llama or mlx, supplies `_model_step` and `_stream_step` plus an `ns` tool namespace. The mixin owns approval, history, the budget, parallel dispatch and context recovery. litert runs its loop inside the engine and bridges back through `ChatToolHandler` instead. `rishi.remote`'s tests patch `acomplete` with a fake, so the whole backend, conversions and tool loop and budget and streaming, is covered in CI without a key. `rishi.copilot`'s tests assert the request rather than sending one, so they need no subscription.
+The tool loop itself lives once, in `rishi.core.ToolLoopMixin`. A backend that receives tool calls as data, such as llama or mlx, supplies `_model_step` and `_stream_step` plus an `ns` tool namespace. The mixin owns approval, history, the budget, parallel dispatch and context recovery. litert runs its loop inside the engine and bridges back through `ChatToolHandler` instead. `rishi.remote`'s tests patch `acomplete` with a fake, so the whole backend, conversions and tool loop and budget and streaming, is covered in CI without a key. `rishi.copilot`'s tests assert the request rather than sending one, so they need no subscription. `rishi.ollama`'s run the whole backend against an `httpx.MockTransport` daemon, so they need no Ollama.

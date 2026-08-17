@@ -13,6 +13,7 @@ the same tools, approval gate, callbacks and streaming interface.
 pip install 'rishi[litert]'    # .litertlm Gemma builds
 pip install 'rishi[llama]'     # any GGUF
 pip install 'rishi[mlx]'       # Apple Silicon (add mlx-vlm for vision and audio)
+pip install 'rishi[ollama]'    # any Ollama model; rishi installs and runs the daemon
 pip install 'rishi[remote]'    # Claude, GPT, Gemini and friends, via fastllm
 pip install 'rishi[cursor]'    # Cursor models via SDK or cursor-agent CLI
 pip install 'rishi[claude]'    # Claude Code via the Agent SDK (the `claude` CLI needs nothing)
@@ -72,6 +73,7 @@ or a prefix such as `llama/` when the id is ambiguous.
 |---------------------------------------|--------------------------|
 | `litert-community/...`, `.litertlm`   | litert                   |
 | `...-GGUF`, `.gguf` path              | llama.cpp                |
+| `ollama/...`, `hf.co/...`             | ollama                   |
 | `mlx-community/...`                   | MLX                      |
 | `claude-...`, `gpt-...`, `gemini-...` | remote (fastllm)         |
 | `cursor/...` or `CursorChat(...)`     | cursor                   |
@@ -79,7 +81,8 @@ or a prefix such as `llama/` when the id is ambiguous.
 | `copilot/...` or `CopilotChat(...)`   | copilot (GitHub Copilot) |
 
 Claude Code and Copilot require a prefix. A bare `claude-...` or `gpt-...` id continues to use the
-hosted API through `remote`.
+hosted API through `remote`. A bare Ollama id such as `qwen3:4b` needs `ollama/` too, because a
+`name:tag` shape is also how Windows spells a path.
 
 ``` python
 print(resolve_runtime('litert-community/gemma-4-E2B-it-litert-lm'))
@@ -274,6 +277,7 @@ print(chat.check('Capital of France?', 'Paris'))
 | backend | install | typical use |
 |----|----|----|
 | MLX | `rishi[mlx]` | Apple Silicon, with an explicit prompt cache, `kv_bits` and LoRA |
+| ollama | `rishi[ollama]` | any Ollama model, on a daemon rishi installs and runs for you |
 | remote | `rishi[remote]` plus a vendor key | the same tools and HITL as local, with `tool_choice` and `reasoning_effort` |
 | cursor | `rishi[cursor]` plus `$CURSOR_API_KEY`, or `cursor-agent login` | Cursor-only models, through the `cursor/` prefix or [`CursorChat`](https://vedicreader.github.io/rishi/cursor.html#cursorchat) |
 | claude | `rishi[claude]`, or just Claude Code plus `claude /login` | your tools without MCP, through the `claude/` prefix or [`ClaudeChat`](https://vedicreader.github.io/rishi/claude.html#claudechat) |
@@ -339,6 +343,47 @@ print(resp_text(cc('What is 2 + 3?')))
 cc.close()
 ```
 
+## Ollama
+
+`Chat('ollama/qwen3:4b')` runs on a local [Ollama](https://ollama.com) daemon. Ollama is a server
+rather than a library, so `rishi.ollama` drives the daemon as well as the conversation: it finds a
+running one, and if there is none it installs Ollama under `~/.cache/rishi/ollama`, starts
+`ollama serve`, pulls the model, and stops the daemon again at exit. Nothing needs setting up first,
+and nothing is installed system-wide.
+
+An Ollama id (`qwen3:4b`) works, and so does a hub GGUF repo, which Ollama serves under `hf.co/`.
+The `quant` argument becomes the tag, so the same repo id runs on either local backend.
+
+Ollama takes `think` as a request field rather than a system-prompt hack, including the levels
+`'low'`, `'medium'`, `'high'` and `'max'`. `structured` is constrained by Ollama's own JSON schema
+support. `n_ctx` and `n_gpu_layers` keep their `rishi.llama` names and go out as `num_ctx` and
+`num_gpu`.
+
+``` python
+from rishi.ollama import ensure_ollama, OllamaServer, stop_ollama
+
+chat = Chat('ollama/qwen3:4b', think='low', n_ctx=8192)   # installs, serves and pulls as needed
+print(resp_text(chat('One fact about lobsters.')))
+
+cl = ensure_ollama()                       # the daemon itself, for pulls and bookkeeping
+print(cl.version(), cl.models(), cl.ps())
+print(model_caps('gemma3:4b', runtime='ollama'))          # asked of the daemon, not guessed
+
+srv = OllamaServer(models='/data/models', n_ctx=16384, kv_cache_type='q8_0', flash_attn=True)
+srv.start()                                # or configure one yourself and point chats at it
+```
+
+Ollama carries images but not audio, keeps its KV cache inside the daemon (so it cannot be saved or
+measured), and exposes no tokenizer, so `count_tokens` estimates. `rishi.llama` covers all three.
+
+``` python
+from rishi.ollama import qwen3_4b as ol_qwen
+
+o = Chat(f'ollama/{ol_qwen}', tools=[add], think=False)
+print(resp_text(o('What is 2 + 3? Use the add tool.')))
+o.unload(); o.close()                      # free the daemon's memory now, keep the daemon up
+```
+
 ## Backend guides
 
 | notebook | topics |
@@ -351,3 +396,4 @@ cc.close()
 | [`05_cursor.ipynb`](cursor.html) | CLI against SDK, model ids, agent modes |
 | [`06_claude.ipynb`](claude.html) | SDK against CLI, tools as prompt tags, MCP under a managed policy |
 | [`07_copilot.ipynb`](copilot.html) | the token exchange, editor headers, model listing |
+| [`08_ollama.ipynb`](ollama.html) | installing and running the daemon, thinking levels, `/api/show` |

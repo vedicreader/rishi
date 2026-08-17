@@ -2,8 +2,9 @@
 
 ## Cursor Cloud specific instructions
 
-`rishi` is an [nbdev](https://nbdev.fast.ai/) Python library, a thin `Chat` layer over four local and
-hosted backends (litert, llama.cpp, mlx, remote) plus cursor-agent, Claude Code and GitHub Copilot.
+`rishi` is an [nbdev](https://nbdev.fast.ai/) Python library, a thin `Chat` layer over five local and
+hosted backends (litert, llama.cpp, mlx, ollama, remote) plus cursor-agent, Claude Code and GitHub
+Copilot.
 It is a library, not a web service, so "running the app" means importing `rishi` and driving a model
 through `Chat`.
 
@@ -21,6 +22,10 @@ through `Chat`.
 - On Linux the `mlx` and `mlx-vlm` extras are skipped by platform markers, and `llama-cpp-python`
   installs the CPU wheel from the configured `llama-cpu` index. `rishi.mlx` will not import there,
   which is expected.
+- The `ollama` extra is `httpx`, plus `zstandard` on Linux below Python 3.14, which is what unpacks
+  the `.tar.zst` release archive. Ollama itself is not a Python package: `rishi.ollama` downloads it
+  into `~/.cache/rishi/ollama` and runs `ollama serve` there, needing no root and touching nothing
+  system-wide.
 - Run tooling through the venv, as `uv run <cmd>`. The nbdev console scripts are HYPHENATED
   (`nbdev-export`, `nbdev-test`, `nbdev-prepare`, `nbdev-clean`), not underscored.
 
@@ -33,6 +38,8 @@ through `Chat`.
 ### Tests
 - `uv run nbdev-test` executes every notebook. Most pass offline, because model calls are served from
   a record and replay cache (`RecordCache`, backed by `diskcache`) rather than hitting real models.
+- `08_ollama.ipynb` runs its whole backend against an `httpx.MockTransport` daemon, so it passes
+  with no Ollama installed and no daemon running. Its live cells are `#| eval: false`.
 - One notebook fails in a bare environment for external reasons, not a code bug. `05_cursor.ipynb`
   needs the `cursor-agent` CLI on `$PATH`, so install the Cursor CLI and run `cursor-agent login`.
   Even listing models shells out to it.
@@ -43,6 +50,10 @@ through `Chat`.
   `README.md`.
 
 ### Running a real model with no API key
+- The other keyless path is ollama, which needs nothing installed beforehand:
+  `from rishi.core import Chat, resp_text; chat = Chat('ollama/qwen3:0.6b'); print(resp_text(chat('hi')))`.
+  That installs Ollama, starts the daemon, pulls about 500MB of weights, and stops the daemon at
+  exit. `stop_ollama()` ends it sooner.
 - The keyless, self-contained path is the llama.cpp backend with a small GGUF:
   `from rishi.core import Chat, resp_text; chat = Chat('Qwen/Qwen3-0.6B-GGUF', n_ctx=2048); print(resp_text(chat('hi')))`.
   The weights download once from the HF Hub, with no token needed, and are cached. Inference runs on
@@ -55,6 +66,8 @@ through `Chat`.
 - `Chat(...)` takes generation options like `think`, `temp`, `top_k` and `seed` as CONSTRUCTOR args,
   not as `chat(...)` call args. Call args are things like `stream=True`.
 - `Chat(model)` picks the backend from the model id. Force it with
-  `runtime='llama'|'litert'|'remote'|'mlx'|'cursor'|'claude'|'copilot'`.
+  `runtime='llama'|'litert'|'remote'|'mlx'|'ollama'|'cursor'|'claude'|'copilot'`.
 - `claude` and `copilot` are never inferred from a model id, because both serve names the hosted
-  vendors also use. Ask for them with a `claude/` or `copilot/` prefix.
+  vendors also use. Ask for them with a `claude/` or `copilot/` prefix. A bare Ollama id such as
+  `qwen3:4b` needs `ollama/` for the same reason: a `name:tag` shape is also a Windows path. Only
+  `hf.co/...` infers ollama on its own.
