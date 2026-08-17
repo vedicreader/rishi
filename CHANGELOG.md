@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.18
+copilot models and trust store
+
 ## 0.1.17
 github copilot backend, and a prose and comment pass over every notebook
 

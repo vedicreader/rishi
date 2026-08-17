@@ -1,4 +1,4 @@
-"""GitHub Copilot's models over its OpenAI-shaped endpoint. The same `Chat` API, signed in with your Copilot subscription instead of a vendor key.
+"""GitHub Copilot models through the `Chat` API, using a Copilot subscription instead of a vendor key.
 
 Docs: https://vedicreader.github.io/rishi/copilot.html.md"""
 
@@ -6,11 +6,12 @@ Docs: https://vedicreader.github.io/rishi/copilot.html.md"""
 
 # %% auto #0
 __all__ = ['COPILOT_API', 'COPILOT_TOKEN_URL', 'COPILOT_CLIENT_ID', 'EDITOR_VERSION', 'PLUGIN_VERSION', 'USER_AGENT',
-           'INTEGRATION_ID', 'API_VERSION', 'OAUTH_ENVS', 'DEVICE_CODE_URL', 'ACCESS_TOKEN_URL', 'copilot_default',
-           'copilot_hdrs', 'oauth_paths', 'find_oauth', 'read_oauth', 'copilot_oauth', 'CopilotToken',
-           'copilot_exchange', 'CopilotAuth', 'copilot_models', 'save_oauth', 'copilot_login', 'CopilotChat',
-           'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream',
-           'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
+           'INTEGRATION_ID', 'API_VERSION', 'COPILOT_ENVS', 'GITHUB_ENVS', 'OAUTH_ENVS', 'DEVICE_CODE_URL',
+           'ACCESS_TOKEN_URL', 'copilot_default', 'copilot_hdrs', 'oauth_paths', 'find_oauth', 'read_oauth',
+           'copilot_oauth', 'CopilotToken', 'copilot_exchange', 'CopilotAuth', 'copilot_catalog', 'copilot_models',
+           'copilot_ctx', 'save_oauth', 'copilot_login', 'CopilotChat', 'UsageStats', 'ChatCallback', 'run_cbs',
+           'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy',
+           'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/07_copilot.ipynb #cp_imports
 import json, os, time
@@ -42,8 +43,6 @@ API_VERSION    = '2025-04-01'
 def copilot_hdrs(auth=None, *, integration_id=INTEGRATION_ID, vision=False, initiator=None,
                  intent='conversation-panel'):
     "Headers Copilot wants on every request. `auth` is a whole `Authorization` value."
-    # left out on the chat path, where fastllm sets it from the api key: two spellings of the
-    # same header go out as two headers
     h = {'editor-version': EDITOR_VERSION, 'editor-plugin-version': PLUGIN_VERSION,
          'user-agent': USER_AGENT, 'copilot-integration-id': integration_id,
          'x-github-api-version': API_VERSION}
@@ -54,8 +53,9 @@ def copilot_hdrs(auth=None, *, integration_id=INTEGRATION_ID, vision=False, init
     return h
 
 # %% ../nbs/07_copilot.ipynb #cp_creds
-#: Environment variables that may hold a GitHub OAuth token, most specific first.
-OAUTH_ENVS = ('GITHUB_COPILOT_OAUTH_TOKEN', 'GH_COPILOT_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN')
+COPILOT_ENVS = ('GITHUB_COPILOT_OAUTH_TOKEN', 'GH_COPILOT_TOKEN')
+GITHUB_ENVS = ('GH_TOKEN', 'GITHUB_TOKEN')
+OAUTH_ENVS = COPILOT_ENVS + GITHUB_ENVS   #: every variable read, though not all at the same moment
 
 def oauth_paths():
     "Files a Copilot sign-in may have left a GitHub OAuth token in, best first."
@@ -76,13 +76,17 @@ def read_oauth(p):
     try: return find_oauth(json.loads(Path(p).read_text()))
     except Exception: return None
 
+def _env_oauth(ks):
+    "The first of environment variables `ks` that holds anything."
+    return first(t for k in ks if (t := os.getenv(k)))
+
 def copilot_oauth(token=None):
-    "A GitHub OAuth token: what you passed, else `OAUTH_ENVS`, else whatever an editor left on disk."
+    "A GitHub OAuth token: what you passed, else `COPILOT_ENVS`, else an editor sign-in, else `GITHUB_ENVS`."
     if token: return token
-    for k in OAUTH_ENVS:
-        if (t := os.getenv(k)): return t
+    if (t := _env_oauth(COPILOT_ENVS)): return t
     for p in oauth_paths():
         if (t := read_oauth(p)): return t
+    if (t := _env_oauth(GITHUB_ENVS)): return t
     raise RuntimeError(
         'No GitHub OAuth token for Copilot. Set one of ' + ', '.join(OAUTH_ENVS) + ', or sign in to '
         'Copilot in an editor, or run `from rishi.copilot import copilot_login; copilot_login()`.')
@@ -103,10 +107,11 @@ def copilot_exchange(oauth=None, *, url=COPILOT_TOKEN_URL, timeout=30):
     "Trade a GitHub OAuth token for a `CopilotToken`."
     r = httpx.get(url, timeout=timeout,
                   headers={**copilot_hdrs(f'token {copilot_oauth(oauth)}'), 'Accept': 'application/json'})
-    if r.status_code in (401, 403): raise PermissionError(
+    if r.status_code in (401, 403, 404): raise PermissionError(
         f'GitHub refused the Copilot token exchange ({r.status_code}). That account needs an active '
         'Copilot subscription, and the OAuth token has to come from an app Copilot knows: an editor '
-        'sign-in or `copilot_login()`, not a personal access token.')
+        'sign-in or `copilot_login()`, not a personal access token. A personal access token is what '
+        'the 404 means: to an app Copilot does not know, the endpoint is not there at all.')
     r.raise_for_status()
     d = r.json()
     exp = float(d.get('expires_at') or 0)
@@ -131,12 +136,22 @@ class CopilotAuth:
         t = self.tok
         return f'CopilotAuth({"signed in" if t else "not yet"}, {t.base_url if t else COPILOT_API})'
 
-def copilot_models(auth=None, timeout=30):
-    "Model ids this account can reach. Copilot is the authority, not a table in here."
+def copilot_catalog(auth=None, timeout=30):
+    "Every model this account can reach, as `{id: entry}` the way Copilot describes them."
     t = (auth or CopilotAuth()).token()
     r = httpx.get(f"{t.base_url.rstrip('/')}/models", headers=copilot_hdrs(f'Bearer {t.key}'), timeout=timeout)
     r.raise_for_status()
-    return [m['id'] for m in (r.json().get('data') or []) if m.get('id')]
+    return {m['id']: m for m in (r.json().get('data') or []) if m.get('id')}
+
+def copilot_models(auth=None, timeout=30, kind='chat'):
+    "Model ids this account can reach. Copilot is the authority, not a table in here. `kind=None` keeps the embedding and completion ones too."
+    return [i for i, m in copilot_catalog(auth, timeout).items()
+            if not kind or (m.get('capabilities') or {}).get('type') == kind]
+
+def copilot_ctx(entry):
+    "The prompt window Copilot reports for one catalogue entry, or `None` where it reports none."
+    lim = ((entry or {}).get('capabilities') or {}).get('limits') or {}
+    return lim.get('max_prompt_tokens') or lim.get('max_context_window_tokens') or None
 
 # %% ../nbs/07_copilot.ipynb #cp_login
 DEVICE_CODE_URL  = 'https://github.com/login/device/code'   #: GitHub's device flow

@@ -15,33 +15,27 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
 ]
-# Keep the core install small. Backend runtimes are optional because their native wheels are
-# large, platform-specific, and most users only need one of them.
 dependencies = [
     "fastcore>=2.0.0",
     "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",
+    "truststore>=0.10",
 ]
 
 [project.optional-dependencies]
-# LiteRT and hosted inference are intentionally separate: local-only users should not need either.
 litert = ["litert-lm-api>=0.14.0"]
 remote = ["python-fastllm==0.0.36", "aidialog==0.0.7"]
 mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 mlx-vlm = [
     "mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'",
 ]
-# llama.cpp's native wheel can be substantial and platform-specific.
 llama = [
     "llama-cpp-python==0.3.30",  # pinned: abetlen's 0.3.33/0.3.34 metal wheels are corrupt upstream (bad internal CRCs)
     "soundfile>=0.14.0",
     "numpy",
 ]
 cursor = ["cursor-sdk>=0.1",]
-# Copilot's endpoint is OpenAI-shaped, so it rides on the same fastllm transport as `remote`; the
-# only thing it adds is the token exchange, which needs an HTTP client of its own.
 copilot = ["rishi[remote]", "httpx",]
-# Only the SDK path needs this; the `claude` CLI path drives a binary and needs nothing installed.
 claude = ["claude-agent-sdk>=0.2",]
 record = ["diskcache>=5.6.3",]
 all = ["rishi[litert,remote,mlx,mlx-vlm,llama,cursor,claude,copilot,record]",]

@@ -51,8 +51,9 @@ any transport code.
    `rishi.copilot.copilot_models()` for the copilot runtime. Copilot's list is per-plan, so a static
    table in ramabana would be wrong for some accounts.
 3. **Auth surface.** Ramabana's docs and any `RAMABANA_*` environment table should mention that
-   copilot reads `GITHUB_COPILOT_OAUTH_TOKEN`, `GH_COPILOT_TOKEN`, `GH_TOKEN` or `GITHUB_TOKEN`, and
-   falls back to the editor config files. If ramabana already ships a `login` verb, route
+   copilot reads `GITHUB_COPILOT_OAUTH_TOKEN` or `GH_COPILOT_TOKEN`, falls back to the editor config
+   files, and reads `GH_TOKEN` or `GITHUB_TOKEN` only after those, because a personal access token in
+   one of them is not something Copilot accepts. If ramabana already ships a `login` verb, route
    `ramabana login copilot` to `rishi.copilot.copilot_login()`.
 4. **Shared auth for multi-agent runs.** If ramabana builds several chats per session (subagents,
    a judge, a summarizer), build one `CopilotAuth` in the session object and pass `auth=` to each
