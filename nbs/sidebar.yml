@@ -8,3 +8,6 @@ website:
       - 03_mlx.ipynb
       - 04_remote.ipynb
       - 05_cursor.ipynb
+      - 06_claude.ipynb
+      - 07_copilot.ipynb
+      - 08_ollama.ipynb

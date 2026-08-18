@@ -14,7 +14,8 @@ import json
 from base64 import b64decode
 from fastllm.acomplete import acomplete
 from fastllm.types import Completion
-from aidialog.msg_parts import Msg, Part, PartType, data_url
+from aidialog.msg_parts import (Msg, Part, PartType, Text, Thinking, ToolUse, ToolResult,
+                                InputImage, InputAudio, data_url)
 from fastcore.all import store_attr, ifnone, listify
 from . import core
 from .core import *
@@ -58,42 +59,45 @@ def _aud_url(p):
     a = p.get('input_audio') or {}
     return f"data:audio/{a.get('format', 'wav')};base64,{a.get('data', '')}"
 
+def _media(cls, url):
+    "A media part carrying `url`, with the mime read off the data URL itself."
+    return cls(text=url, mime=(data_url(url) or (None, None))[0])
+
 def _parts(content):
-    "Canonical rishi content (str or list of parts) -> fastllm `Part`s."
+    "Canonical rishi content (str or list of parts) -> aidialog `Part`s."
     if content is None: return []
-    if isinstance(content, str): return [Part(type=PartType.text, text=content)]
+    if isinstance(content, str): return [Text(text=content)] if content else []   # no empty part on a tool-call turn
     out = []
     for p in content:
         if not isinstance(p, dict): continue
         t = p.get('type')
-        if   t == 'text':        out.append(Part(type=PartType.text, text=p.get('text', '')))
-        elif t == 'image_url':   out.append(Part(type=PartType.input_image, text=_img_url(p)))
-        elif t == 'input_audio': out.append(Part(type=PartType.input_audio, text=_aud_url(p)))
+        if   t == 'text':        out.append(Text(text=p.get('text', '')))
+        elif t == 'image_url':   out.append(_media(InputImage, _img_url(p)))
+        elif t == 'input_audio': out.append(_media(InputAudio, _aud_url(p)))
     return out
 
 def to_msg(m):
     "One canonical rishi history dict -> a fastllm `Msg`."
     role = m.get('role', 'user')
     if role == 'tool':
-        return Msg(role='tool', content=[Part(type=PartType.tool_result, text=str(m.get('content', '')),
-                                              data={'id': m.get('tool_call_id'), 'name': m.get('name', '')})])
+        return Msg(role='tool', content=[ToolResult(id=m.get('tool_call_id'), name=m.get('name', ''),
+                                                   text=str(m.get('content', '')))])
     parts = []
     if role == 'assistant' and (th := (m.get('channels') or {}).get('thought')):
-        parts.append(Part(type=PartType.thinking, text=th))
+        parts.append(Thinking(text=th))
     parts += _parts(m.get('content'))
     for tc in (m.get('tool_calls') or []):
         fn = tc.get('function') or {}
-        parts.append(Part(type=PartType.tool_use, data={'id': tc.get('id'), 'name': fn.get('name', ''),
-                                                        'arguments': fn.get('arguments') or {},
-                                                        'server': bool(tc.get('server'))}))
+        parts.append(ToolUse(id=tc.get('id'), name=fn.get('name', ''), arguments=fn.get('arguments') or {},
+                             server=bool(tc.get('server'))))
     return Msg(role=role, content=parts)
 
 def to_hist(m):
     "A fastllm `Msg` -> canonical rishi history dicts (a tool `Msg` can hold several results)."
     if m.role == 'tool':
-        return [{'role': 'tool', 'tool_call_id': (p.data or {}).get('id'), 'name': (p.data or {}).get('name', ''),
-                 'content': str(p.text)} for p in m.content if p.type == PartType.tool_result]
-    text = ''.join(p.text or '' for p in m.content if p.type == PartType.text)
+        return [{'role': 'tool', 'tool_call_id': p.id, 'name': p.name or '', 'content': str(p.text)}
+                for p in m.content if p.type == PartType.tool_result]
+    text = ''.join(p.text or '' for p in m.content if p.type in (PartType.text, PartType.refusal))
     th   = ''.join(p.text or '' for p in m.content if p.type == PartType.thinking)
     media = [p for p in m.content if p.type in (PartType.input_image, PartType.input_audio)]
     out = {'role': m.role, 'content': text}
@@ -101,25 +105,27 @@ def to_hist(m):
         parts = ([{'type': 'text', 'text': text}] if text else []) + [_media_part(p) for p in media]
         out['content'] = parts
     if th: out['channels'] = {'thought': th}
-    tcs = [ToolCall(name=(p.data or {}).get('name', ''), arguments=(p.data or {}).get('arguments') or {},
-                    id=(p.data or {}).get('id'), server=bool((p.data or {}).get('server')))
+    tcs = [ToolCall(name=p.name or '', arguments=p.arguments or {}, id=p.id, server=bool(p.server))
            for p in m.content if p.type == PartType.tool_use]
     if tcs: out['tool_calls'] = tcs
     return [out]
 
 def _media_part(p):
-    "A fastllm media `Part` -> an OpenAI-style content part."
+    "An aidialog media `Part` -> an OpenAI-style content part."
     if p.type == PartType.input_image: return {'type': 'image_url', 'image_url': {'url': p.text}}
     mime, b64 = data_url(p.text) or ('audio/wav', '')
     return {'type': 'input_audio', 'input_audio': {'data': b64, 'format': mime.split('/')[-1]}}
 
 # %% ../nbs/04_remote.ipynb #rm_resp
 def norm_usage(u, model=None):
-    "fastllm `Usage` -> rishi `UsageStats`."
+    "fastllm `Usage` -> a rishi usage dict, including the reasoning and cache-write counts providers bill for."
     if u is None: return {}
-    return {'prompt_tokens': u.prompt_tokens, 'completion_tokens': u.completion_tokens,
-            'total_tokens': u.total_tokens or (u.prompt_tokens + u.completion_tokens),
-            'cached_tokens': u.cached_tokens, 'model': model}
+    out = {'prompt_tokens': u.prompt_tokens, 'completion_tokens': u.completion_tokens,
+           'total_tokens': u.total_tokens or (u.prompt_tokens + u.completion_tokens),
+           'cached_tokens': u.cached_tokens, 'model': model}
+    for k in ('reasoning_tokens', 'cache_creation_tokens'):
+        if (v := getattr(u, k, 0)): out[k] = v
+    return out
 
 #: Keys a provider hides a generated image behind, and the mime key beside it.
 _inline_keys = (('inlineData', 'mimeType'), ('inline_data', 'mime_type'))
@@ -259,16 +265,15 @@ class RemoteChat(ToolLoopMixin, Chat):
         comp, split = None, StreamSplit() if self.tool_mode == 'tags' else None
         for o in sync_iter(_agen):
             if isinstance(o, Completion): comp = o
-            elif isinstance(o, Part):
-                if o.type == PartType.tool_use and o.data:
-                    yield {'content': [{'type': 'tool_call', 'name': o.data.get('name', ''),
-                                        'arguments': o.data.get('arguments') or {}}]}
-            elif isinstance(o, dict):
+            elif not isinstance(o, Part): continue          # a `Status` marker, not model content
+            elif o.type == PartType.tool_use:
+                yield {'content': [{'type': 'tool_call', 'name': o.name or '',
+                                    'arguments': o.arguments or {}}]}
+            elif o.type == PartType.thinking: yield {'channels': {'thought': o.text or ''}}
+            elif o.type in (PartType.text, PartType.refusal) and (t := o.text):
                 # in tag mode the calls arrive as text, so split it on the way past: otherwise the
                 # `<tool_call>` block renders as prose before the final `Resp` turns it into a call
-                if (t := o.get('text')): yield from (split.feed(t) if split else
-                                                     [{'content': [{'type': 'text', 'text': t}]}])
-                if (th := o.get('thinking')): yield {'channels': {'thought': th}}
+                yield from (split.feed(t) if split else [{'content': [{'type': 'text', 'text': t}]}])
         if split is not None: yield from split.finish()
         if comp is None: raise RuntimeError('stream ended without a final Completion')
         self._step_res = norm_completion(comp)

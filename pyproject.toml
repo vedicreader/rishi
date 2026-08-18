@@ -24,7 +24,7 @@ dependencies = [
 
 [project.optional-dependencies]
 litert = ["litert-lm-api>=0.14.0"]
-remote = ["python-fastllm==0.0.36", "aidialog==0.0.7"]
+remote = ["python-fastllm==0.0.41", "aidialog>=0.0.10"]
 mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 mlx-vlm = [
     "mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'",
@@ -34,11 +34,17 @@ llama = [
     "soundfile>=0.14.0",
     "numpy",
 ]
+ollama = [
+    "httpx",
+    # the Linux release archive is zstd; stdlib `compression.zstd` lands in 3.14, so before that
+    # rishi's own installer needs this. macOS ships .tgz and Windows .zip, which need nothing.
+    "zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'",
+]
 cursor = ["cursor-sdk>=0.1",]
 copilot = ["rishi[remote]", "httpx",]
 claude = ["claude-agent-sdk>=0.2",]
 record = ["diskcache>=5.6.3",]
-all = ["rishi[litert,remote,mlx,mlx-vlm,llama,cursor,claude,copilot,record]",]
+all = ["rishi[litert,remote,mlx,mlx-vlm,llama,ollama,cursor,claude,copilot,record]",]
 dev = ["rishi[all]",]
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"
