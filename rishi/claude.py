@@ -204,7 +204,7 @@ def _sdk_events(self:ClaudeChat, prompt, sp):
             elif isinstance(m, ResultMessage): res = m
         if res is None: raise RuntimeError('the Agent SDK ended without a result')
         yield 'result', {'result': res.result or ''.join(text), 'usage': res.usage, 'is_error': res.is_error, 'subtype': res.subtype}
-    return sync_iter(_agen)
+    return sync_iter(_agen, stop=self._cancel)
 
 # %% ../nbs/06_claude.ipynb #cl_steps
 @patch
@@ -228,7 +228,9 @@ def _stream_step(self:ClaudeChat, max_output_tokens=None):
         proc = subprocess.Popen(self._cmd('stream-json') + ['--include-partial-messages'],
                                 stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 text=True, cwd=str(self.workspace) if self.workspace else None)
-        with proc:
+        # `with proc` waits for the CLI on the way out, without a timeout. A cancelled turn abandons
+        # this generator, so kill the process rather than block the caller until it finishes alone.
+        with killed_on_exit(proc):
             proc.stdin.write(self._prompt()); proc.stdin.close()   # stdin, not argv: see `_run`
             for line in proc.stdout:
                 if not (line := line.strip()): continue

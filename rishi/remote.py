@@ -263,7 +263,7 @@ class RemoteChat(ToolLoopMixin, Chat):
             agen = await self._acomplete(self.hist, True, max_output_tokens)
             async for o in agen: yield o
         comp, split = None, StreamSplit() if self.tool_mode == 'tags' else None
-        for o in sync_iter(_agen):
+        for o in sync_iter(_agen, stop=self._cancel):
             if isinstance(o, Completion): comp = o
             elif not isinstance(o, Part): continue          # a `Status` marker, not model content
             elif o.type == PartType.tool_use:

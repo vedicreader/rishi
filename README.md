@@ -354,7 +354,7 @@ An Ollama id (`qwen3:4b`) works. So does a hub GGUF repo, which Ollama serves un
 `quant` as the tag. The same repo id then runs on either local backend.
 
 `think` is a request field here rather than a system-prompt hack, and takes the levels `'low'`,
-`'medium'`, `'high'` and `'max'`. `structured` uses Ollama's own JSON schema support. `n_ctx` and
+`'medium'`, `'high'` and `'max'`. `structured` uses Ollama’s own JSON schema support. `n_ctx` and
 `n_gpu_layers` keep their `rishi.llama` names and go out as `num_ctx` and `num_gpu`.
 
 ``` python

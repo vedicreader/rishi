@@ -281,7 +281,7 @@ class CursorChat(ToolLoopMixin, Chat):
         proc = subprocess.Popen(self._cmd('stream-json') + ['--stream-partial-output', self._prompt()],
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         split, res = StreamSplit(), None
-        with proc:
+        with killed_on_exit(proc):
             for line in proc.stdout:
                 if not (line := line.strip()): continue
                 try: o = json.loads(line)

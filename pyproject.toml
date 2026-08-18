@@ -20,6 +20,7 @@ dependencies = [
     "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",
     "truststore>=0.10",
+    "liteparse<2.13"
 ]
 
 [project.optional-dependencies]
@@ -35,9 +36,6 @@ llama = [
     "numpy",
 ]
 ollama = [
-    "httpx",
-    # the Linux release archive is zstd; stdlib `compression.zstd` lands in 3.14, so before that
-    # rishi's own installer needs this. macOS ships .tgz and Windows .zip, which need nothing.
     "zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'",
 ]
 cursor = ["cursor-sdk>=0.1",]

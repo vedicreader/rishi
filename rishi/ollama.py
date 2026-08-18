@@ -16,7 +16,7 @@ __all__ = ['OLLAMA_HOST', 'LOCAL_HOSTS', 'qwen3_06b', 'qwen3_17b', 'qwen3_4b', '
 
 # %% ../nbs/08_ollama.ipynb #ol_imports
 import json, os, time, atexit, platform, shutil, subprocess, tarfile, zipfile
-import httpx
+import httpx2 as httpx
 from urllib.parse import urlsplit
 from fastcore.funccall import get_schema
 from fastcore.all import Path, store_attr, L, ifnone, first, listify

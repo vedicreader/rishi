@@ -348,8 +348,10 @@ class LitertChat(core.Chat):
         "Tokens already resident in this conversation's KV cache and reusable by the next turn."
         return self.conv.token_count
     def cancel(self):
-        "Cancel the in-flight generation."
-        self.conv.cancel_process()
+        "Cancel the in-flight generation, and set the flag the shared loop reads."
+        super().cancel()
+        if self.conv is not None: self.conv.cancel_process()
+        return True
     def count_tokens(self, text):
         "Number of tokens in `text` per the engine tokenizer."
         return len(self.engine.tokenize(text))

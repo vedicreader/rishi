@@ -230,12 +230,16 @@ class MlxChat(ToolLoopMixin, Chat):
         "Stream one completion, yielding chunk dicts and leaving the merged `Resp` on `self._step_res`."
         ids, feed, cached = self._feed_ids()
         split, fin, gen, pt, gt = StreamSplit(), None, [], 0, 0
-        for r in self._generate(feed, max_output_tokens):
-            fin, pt, gt = r.finish_reason or fin, r.prompt_tokens, r.generation_tokens
-            gen.append(r.token)
-            yield from split.feed(r.text)
+        try:
+            for r in self._generate(feed, max_output_tokens):
+                fin, pt, gt = r.finish_reason or fin, r.prompt_tokens, r.generation_tokens
+                gen.append(r.token)
+                yield from split.feed(r.text)
+        finally:
+            # `stream_generate` grows the cache a token at a time, so abandoning it half way leaves
+            # `_cache_ids` short of what the cache holds and the next turn trims the wrong amount
+            if self._cache is not None: self._cache_ids = ids + gen
         yield from split.finish()
-        if self._cache is not None: self._cache_ids = ids + gen
         self._step_res = self._mk_resp(split, fin, cached, pt, gt)
 
     def _mk_resp(self, split, fin, cached, pt, gt):

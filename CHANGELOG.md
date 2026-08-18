@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.19
+ollama and agent cancel changes
+
 ## 0.1.18
 copilot models and trust store
 

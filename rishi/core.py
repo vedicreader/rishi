@@ -6,26 +6,26 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['system_certs', 'tool_reminder_', 'TAG_TOOLS_SP', 'CHARS_PER_TOKEN', 'runtimes', 'dflt_runtime', 'MODALITIES',
-           'CAPS_FALLBACK', 'ENDPOINT_TOOLS', 'budget_msg_', 'dflt_final_prompt_', 'qa_sp_', 'CHAT_CACHE',
-           'KEY_VERSION', 'use_system_certs', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'quote_',
-           'Resp', 'tc_summary_', 'mk_tr_details', 'StreamFormatter', 'display_stream', 'truncated',
-           'TruncationCallback', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs', 'is_media', 'mk_toolspec',
-           'split_think', 'mk_tag_tc', 'parse_tool_tags', 'tag_tools_sp', 'est_tokens', 'render_prompt', 'parse_args',
-           'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback',
-           'ToolReminderCallback', 'common_prefix_len', 'split_runtime', 'infer_runtime', 'resolve_runtime',
-           'get_runtime', 'Caps', 'model_caps', 'ToolCall', 'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs',
-           'ContextWindowExceededError', 'is_ctx_error', 'Chat', 'ToolLoopMixin', 'msg_groups', 'evict_middle',
-           'SlidingWindowCallback', 'AsyncChat', 'adisplay_stream', 'browser_approval', 'hitl_policy', 'extract_code',
-           'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'sync_iter', 'task_complete', 'output_matches',
-           'PyFenceCallback', 'is_transient', 'RecordCache', 'CachedChat', 'repo_root', 'mv_skill_md', 'ChatBroker',
-           'BrokerChat']
+           'CAPS_FALLBACK', 'ENDPOINT_TOOLS', 'budget_msg_', 'cancel_msg_', 'cancelled_reply_', 'dflt_final_prompt_',
+           'qa_sp_', 'CHAT_CACHE', 'KEY_VERSION', 'use_system_certs', 'UsageStats', 'ChatCallback', 'run_cbs',
+           'resp_text', 'thought', 'quote_', 'Resp', 'tc_summary_', 'mk_tr_details', 'StreamFormatter',
+           'display_stream', 'truncated', 'TruncationCallback', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs',
+           'is_media', 'mk_toolspec', 'split_think', 'mk_tag_tc', 'parse_tool_tags', 'tag_tools_sp', 'est_tokens',
+           'render_prompt', 'parse_args', 'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit',
+           'acc_tc', 'UsageCallback', 'ToolReminderCallback', 'common_prefix_len', 'split_runtime', 'infer_runtime',
+           'resolve_runtime', 'get_runtime', 'Caps', 'model_caps', 'ToolCall', 'tc_name', 'mk_tool_res_msg',
+           'mk_tool_res_msgs', 'ContextWindowExceededError', 'is_ctx_error', 'Chat', 'ToolLoopMixin', 'msg_groups',
+           'evict_middle', 'SlidingWindowCallback', 'AsyncChat', 'adisplay_stream', 'browser_approval', 'hitl_policy',
+           'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'killed_on_exit', 'sync_iter',
+           'task_complete', 'output_matches', 'PyFenceCallback', 'is_transient', 'RecordCache', 'CachedChat',
+           'repo_root', 'mv_skill_md', 'ChatBroker', 'BrokerChat']
 
 # %% ../nbs/00_core.ipynb #655b2174ec1d6506
-import json, re, os, asyncio, io, ast, inspect, warnings, uuid
+import json, re, os, asyncio, io, ast, inspect, subprocess, threading, warnings, uuid
 from html import escape
 from urllib.request import Request, urlopen
 from mimetypes import guess_type
-from contextlib import ExitStack, redirect_stdout
+from contextlib import ExitStack, contextmanager, redirect_stdout
 from concurrent.futures import ThreadPoolExecutor
 from base64 import b64encode, b64decode
 from hashlib import sha256
@@ -705,6 +705,19 @@ def mk_tool_res_msgs(tcs, results):
 # %% ../nbs/00_core.ipynb #11c2627de6f9c1d8
 #: Shown to the model when `max_steps` tool budget is exhausted.
 budget_msg_ = 'Tool-call budget exceeded; no more tools will run this turn.'
+#: Recorded in place of a tool result the user stopped the turn before running.
+cancel_msg_ = 'Not run: the user stopped this turn.'
+#: Stands in for the reply of a turn stopped before it had said anything.
+cancelled_reply_ = '(stopped by the user)'
+
+def _chunk_text(o):
+    "The plain text of one streamed chunk dict. Raw and markdown mode see the same chunks."
+    return ''.join(c.get('text', '') for c in (o.get('content') or [])
+                   if isinstance(c, dict) and c.get('type') == 'text') if isinstance(o, dict) else ''
+
+def _chunk_thought(o):
+    "The thinking of one streamed chunk dict."
+    return (o.get('channels') or {}).get('thought', '') if isinstance(o, dict) else ''
 dflt_final_prompt_ = ("You've reached the tool-call budget for this turn. Stop calling tools and "
                       "answer with what you already have.")
 
@@ -754,6 +767,7 @@ class Chat:
         store_attr('sp,approve,tool_max_len,max_steps,parallel_tools,max_parallel_tools,final_prompt', self)
         self.use, self.cbs, self.turn_msg, self.turn_res = UsageStats(), L(), None, None
         self._steps, self._budget_exceeded, self._final_sent = 0, False, False
+        self._cancel = threading.Event()
         if default_cbs: self.add_cbs(self._dflt_cbs)
         self.add_cbs(cbs)
         return model
@@ -786,6 +800,7 @@ class Chat:
         One `Chat` is one conversation: `hist`, the turn state and the backend cache are all shared
         mutable state, so a single instance is not safe to drive from two threads at once.'''
         self.use, self._steps, self._budget_exceeded, self._final_sent = UsageStats(), 0, False, False
+        self._cancel.clear()
         self._stream_raw = stream == 'raw'
         if stream: return self._stream_turn(msg, max_output_tokens, cbs)
         added = self.add_cbs(cbs)
@@ -835,6 +850,19 @@ class Chat:
     def recover_context(self, error, max_output_tokens=None):
         "Backend contract for recovering from a full context window. Backends override this."
         raise ContextWindowExceededError(f'context recovery is not implemented for {type(self).__name__}') from error
+
+    def cancel(self):
+        """Ask the turn in flight to stop at its next safe point. Safe to call from another thread.
+
+        Cooperative, not a kill: the loop stops between chunks and between tool calls, so `hist` is
+        left with a `tool` result for every `tool_call` and the next turn can be sent. What it costs
+        is that a backend with no abort seam finishes the completion it is already inside.
+        """
+        self._cancel.set()
+        return True
+
+    @property
+    def cancelled(self): return self._cancel.is_set()
 
     def close(self):
         "Release backend resources (overridden per backend)."
@@ -900,7 +928,9 @@ class ToolLoopMixin:
         if can_parallel:
             n = min(len(todo), self.max_parallel_tools if self.max_parallel_tools is not None else len(todo))
             with ThreadPoolExecutor(max_workers=n, thread_name_prefix='rishi-tool') as ex: outs = list(ex.map(self.call_tool, todo))
-        else: outs = [self.call_tool(tc) for tc in todo]
+        # approval happened for the whole batch up front, so this is where a cancel raised during
+        # call 2 of 5 stops calls 3 to 5 from running
+        else: outs = [cancel_msg_ if self.cancelled else self.call_tool(tc) for tc in todo]
         outs = iter(outs)
         for tc, (ok, denial) in zip(tcs, oks): self._record_tool(tc, next(outs) if ok else denial)
 
@@ -918,19 +948,39 @@ class ToolLoopMixin:
         except Exception:
             raise ContextWindowExceededError(f"could not recover after truncating tool results: {err}") from err
 
-    def _finish_turn(self, res, us):
+    def _refuse_tools(self, res, why=cancel_msg_):
+        """Record `res` and a refusal for each call it proposed, without running any of them.
+
+        A stopped turn still owes the provider a `tool` result per `tool_call`, or the next request
+        is rejected for an unanswered call. This is the same shape `_run_tools` leaves behind when
+        approval says no, minus the execution.
+        """
+        self.hist.append(res)
+        for tc in res.get('tool_calls') or []: self._record_tool(tc, why)
+
+    def _cut_res(self, text, thought=''):
+        """The assistant message for a turn cut mid-stream.
+
+        Never empty: a stop landing before the first token would otherwise leave the user message
+        with no reply, which Anthropic and Gemini both refuse on the next request.
+        """
+        res = Resp({'role': 'assistant', 'content': text or cancelled_reply_})
+        if thought: res['channels'] = {'thought': thought}
+        return res
+
+    def _finish_turn(self, res, us, recorded=False):
         "Shared tail: total the turn's usage, record the response, fire `after_response`."
         if (u := sum_usage(us)): res['usage'] = u
-        self._ctx_tokens = (us[-1] or {}).get('total_tokens', self._ctx_tokens)
+        if us: self._ctx_tokens = (us[-1] or {}).get('total_tokens', self._ctx_tokens)
         self.turn_res = res
-        self.hist.append(res)
+        if not recorded: self.hist.append(res)
 
     def _send(self, msg, max_output_tokens=None):
         'Send one message, looping until the model stops calling tools or the budget ends the turn.'
         self.turn_msg = self.mk_msg(msg)
         for _ in run_cbs(self, 'before_send'): pass
         if self.turn_msg is not None: self.hist.append(self.turn_msg)
-        us = []
+        us, recorded = [], False
         while True:
             try: res = self._model_step(max_output_tokens)
             except Exception as e:
@@ -938,9 +988,14 @@ class ToolLoopMixin:
                 res = self.recover_context(e, max_output_tokens)
             us.append(res.get('usage'))
             if not res.get('tool_calls') or self._budget_exceeded: break
+            # not streaming, so there is no seam inside the completion: a cancel lands here, between
+            # the step that proposed calls and running them
+            if self.cancelled: self._refuse_tools(res); recorded = True; break
             self._run_tools(res)
+            # a cancel raised while those tools ran ends the turn here; `_run_tools` recorded `res`
+            if self.cancelled: recorded = True; break
             if self._budget_exceeded: break     # budget ran out mid-round; `__call__` sends `final_prompt`
-        self._finish_turn(res, us)
+        self._finish_turn(res, us, recorded)
         for _ in run_cbs(self, 'after_response'): pass
         return self.turn_res
 
@@ -951,17 +1006,31 @@ class ToolLoopMixin:
             self.turn_msg = self.mk_msg(msg)
             for _ in run_cbs(self, 'before_send'): pass
             if self.turn_msg is not None: self.hist.append(self.turn_msg)
-            fmt, us = StreamFormatter(), []
+            fmt, us, recorded, cut = StreamFormatter(), [], False, False
             while True:
+                said, thought_ = [], []
+                step = self._stream_step(max_output_tokens)
                 try:
-                    for o in self._stream_step(max_output_tokens):
+                    for o in step:
+                        # the one seam inside a completion: checked per chunk, so stopping costs at
+                        # most one more token rather than the rest of the answer
+                        if self.cancelled: cut = True; break
+                        said.append(_chunk_text(o)); thought_.append(_chunk_thought(o))
                         if (s := self._emit(o, fmt)): yield s
                 except Exception as e:
                     if not is_ctx_error(self, e): raise
                     res = self.recover_context(e, max_output_tokens)
                     yield self._emit(res, StreamFormatter())
                     us.append(res.get('usage')); break
+                finally:
+                    if cut: step.close()      # backends abort their own wire call from here
                 if fmt._inthink and not self._stream_raw: fmt._inthink = False; yield '\n\n'
+                if cut:
+                    # `_step_res` is only assigned once a step finishes, so a cut turn writes its own
+                    # partial message rather than recording the previous step's a second time
+                    res = self._cut_res(''.join(said), ''.join(thought_))
+                    self.hist.append(res); recorded = True
+                    break
                 res = self._step_res
                 us.append(res.get('usage'))
                 if not res.get('tool_calls') or self._budget_exceeded: break
@@ -969,9 +1038,11 @@ class ToolLoopMixin:
                     o = {'content': [{'type': 'tool_call', 'name': tc_name(tc),
                                       'arguments': (tc.get('function') or {}).get('arguments', {})}]}
                     if (s := self._emit(o, fmt)): yield s
+                if self.cancelled: self._refuse_tools(res); recorded = True; break
                 self._run_tools(res)
+                if self.cancelled: recorded = True; break
                 if self._budget_exceeded: break
-            self._finish_turn(res, us)
+            self._finish_turn(res, us, recorded)
             yield from run_cbs(self, 'after_response')
             return self.turn_res   # stream's final Resp, captured by SaveReturn / AsyncChat `.value`
         finally: self._streaming = prev; self.remove_cbs(added)
@@ -1118,20 +1189,52 @@ def run_coro(coro):
     except RuntimeError: return asyncio.run(coro)
     with ThreadPoolExecutor(1) as ex: return ex.submit(asyncio.run, coro).result()
 
-def sync_iter(agen_fn):
+@contextmanager
+def killed_on_exit(proc, timeout=2):
+    """Run a block over `proc`; leaving it early kills the child rather than waiting for it.
+
+    `with Popen(...)` calls `wait()` with no timeout, so a generator abandoned mid-stream blocks its
+    caller until the CLI finishes work nobody wants any more. A block that ends normally still
+    waits, and leaves the pipes open for the caller to read `stderr` from.
+    """
+    try: yield proc
+    except BaseException:
+        if proc.poll() is None:
+            proc.terminate()
+            try: proc.wait(timeout)
+            except subprocess.TimeoutExpired: proc.kill(); proc.wait()
+        for p in (proc.stdin, proc.stdout, proc.stderr):
+            if p is not None:
+                try: p.close()
+                except Exception: pass
+        raise
+    else: proc.wait()
+
+def sync_iter(agen_fn, stop=None):
     '''Drive the async generator returned by `agen_fn()` from sync code, yielding its items.
 
     The whole generator runs on one event loop in one background thread, rather than a fresh loop per
     item: a streaming HTTP response is bound to the loop that opened it, so pumping it with repeated
-    `asyncio.run` calls would tear the connection down mid-stream.'''
+    `asyncio.run` calls would tear the connection down mid-stream.
+
+    `stop` is an event polled after each item. Setting it closes the async generator on the loop that
+    opened it, which is what ends a provider's HTTP stream. Without it, abandoning this generator
+    only stops the *consumer*: the pump thread is detached and its queue is unbounded, so the model
+    goes on generating, and billing, until the response ends by itself.'''
     from queue import Queue
     from threading import Thread
     q, done = Queue(), object()
     async def _pump():
+        agen = agen_fn()
         try:
-            async for o in agen_fn(): q.put(o)
+            async for o in agen:
+                q.put(o)
+                if stop is not None and stop.is_set(): break
         except BaseException as e: q.put(e)
-        finally: q.put(done)
+        finally:
+            try: await agen.aclose()
+            except BaseException: pass
+            q.put(done)
     t = Thread(target=lambda: asyncio.run(_pump()), daemon=True)
     t.start()
     try:
@@ -1309,6 +1412,12 @@ class CachedChat:
 
     @property
     def cache(self): return self.rec.cache
+
+    def cancel(self):
+        "Stop the live turn, if one was ever built. Nothing to stop while replaying."
+        return self._chat.cancel() if self._chat is not None else False
+    @property
+    def cancelled(self): return self._chat is not None and self._chat.cancelled
     @property
     def chat(self):
         "The real `Chat`, built only when something actually has to be asked."
@@ -1347,6 +1456,8 @@ class CachedChat:
             r = self.chat(prompt, **kw)
             return {'resp': dict(r), 'hist': [dict(m) for m in self.chat.hist[n:]]}
         rec = self.rec(key, _live, what)
+        # a stopped turn is a truncated one, and a recording of it would replay the truncation forever
+        if not hit and self.cancelled: self.rec.forget(key)
         self.hist += [dict(m) for m in rec['hist']]
         # a replayed turn never reached the live chat, so hand it the history it missed
         if hit and self._chat is not None:
