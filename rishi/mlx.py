@@ -93,6 +93,8 @@ class MlxChat(ToolLoopMixin, Chat):
     _runtime = 'mlx'
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     _media_ok = False    # text-only; `MlxVlmChat` flips this
+    _media_note = ("this MLX model is text-only. Install `pip install 'rishi[mlx-vlm]'` and use a vision "
+                   "model (e.g. rishi.mlx.qwen3vl_4b) for image or audio input, or pass vlm=True.")
     mk_content, mk_msg, mk_msgs = staticmethod(mk_oai_content), staticmethod(mk_oai_msg), staticmethod(mk_oai_msgs)
 
     def __new__(cls, model=None, *, runtime=None, model_path=None, vlm=None, **kw):
@@ -184,20 +186,12 @@ class MlxChat(ToolLoopMixin, Chat):
         self._reset_cache()
         return False
 
-    def _check_media(self):
-        "Text-only models cannot take image or audio parts. Say so rather than dropping them in silence."
-        c = (self.turn_msg or {}).get('content')
-        if isinstance(c, list) and any(is_media(p) for p in c): raise TypeError(
-            "this MLX model is text-only. Install `pip install 'rishi[mlx-vlm]'` and use a vision model "
-            f"(e.g. rishi.mlx.qwen3vl_4b) for image or audio input, or pass vlm=True.")
-
     def _msgs(self):
         "OpenAI-style messages for the chat template: system prompt plus canonical history."
         return ([{'role': 'system', 'content': self.sp}] if self.sp else []) + self.hist2fmt(self.hist)
 
     def _prompt_ids(self):
         "Token ids for the whole conversation, rendered with the model's own chat template."
-        if not self._media_ok: self._check_media()
         kw = dict(add_generation_prompt=True)
         if self.toolspecs: kw['tools'] = self.toolspecs
         if self.think is not None: kw['enable_thinking'] = self.think

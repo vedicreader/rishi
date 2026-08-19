@@ -72,7 +72,7 @@ through `Chat`.
 - `Chat(...)` takes generation options like `think`, `temp`, `top_k` and `seed` as CONSTRUCTOR args,
   not as `chat(...)` call args. Call args are things like `stream=True`.
 - `Chat(model)` picks the backend from the model id. Force it with
-  `runtime='llama'|'litert'|'remote'|'mlx'|'ollama'|'cursor'|'claude'|'copilot'`.
+  `runtime='llama'|'litert'|'remote'|'mlx'|'ollama'|'claude'|'copilot'`.
 - `claude` and `copilot` are never inferred from a model id, because both serve names the hosted
   vendors also use. Ask for them with a `claude/` or `copilot/` prefix. A bare Ollama id such as
   `qwen3:4b` needs `ollama/` for the same reason: a `name:tag` shape is also a Windows path. Only

@@ -1,13 +1,13 @@
 ---
 name: rishi
-description: Run models through rishi's one Chat API. Local engines are Gemma .litertlm over litert_lm (rishi.litert), any GGUF over llama-cpp-python (rishi.llama), quantized models on Apple silicon over MLX (rishi.mlx) and anything an Ollama daemon serves (rishi.ollama). Hosted ones are vendor APIs over fastllm (rishi.remote), Cursor (rishi.cursor), Claude Code (rishi.claude) and GitHub Copilot (rishi.copilot). All of them share tool calling with human approval, a tool-call budget, streaming, thinking, a python sandbox, structured output, classification and graded answers. Use when writing or debugging offline LLM chat, local tool-use agents, or anything mentioning rishi, litert_lm, gemma .litertlm models, local GGUF/llama.cpp chat, mlx-lm/mlx-vlm, ollama, cursor-agent, Claude Code or GitHub Copilot.
+description: Run models through rishi's one Chat API. Local engines are Gemma .litertlm over litert_lm (rishi.litert), any GGUF over llama-cpp-python (rishi.llama), quantized models on Apple silicon over MLX (rishi.mlx) and anything an Ollama daemon serves (rishi.ollama). Hosted ones are vendor APIs over fastllm (rishi.remote), Claude Code (rishi.claude) and GitHub Copilot (rishi.copilot). All of them share tool calling with human approval, a tool-call budget, streaming, thinking, a python sandbox, structured output, classification and graded answers. Use when writing or debugging offline LLM chat, local tool-use agents, or anything mentioning rishi, litert_lm, gemma .litertlm models, local GGUF/llama.cpp chat, mlx-lm/mlx-vlm, ollama, Claude Code or GitHub Copilot.
 ---
 
 # rishi
 
-rishi wraps eight backends in one callable `Chat`. Four are on-device, and need no API key and no network once weights are cached. The backend-agnostic API lives in `rishi.core`. The local engines are `rishi.litert` (Gemma `.litertlm` over litert_lm), `rishi.llama` (any GGUF over llama-cpp-python), `rishi.mlx` (Apple silicon over mlx-lm and mlx-vlm) and `rishi.ollama` (whatever a local Ollama daemon serves). The hosted ones are `rishi.remote` for vendor APIs over fastllm, plus `rishi.cursor`, `rishi.claude` and `rishi.copilot`. `Chat(model)` picks one from the model name.
+rishi wraps seven backends in one callable `Chat`. Four are on-device, and need no API key and no network once weights are cached. The backend-agnostic API lives in `rishi.core`. The local engines are `rishi.litert` (Gemma `.litertlm` over litert_lm), `rishi.llama` (any GGUF over llama-cpp-python), `rishi.mlx` (Apple silicon over mlx-lm and mlx-vlm) and `rishi.ollama` (whatever a local Ollama daemon serves). The hosted ones are `rishi.remote` for vendor APIs over fastllm, plus `rishi.claude` and `rishi.copilot`. `Chat(model)` picks one from the model name.
 
-The core install is small, and every runtime is an extra: `rishi[litert]`, `rishi[llama]`, `rishi[mlx]`, `rishi[ollama]`, `rishi[remote]`, `rishi[cursor]`, `rishi[claude]`, `rishi[copilot]`, or `rishi[all]` for everything your platform supports. Backend modules load lazily, and asking for one without its extra raises an ImportError naming it.
+The core install is small, and every runtime is an extra: `rishi[litert]`, `rishi[llama]`, `rishi[mlx]`, `rishi[ollama]`, `rishi[remote]`, `rishi[claude]`, `rishi[copilot]`, or `rishi[all]` for everything your platform supports. Backend modules load lazily, and asking for one without its extra raises an ImportError naming it.
 
 ## The one thing to remember
 
@@ -24,7 +24,7 @@ print(resp_text(r))
 
 ## API surface
 
-- `Chat(model=None, *, runtime=None, model_path=None, engine=None, backend=Backend.CPU(), multimodal=True, cache_dir=None, sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None, think=False, filter_think=True, temp=None, top_k=None, top_p=None, seed=None, sampler_config=None, max_output_tokens=None, cbs=None, default_cbs=True)` . `model` comes first, as a repo id or local path. `Chat` dispatches by `runtime` and model shape, and returns a `LitertChat`, `LlamaChat`, `MlxChat`, `OllamaChat`, `RemoteChat`, `CursorChat`, `ClaudeChat` or `CopilotChat`. The litert-specific kwargs are shown here. llama adds `quant`, `n_ctx`, `n_gpu_layers`, `mmproj` and `comp_kw`, and mlx and the hosted backends have their own, in their sections.
+- `Chat(model=None, *, runtime=None, model_path=None, engine=None, backend=Backend.CPU(), multimodal=True, cache_dir=None, sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None, think=False, filter_think=True, temp=None, top_k=None, top_p=None, seed=None, sampler_config=None, max_output_tokens=None, cbs=None, default_cbs=True)` . `model` comes first, as a repo id or local path. `Chat` dispatches by `runtime` and model shape, and returns a `LitertChat`, `LlamaChat`, `MlxChat`, `OllamaChat`, `RemoteChat`, `ClaudeChat` or `CopilotChat`. The litert-specific kwargs are shown here. llama adds `quant`, `n_ctx`, `n_gpu_layers`, `mmproj` and `comp_kw`, and mlx and the hosted backends have their own, in their sections.
 - `chat(msg=None, stream=False, max_output_tokens=None, cbs=None)` runs a turn. `stream=True` returns a generator of markdown chunks. `cbs=` registers callbacks for that turn only.
 - State: `chat.hist` (Python-visible history, print with `chat.print_hist()`), `chat.use` (a `UsageStats`: `total`, `in`, `out`, `turns`), `chat.token_count` (live context size), `chat.pct_full` (that over `ctx_limit`).
 - Chat methods: `run_py(code)`, `classify(text, labels)`, `structured(prompt, schema)`, `check(question, expected, ...)`, `grades(question, expected, actual)`, `count_tokens(text)`, `render(msg)`, `cancel()`, `add_cb`/`add_cbs`/`remove_cb`/`remove_cbs`, `close()`.
@@ -123,11 +123,11 @@ A Chat that built its own engine frees it on `close()`. A Chat handed an engine 
 - The log line `WebGPU sampler not available, falling back to statically linked C API` is harmless. Quiet the noise with `set_min_log_severity(3)`.
 - Tool and structured-output arguments arrive as floats (`21.0`) from the model's JSON. Cast inside the tool if you need strict ints.
 - `run_text_scoring` is not available on this runtime, so `classify` and `check` grade by generation, not log-likelihood scoring.
-- TLS behind a re-signing corporate proxy: `certifi` does not know the proxy's root certificate and every hosted backend fails with `CERTIFICATE_VERIFY_FAILED`. Importing rishi calls `use_system_certs()`, which verifies against the OS trust store through `truststore`; `RISHI_SYSTEM_CERTS=0` turns it off. It covers what Python dials (`remote`, `copilot`, the `cursor` and `claude` SDK paths), not the CLI paths, which are separate binaries with trust stores of their own.
+- TLS behind a re-signing corporate proxy: `certifi` does not know the proxy's root certificate and every hosted backend fails with `CERTIFICATE_VERIFY_FAILED`. Importing rishi calls `use_system_certs()`, which verifies against the OS trust store through `truststore`; `RISHI_SYSTEM_CERTS=0` turns it off. It covers what Python dials (`remote`, `copilot`, the `claude` SDK path), not the CLI paths, which are separate binaries with trust stores of their own.
 
 ## One interface for every backend
 
-`Chat` picks the backend from the model name, fastllm-style, and returns that backend's own `Chat` subclass: `LitertChat`, `LlamaChat`, `MlxChat`, `RemoteChat`, `CursorChat`, `ClaudeChat` or `CopilotChat`. It is a real subclass, not a wrapper, so `isinstance(chat, Chat)` holds and `chat.runtime` says which one you got. Callbacks, tools, `hist`, `use` and streaming are exactly as documented per backend. `**kw` passes straight through, so backend-specific arguments such as `backend=Backend.GPU()`, `mmproj=`, `n_gpu_layers=` and `kv_bits=` still work.
+`Chat` picks the backend from the model name, fastllm-style, and returns that backend's own `Chat` subclass: `LitertChat`, `LlamaChat`, `MlxChat`, `RemoteChat`, `ClaudeChat` or `CopilotChat`. It is a real subclass, not a wrapper, so `isinstance(chat, Chat)` holds and `chat.runtime` says which one you got. Callbacks, tools, `hist`, `use` and streaming are exactly as documented per backend. `**kw` passes straight through, so backend-specific arguments such as `backend=Backend.GPU()`, `mmproj=`, `n_gpu_layers=` and `kv_bits=` still work.
 
 ```python
 from rishi import Chat, AsyncChat
@@ -139,7 +139,6 @@ Chat('mlx-community/Qwen3-VL-4B-Instruct-4bit')     # -> mlx, and on to MlxVlmCh
 Chat('ollama/qwen3:4b')                             # -> ollama (prefix only for a bare id)
 Chat('hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M')             # -> ollama (only Ollama addresses hf.co)
 Chat('claude-sonnet-4-5')                           # -> remote (hosted, via fastllm)
-Chat('cursor/grok-4.5')                             # -> cursor (prefix only)
 Chat('claude/claude-sonnet-5')                      # -> claude (Claude Code, prefix only)
 Chat('copilot/gpt-4.1')                             # -> copilot (GitHub Copilot, prefix only)
 Chat('openrouter/moonshotai/kimi-k2')               # vendor-prefixed hosted names work too

@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.20
+remove cursor, use claude sdk for claude chat. remove fastllm claude
+
 ## 0.1.19
 ollama and agent cancel changes
 

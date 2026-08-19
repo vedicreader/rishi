@@ -15,7 +15,6 @@ pip install 'rishi[llama]'     # any GGUF
 pip install 'rishi[mlx]'       # Apple Silicon (add mlx-vlm for vision and audio)
 pip install 'rishi[ollama]'    # any Ollama model; rishi installs and runs the daemon
 pip install 'rishi[remote]'    # Claude, GPT, Gemini and friends, via fastllm
-pip install 'rishi[cursor]'    # Cursor models via SDK or cursor-agent CLI
 pip install 'rishi[claude]'    # Claude Code via the Agent SDK (the `claude` CLI needs nothing)
 pip install 'rishi[copilot]'   # GitHub Copilot, on your Copilot subscription
 pip install 'rishi[all]'       # everything your platform supports
@@ -76,7 +75,6 @@ or a prefix such as `llama/` when the id is ambiguous.
 | `ollama/...`, `hf.co/...`             | ollama                   |
 | `mlx-community/...`                   | MLX                      |
 | `claude-...`, `gpt-...`, `gemini-...` | remote (fastllm)         |
-| `cursor/...` or `CursorChat(...)`     | cursor                   |
 | `claude/...` or `ClaudeChat(...)`     | claude (Claude Code)     |
 | `copilot/...` or `CopilotChat(...)`   | copilot (GitHub Copilot) |
 
@@ -89,14 +87,12 @@ print(resolve_runtime('litert-community/gemma-4-E2B-it-litert-lm'))
 print(resolve_runtime('Qwen/Qwen3-4B-GGUF'))
 print(resolve_runtime('mlx-community/Qwen3-4B-4bit'))
 print(resolve_runtime('claude-sonnet-4-5'))
-print(resolve_runtime('cursor/default'))
 ```
 
     ('litert', 'litert-community/gemma-4-E2B-it-litert-lm')
     ('llama', 'Qwen/Qwen3-4B-GGUF')
     ('mlx', 'mlx-community/Qwen3-4B-4bit')
     ('remote', 'claude-sonnet-4-5')
-    ('cursor', 'default')
 
 ## Feature tour
 
@@ -279,7 +275,6 @@ print(chat.check('Capital of France?', 'Paris'))
 | MLX | `rishi[mlx]` | Apple Silicon, with an explicit prompt cache, `kv_bits` and LoRA |
 | ollama | `rishi[ollama]` | any Ollama model, on a daemon rishi installs and runs for you |
 | remote | `rishi[remote]` plus a vendor key | the same tools and HITL as local, with `tool_choice` and `reasoning_effort` |
-| cursor | `rishi[cursor]` plus `$CURSOR_API_KEY`, or `cursor-agent login` | Cursor-only models, through the `cursor/` prefix or [`CursorChat`](https://vedicreader.github.io/rishi/cursor.html#cursorchat) |
 | claude | `rishi[claude]`, or just Claude Code plus `claude /login` | your tools without MCP, through the `claude/` prefix or [`ClaudeChat`](https://vedicreader.github.io/rishi/claude.html#claudechat) |
 | copilot | `rishi[copilot]` plus a Copilot subscription | many vendors’ models on one subscription, through the `copilot/` prefix or [`CopilotChat`](https://vedicreader.github.io/rishi/copilot.html#copilotchat) |
 
@@ -288,14 +283,10 @@ print(chat.check('Capital of France?', 'Paris'))
 from rishi.mlx import qwen3_4b as mlx_qwen
 m = Chat(mlx_qwen); print(resp_text(m('One octopus fact.'))); m.close()
 
-# Hosted — hand local history to a bigger model
+# Hosted -- hand local history to a bigger model
 loc = Chat(qwen3_4b); loc('My name is Karthik and my favourite number is 17.')
 big = Chat('gpt-4.1-nano', messages=loc.hist)
 print(resp_text(big('What is my name and favourite number?'))); loc.close(); big.close()
-
-# Cursor — SDK path (prefix required for plain `Chat`)
-from rishi.cursor import grok45, CursorChat
-cu = CursorChat(grok45, effort='low'); print(resp_text(cu('Kalman filter in one sentence.'))); cu.close()
 ```
 
 ## Claude Code
@@ -392,7 +383,6 @@ o.unload(); o.close()                      # free the daemon's memory now, keep 
 | [`02_litert.ipynb`](litert.html) | Gemma `.litertlm`, GPU and NPU, [`bench()`](https://vedicreader.github.io/rishi/litert.html#bench) |
 | [`03_mlx.ipynb`](mlx.html) | vision and audio routing, speculative decoding, cache save and load |
 | [`04_remote.ipynb`](remote.html) | provider tools, server-side search |
-| [`05_cursor.ipynb`](cursor.html) | CLI against SDK, model ids, agent modes |
 | [`06_claude.ipynb`](claude.html) | SDK against CLI, tools as prompt tags, MCP under a managed policy |
 | [`07_copilot.ipynb`](copilot.html) | the token exchange, editor headers, model listing |
 | [`08_ollama.ipynb`](ollama.html) | installing and running the daemon, thinking levels, `/api/show` |

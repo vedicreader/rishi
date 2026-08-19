@@ -485,20 +485,14 @@ def common_prefix_len(a, b):
 #: Runtime name -> (module, Chat class) for `get_runtime`.
 runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','LlamaChat'),
             'mlx': ('rishi.mlx','MlxChat'), 'remote': ('rishi.remote','RemoteChat'),
-            'ollama': ('rishi.ollama','OllamaChat'), 'cursor': ('rishi.cursor','CursorChat'),
+            'ollama': ('rishi.ollama','OllamaChat'),
             'claude': ('rishi.claude','ClaudeChat'), 'copilot': ('rishi.copilot','CopilotChat')}
 dflt_runtime = 'litert'
 # checked in order, so the local file/repo shapes win over the hosted model-name patterns
 _pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'),
-         # ollama before llama: `hf.co/...-GGUF` is how Ollama addresses a GGUF repo, and only Ollama
-         # does. A bare `qwen3:4b` is not inferred, because a `name:tag` shape is also a Windows path.
+         # ollama before llama: `hf.co/...-GGUF` is how Ollama addresses a GGUF repo.
          'ollama': ('hf.co/','huggingface.co/'), 'llama': ('.gguf','gguf'),
          'mlx': ('mlx-community','mlx_lm','-mlx','mlx-'),
-         # cursor before remote: Cursor accepts both decorated and plain `grok-...` ids
-         'cursor': ('cursor-', 'grok-'),
-         # `claude` and `copilot` are not inferred: `claude-...` has always meant the hosted API
-         # through `remote`, and Copilot serves other vendors' models under their own names, so
-         # either one would reroute existing callers. Ask for those by prefix.
          'remote': ('claude-','gpt-','gemini-','kimi-','deepseek-','grok-','sonnet','opus','haiku','fable')}
 
 def split_runtime(model):
@@ -703,11 +697,8 @@ def mk_tool_res_msgs(tcs, results):
     return [mk_tool_res_msg(tc, r) for tc, r in zip(tcs, results)]
 
 # %% ../nbs/00_core.ipynb #11c2627de6f9c1d8
-#: Shown to the model when `max_steps` tool budget is exhausted.
 budget_msg_ = 'Tool-call budget exceeded; no more tools will run this turn.'
-#: Recorded in place of a tool result the user stopped the turn before running.
 cancel_msg_ = 'Not run: the user stopped this turn.'
-#: Stands in for the reply of a turn stopped before it had said anything.
 cancelled_reply_ = '(stopped by the user)'
 
 def _chunk_text(o):
@@ -740,6 +731,14 @@ class Chat:
     "Backend-agnostic chat: `Chat(model)` dispatches to the litert/llama/mlx subclass by `runtime`/model shape."
     _dflt_cbs = []
     _stream_raw = False      # `stream='raw'` yields chunk dicts instead of markdown strings
+    _media_ok = True         # can this transport carry pictures and sound? Text-only ones set False
+    _media_note = ''         # ...and say there what to use instead
+
+    def _check_media(self):
+        "Refuse media a text-only transport cannot carry, rather than dropping it in silence."
+        if self._media_ok: return
+        c = (self.turn_msg or {}).get('content')
+        if isinstance(c, list) and any(is_media(p) for p in c): raise TypeError(self._media_note)
 
     def _emit(self, o, fmt):
         "One streamed chunk: the raw dict in raw mode, else `fmt`-rendered markdown (falsy = emit nothing)."
@@ -928,8 +927,6 @@ class ToolLoopMixin:
         if can_parallel:
             n = min(len(todo), self.max_parallel_tools if self.max_parallel_tools is not None else len(todo))
             with ThreadPoolExecutor(max_workers=n, thread_name_prefix='rishi-tool') as ex: outs = list(ex.map(self.call_tool, todo))
-        # approval happened for the whole batch up front, so this is where a cancel raised during
-        # call 2 of 5 stops calls 3 to 5 from running
         else: outs = [cancel_msg_ if self.cancelled else self.call_tool(tc) for tc in todo]
         outs = iter(outs)
         for tc, (ok, denial) in zip(tcs, oks): self._record_tool(tc, next(outs) if ok else denial)
@@ -949,21 +946,12 @@ class ToolLoopMixin:
             raise ContextWindowExceededError(f"could not recover after truncating tool results: {err}") from err
 
     def _refuse_tools(self, res, why=cancel_msg_):
-        """Record `res` and a refusal for each call it proposed, without running any of them.
-
-        A stopped turn still owes the provider a `tool` result per `tool_call`, or the next request
-        is rejected for an unanswered call. This is the same shape `_run_tools` leaves behind when
-        approval says no, minus the execution.
-        """
+        "Record `res` and a refusal for each call it proposed, without running any of them."
         self.hist.append(res)
         for tc in res.get('tool_calls') or []: self._record_tool(tc, why)
 
     def _cut_res(self, text, thought=''):
-        """The assistant message for a turn cut mid-stream.
-
-        Never empty: a stop landing before the first token would otherwise leave the user message
-        with no reply, which Anthropic and Gemini both refuse on the next request.
-        """
+        "The assistant message for a turn cut mid-stream."
         res = Resp({'role': 'assistant', 'content': text or cancelled_reply_})
         if thought: res['channels'] = {'thought': thought}
         return res
@@ -978,6 +966,7 @@ class ToolLoopMixin:
     def _send(self, msg, max_output_tokens=None):
         'Send one message, looping until the model stops calling tools or the budget ends the turn.'
         self.turn_msg = self.mk_msg(msg)
+        self._check_media()
         for _ in run_cbs(self, 'before_send'): pass
         if self.turn_msg is not None: self.hist.append(self.turn_msg)
         us, recorded = [], False
@@ -988,13 +977,10 @@ class ToolLoopMixin:
                 res = self.recover_context(e, max_output_tokens)
             us.append(res.get('usage'))
             if not res.get('tool_calls') or self._budget_exceeded: break
-            # not streaming, so there is no seam inside the completion: a cancel lands here, between
-            # the step that proposed calls and running them
             if self.cancelled: self._refuse_tools(res); recorded = True; break
             self._run_tools(res)
-            # a cancel raised while those tools ran ends the turn here; `_run_tools` recorded `res`
             if self.cancelled: recorded = True; break
-            if self._budget_exceeded: break     # budget ran out mid-round; `__call__` sends `final_prompt`
+            if self._budget_exceeded: break
         self._finish_turn(res, us, recorded)
         for _ in run_cbs(self, 'after_response'): pass
         return self.turn_res
@@ -1004,6 +990,7 @@ class ToolLoopMixin:
         added = self.add_cbs(cbs); prev = getattr(self, '_streaming', False); self._streaming = True
         try:
             self.turn_msg = self.mk_msg(msg)
+            self._check_media()
             for _ in run_cbs(self, 'before_send'): pass
             if self.turn_msg is not None: self.hist.append(self.turn_msg)
             fmt, us, recorded, cut = StreamFormatter(), [], False, False
@@ -1012,8 +999,6 @@ class ToolLoopMixin:
                 step = self._stream_step(max_output_tokens)
                 try:
                     for o in step:
-                        # the one seam inside a completion: checked per chunk, so stopping costs at
-                        # most one more token rather than the rest of the answer
                         if self.cancelled: cut = True; break
                         said.append(_chunk_text(o)); thought_.append(_chunk_thought(o))
                         if (s := self._emit(o, fmt)): yield s
@@ -1023,11 +1008,9 @@ class ToolLoopMixin:
                     yield self._emit(res, StreamFormatter())
                     us.append(res.get('usage')); break
                 finally:
-                    if cut: step.close()      # backends abort their own wire call from here
+                    if cut: step.close()
                 if fmt._inthink and not self._stream_raw: fmt._inthink = False; yield '\n\n'
                 if cut:
-                    # `_step_res` is only assigned once a step finishes, so a cut turn writes its own
-                    # partial message rather than recording the previous step's a second time
                     res = self._cut_res(''.join(said), ''.join(thought_))
                     self.hist.append(res); recorded = True
                     break

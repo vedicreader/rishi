@@ -38,11 +38,10 @@ llama = [
 ollama = [
     "zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'",
 ]
-cursor = ["cursor-sdk>=0.1",]
 copilot = ["rishi[remote]", "httpx",]
 claude = ["claude-agent-sdk>=0.2",]
 record = ["diskcache>=5.6.3",]
-all = ["rishi[litert,remote,mlx,mlx-vlm,llama,ollama,cursor,claude,copilot,record]",]
+all = ["rishi[litert,remote,mlx,mlx-vlm,llama,ollama,claude,copilot,record]",]
 dev = ["rishi[all]",]
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"

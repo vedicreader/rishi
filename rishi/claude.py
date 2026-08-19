@@ -6,13 +6,17 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_DISALLOWED',
-           'NO_MCP', 'claude_bin', 'sdk_available', 'claude_via', 'norm_claude_usage', 'norm_claude', 'ClaudeChat',
-           'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream',
-           'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
+           'NO_MCP', 'ABORTED', 'claude_bin', 'sdk_available', 'claude_via', 'norm_claude_usage', 'norm_claude',
+           'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'UsageStats', 'ChatCallback',
+           'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy',
+           'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
-import json, shutil, subprocess
-from fastcore.all import store_attr, patch, ifnone
+import asyncio, json, os, shutil, subprocess
+from base64 import b64encode
+from pathlib import Path
+from fastcore.all import store_attr, patch, ifnone, listify
+from fastcore.aio import run_sync, iter_sync
 from . import core
 from .core import *
 
@@ -72,9 +76,11 @@ def norm_claude_usage(u, model=None):
     return {'prompt_tokens': pt, 'completion_tokens': ct, 'total_tokens': pt + ct,
             'cached_tokens': u.get('cache_read_input_tokens') or 0, 'model': model}
 
+ABORTED = ('aborted_streaming', 'aborted')
 def norm_claude(d, model=None):
     "A Claude Code result -> a rishi `Resp`, with `<tool_call>` tags read out of the text."
-    if d.get('is_error'): raise RuntimeError(f"claude failed: {d.get('result') or d.get('subtype')}")
+    if d.get('is_error') and d.get('terminal_reason') not in ABORTED:
+        raise RuntimeError(f"claude failed: {d.get('result') or d.get('subtype')}")
     text, th = split_think(d.get('result') or '')
     text, tcs = parse_tool_tags(text)
     res = {'role': 'assistant', 'content': text}
@@ -83,12 +89,42 @@ def norm_claude(d, model=None):
     res['usage'] = norm_claude_usage(d.get('usage'), model)
     return Resp(res)
 
+# %% ../nbs/06_claude.ipynb #0b45f039
+def mk_claude_content(o):
+    """`mk_oai_content`, plus the documents Claude Code takes and OpenAI content has no part for.
+
+    A PDF rides in the same `image_url` envelope the other media use. That envelope is rishi's
+    internal shape for "a data URL in the history"; the mime inside it is what `_to_parts` reads to
+    choose between an Anthropic `image` block and a `document` one.
+    """
+    if isinstance(o, (dict, str)): return mk_oai_content(o)
+    b = Path(o).read_bytes() if isinstance(o, os.PathLike) else o
+    if isinstance(b, bytes):
+        mime = core.detect_mime(b) or ''
+        if not mime.startswith(('image/', 'audio/')):
+            return {'type': 'image_url',
+                    'image_url': {'url': f'data:{mime or "application/octet-stream"};base64,{b64encode(b).decode()}'}}
+    return mk_oai_content(o)
+
+def mk_claude_msg(content, role='user'):
+    "`mk_oai_msg` built out of `mk_claude_content`."
+    if content is None or isinstance(content, dict): return content
+    parts = [mk_claude_content(o) for o in content] if isinstance(content, list) else [mk_claude_content(content)]
+    if all(p.get('type') == 'text' for p in parts): return {'role': role, 'content': '\n'.join(p['text'] for p in parts)}
+    return {'role': role, 'content': parts}
+
+def mk_claude_msgs(msgs): return [mk_claude_msg(m) for m in listify(msgs)] if msgs else []
+
+
 # %% ../nbs/06_claude.ipynb #cl_chat
 class ClaudeChat(ToolLoopMixin, Chat):
     "Chat against a Claude Code model, with the same `rishi.core.Chat` API over the Agent SDK or the CLI."
     _runtime = 'claude'
+    _media_note = ("this Claude Code chat cannot carry a picture or a document: only a live session can, "
+                   "and this one renders the conversation to a text prompt. Use the default "
+                   "`stateful=True` with the Agent SDK, or `rishi.remote`/`rishi.ollama`/`rishi.litert`.")
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
-    mk_content, mk_msg, mk_msgs = staticmethod(mk_oai_content), staticmethod(mk_oai_msg), staticmethod(mk_oai_msgs)
+    mk_content, mk_msg, mk_msgs = staticmethod(mk_claude_content), staticmethod(mk_claude_msg), staticmethod(mk_claude_msgs)
     local = False   #: the binary is local, the model is not
 
     def __init__(self, model=None, *, runtime=None, model_path=None, sp='', messages=None, tools=None,
@@ -101,16 +137,31 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  effort=None,               # 'low'/'medium'/'high'/'xhigh'/'max'. None -> the default
                  bare=True,                 # answer as a model: no CLAUDE.md, skills, plugins or hooks. See `_cmd`
                  via=None,                  # 'sdk' or 'cli'. None -> the SDK when it is installed
+                 stateful=True,             # keep one Claude Code session per chat. See `_connect`
                  bin=CLAUDE_BIN, timeout=600, settings=None, cbs=None, default_cbs=True, **opts):
         self.model_id = core.split_runtime(model)[1] or opus5
         self._set_tools(tools)
         store_attr('permission_mode,claude_tools,claude_disallowed,workspace,effort,bare,bin,timeout,settings,opts')
         self.via = claude_via(via)
+        self.stateful = stateful
+        self.client = self._last_res = None
+        self._stale = False             # a cancelled turn leaves the transcript and `hist` disagreeing
+        self._sent = 0                  # how much of `hist` the live session has seen
         self.ctx_limit, self._ctx_tokens = ctx_limit, 0
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
                     tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
                     max_parallel_tools=max_parallel_tools, final_prompt=final_prompt, cbs=cbs,
                     default_cbs=default_cbs)
+
+    @property
+    def in_session_mode(self):
+        "Does this chat drive one live session, rather than a fresh `query` per turn?"
+        return self.use_sdk and self.stateful
+
+    @property
+    def _media_ok(self):
+        "A live session carries pictures and documents as content blocks. A text prompt cannot."
+        return self.in_session_mode
 
     @property
     def tool_channel(self):
@@ -124,7 +175,8 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     @property
     def token_count(self):
-        "An estimate of the prompt this chat would send next. Claude Code reports no live usage."
+        "What the live session holds, which it reports; else an estimate of the prompt it would send."
+        if (u := self._ctx_usage()) and (n := (u or {}).get('totalTokens')): return n
         return est_tokens(self._prompt()) + est_tokens(self._sp())
 
     def _sp(self):
@@ -140,13 +192,18 @@ class ClaudeChat(ToolLoopMixin, Chat):
         self._ctx_tokens = (r.get('usage') or {}).get('total_tokens') or self._ctx_tokens
         return r
 
+    @property
+    def in_session(self):
+        "Is a Claude Code session live for this chat? Safe on a half-built one: `__del__` reaches here."
+        return getattr(self, 'client', None) is not None
+
     def _recreate_conv(self):
-        "Nothing to invalidate when rishi's history moves. Every turn re-sends the whole thing."
-        pass
+        "Drop the session, so the next turn opens a fresh one and replays `hist` into it."
+        self._disconnect()
 
     def close(self):
-        "Nothing to release. A turn is a process or a `query`, and neither outlives it."
-        pass
+        "End the session. A leaked chat would otherwise leak a `node` process; the loop is fastcore's."
+        self._disconnect()
 
 # %% ../nbs/06_claude.ipynb #cl_cli
 @patch
@@ -183,6 +240,7 @@ def _opts(self:ClaudeChat, sp):
               cwd=str(self.workspace) if self.workspace else None,
               permission_mode=self.permission_mode, settings=self.settings,
               mcp_servers={}, strict_mcp_config=False,   # see `NO_MCP`
+              include_partial_messages=True,             # token deltas, as `_cmd` already asks for
               disallowed_tools=list(self.claude_disallowed or ()))
     if self.claude_tools is not None: kw['allowed_tools'] = list(self.claude_tools)
     elif self.toolspecs: kw['tools'] = []   # rishi's tools are the only channel - see `_cmd`
@@ -196,7 +254,12 @@ def _sdk_events(self:ClaudeChat, prompt, sp):
     from claude_agent_sdk import query, AssistantMessage, ResultMessage, TextBlock, ThinkingBlock
     async def _agen():
         text, res = [], None
-        async for m in query(prompt=prompt, options=self._opts(sp)):
+        ait = query(prompt=prompt, options=self._opts(sp)).__aiter__()
+        while True:
+            try: m = await asyncio.wait_for(ait.__anext__(), self.timeout)
+            except StopAsyncIteration: break
+            except asyncio.TimeoutError:
+                raise TimeoutError(f'Claude Code sent nothing for {self.timeout}s') from None
             if isinstance(m, AssistantMessage):
                 for b in m.content:
                     if isinstance(b, ThinkingBlock) and b.thinking: yield 'thought', b.thinking
@@ -206,13 +269,155 @@ def _sdk_events(self:ClaudeChat, prompt, sp):
         yield 'result', {'result': res.result or ''.join(text), 'usage': res.usage, 'is_error': res.is_error, 'subtype': res.subtype}
     return sync_iter(_agen, stop=self._cancel)
 
+# %% ../nbs/06_claude.ipynb #95f0e8ec
+@patch
+def _connect(self:ClaudeChat):
+    "The live session, opened on first use. `_sp()` is fixed here: the SDK has no way to change it later."
+    if self.client is not None: return self.client
+    from claude_agent_sdk import ClaudeSDKClient
+    client = ClaudeSDKClient(options=self._opts(self._sp()))
+    run_sync(asyncio.wait_for(client.connect(), self.timeout))
+    self.client = client        # `_sent` belongs to `_disconnect`: resetting it here would
+    return client               # undo the delta this turn just computed
+
+@patch
+def _disconnect(self:ClaudeChat):
+    "End the session if there is one. The loop outlives it, ready for the next."
+    c = getattr(self, 'client', None)
+    self.client, self._sent, self._last_res, self._stale = None, 0, None, False
+    if c is None: return
+    try: run_sync(asyncio.wait_for(c.disconnect(), self.timeout))
+    except Exception: pass          # a dead subprocess is already disconnected
+
+@patch
+def _delta(self:ClaudeChat):
+    "The slice of `hist` the session has not been sent, as one rendered prompt."
+    if self._sent < len(self.hist) and self.hist[self._sent] is self._last_res:
+        self._sent += 1             # the session wrote this one; sending it back would echo it
+    out = render_prompt(self.hist[self._sent:])
+    self._sent = len(self.hist)
+    return out
+
+# %% ../nbs/06_claude.ipynb #d3ad2ce7
+@patch
+def cancel(self:ClaudeChat):
+    "Stop the turn, and tell the session to stop generating rather than only stopping the reader."
+    out = super(ClaudeChat, self).cancel()
+    if self.in_session:
+        # the session survives an interrupt, but `hist` and the transcript may now disagree about
+        # what was said, so the next turn opens a fresh one seeded from `hist`
+        try: run_sync(asyncio.wait_for(self.client.interrupt(), self.timeout))
+        except Exception: pass
+        self._stale = True
+    return out
+
+@patch
+def _ctx_usage(self:ClaudeChat):
+    "What the live session says its window holds, or None."
+    if not self.in_session: return None
+    try: return run_sync(asyncio.wait_for(self.client.get_context_usage(), self.timeout))
+    except Exception: return None
+
+# %% ../nbs/06_claude.ipynb #da4e0a44
+@patch
+def _to_parts(self:ClaudeChat, msgs):
+    "rishi's OpenAI-shaped messages as aidialog `Part`s, media included."
+    from aidialog.msg_parts import Text, InputImage, InputFile
+    out = []
+    for m in msgs:
+        who = core._roles.get(m.get('role'), m.get('role', '?'))   # private, so not via the star import
+        c = m.get('content')
+        if isinstance(c, str):
+            if c: out.append(Text(f'## {who}\n{c}'))
+            continue
+        for prt in (c or []):
+            if not isinstance(prt, dict): continue
+            t = prt.get('type')
+            if t == 'text': out.append(Text(f'## {who}\n{prt.get("text","")}'))
+            elif t == 'image_url':
+                url = (prt.get('image_url') or {}).get('url', '')
+                out.append(InputFile(url) if 'application/pdf' in url[:40] else InputImage(url))
+            elif t == 'input_audio': raise TypeError(
+                'Claude Code takes no audio input. Use `rishi.remote`, `rishi.ollama` or `rishi.litert`.')
+    return out
+
+@patch
+def _delta(self:ClaudeChat):
+    "What the session has not been sent: a rendered string, or Anthropic blocks when media is in it."
+    if self._sent < len(self.hist) and self.hist[self._sent] is self._last_res:
+        self._sent += 1             # the session wrote this one; sending it back would echo it
+    new = self.hist[self._sent:]
+    self._sent = len(self.hist)
+    if not any(is_media(p) for m in new for p in (m.get('content') or []) if isinstance(p, dict)):
+        return render_prompt(new)
+    from aidialog.msg_parts import Msg
+    from fastllm.anthropic import denorm_user
+    return denorm_user(Msg(role='user', content=self._to_parts(new)))['content']
+
+# %% ../nbs/06_claude.ipynb #26df6fe0
+@patch
+def _session_turn(self:ClaudeChat, prompt):
+    "One turn on the live session, in `_sdk_events`' `(kind, value)` shape."
+    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ThinkingBlock
+    client = self._connect()
+    async def _agen():
+        text, res = [], None
+        if isinstance(prompt, str): await client.query(prompt)
+        else:                                          # content blocks need the streaming-input shape
+            async def _one():
+                yield {'type': 'user', 'message': {'role': 'user', 'content': prompt},
+                       'parent_tool_use_id': None, 'session_id': 'default'}
+            await client.query(_one())
+        ait = client.receive_response().__aiter__()
+        while True:
+            if self._cancel.is_set(): break
+            try: m = await asyncio.wait_for(ait.__anext__(), self.timeout)
+            except StopAsyncIteration: break
+            except asyncio.TimeoutError:
+                raise TimeoutError(f'Claude Code sent nothing for {self.timeout}s') from None
+            if isinstance(m, AssistantMessage):
+                for b in m.content:
+                    if isinstance(b, ThinkingBlock) and b.thinking: yield 'thought', b.thinking
+                    elif isinstance(b, TextBlock) and b.text: text.append(b.text); yield 'text', b.text
+            elif isinstance(m, ResultMessage): res = m
+        if res is None: raise RuntimeError('the Claude Code session ended without a result')
+        yield 'result', {'result': res.result or ''.join(text), 'usage': res.usage,
+                         'is_error': res.is_error, 'subtype': res.subtype}
+    return iter_sync(_agen())
+
+@patch
+def _events(self:ClaudeChat):
+    "This turn's events: the delta on a live session, else the whole conversation on a fresh query."
+    if not self.in_session_mode: return self._sdk_events(self._prompt(), self._sp())
+    if self._stale: self._disconnect()   # a cancelled turn: start again from what rishi holds
+    self._connect()                      # before the delta, not after: connecting must not
+    return self._session_events(self._delta())   # come between computing it and sending it
+
+@patch
+def _session_events(self:ClaudeChat, prompt):
+    """`_session_turn`, with one reconnect if the session died before it said anything.
+
+    A subprocess that goes away mid-conversation used to be a hard failure. Retrying is only safe
+    before the first event: once text has been yielded, replaying the turn would repeat it, so a
+    session that dies mid-answer still raises and leaves `hist` to `_recreate_conv`.
+    """
+    started = False
+    try:
+        for o in self._session_turn(prompt): started = True; yield o
+    except Exception:
+        if started: raise
+        self._disconnect(); self._connect()
+        for o in self._session_turn(render_prompt(self.hist)): yield o
+        self._sent = len(self.hist)
+
 # %% ../nbs/06_claude.ipynb #cl_steps
 @patch
 def _model_step(self:ClaudeChat, max_output_tokens=None):
     "One wire call, through whichever path this chat uses."
     if self.use_sdk:
-        out = next(v for k, v in self._sdk_events(self._prompt(), self._sp()) if k == 'result')
-        return self._note_usage(norm_claude(out, self.model_id))
+        out = next(v for k, v in self._events() if k == 'result')
+        self._last_res = res = self._note_usage(norm_claude(out, self.model_id))
+        return res
     return self._note_usage(norm_claude(json.loads(self._run('json').stdout), self.model_id))
 
 @patch
@@ -220,7 +425,7 @@ def _stream_step(self:ClaudeChat, max_output_tokens=None):
     "The same turn, streamed. Thinking gets its own channel, and tag calls are never rendered as prose."
     split, out = StreamSplit(), None
     if self.use_sdk:
-        for kind, v in self._sdk_events(self._prompt(), self._sp()):
+        for kind, v in self._events():
             if kind == 'thought': yield {'channels': {'thought': v}}
             elif kind == 'text': yield from split.feed(v)
             else: out = v
@@ -243,7 +448,7 @@ def _stream_step(self:ClaudeChat, max_output_tokens=None):
                 elif o.get('type') == 'result': out = o
         if out is None: raise RuntimeError(f'claude ended without a result: {proc.stderr.read()[:400]}')
     yield from split.finish()
-    self._step_res = self._note_usage(norm_claude(out, self.model_id))
+    self._step_res = self._last_res = self._note_usage(norm_claude(out, self.model_id))
 
 @patch
 def _oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None):
