@@ -71,7 +71,7 @@ def _parts(content):
     for p in content:
         if not isinstance(p, dict): continue
         t = p.get('type')
-        if   t == 'text':        out.append(Text(text=p.get('text', '')))
+        if   t == 'text' and (text := p.get('text', '')): out.append(Text(text=text))
         elif t == 'image_url':   out.append(_media(InputImage, _img_url(p)))
         elif t == 'input_audio': out.append(_media(InputAudio, _aud_url(p)))
     return out

@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.24
+anthropic messages can sometimes have empty text blocks
+
 ## 0.1.23
 tool loop fixes to align aidialog tool part with rishi's
 
