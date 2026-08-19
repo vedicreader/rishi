@@ -8,7 +8,7 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 __all__ = ['system_certs', 'tool_reminder_', 'TAG_TOOLS_SP', 'CHARS_PER_TOKEN', 'runtimes', 'dflt_runtime', 'MODALITIES',
            'CAPS_FALLBACK', 'ENDPOINT_TOOLS', 'budget_msg_', 'cancel_msg_', 'cancelled_reply_', 'dflt_final_prompt_',
            'qa_sp_', 'CHAT_CACHE', 'KEY_VERSION', 'use_system_certs', 'UsageStats', 'ChatCallback', 'run_cbs',
-           'resp_text', 'thought', 'quote_', 'Resp', 'tc_summary_', 'mk_tr_details', 'StreamFormatter',
+           'resp_text', 'thought', 'quote_', 'Resp', 'tc_summary_', 'mk_tr_details', 'has_tool_call', 'StreamFormatter',
            'display_stream', 'truncated', 'TruncationCallback', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs',
            'is_media', 'mk_toolspec', 'split_think', 'mk_tag_tc', 'parse_tool_tags', 'tag_tools_sp', 'est_tokens',
            'render_prompt', 'parse_args', 'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit',
@@ -159,9 +159,15 @@ def mk_tr_details(name, args, result, mx=2000):
     body = json.dumps({'call': {'function': name, 'arguments': args}, 'result': str(result)[:mx]}, indent=2)
     return f"\n\n<details><summary>{tc_summary_(name, args, result)}</summary>\n\n```json\n{body}\n```\n\n</details>\n\n"
 
+def has_tool_call(o):
+    "Does this streamed chunk carry a `tool_call` content part?"
+    return any(isinstance(p, dict) and p.get('type') == 'tool_call'
+               for p in (o.get('content') or [] if isinstance(o, dict) else []))
+
 class StreamFormatter:
     "Format a litert response stream to markdown. Thinking streams as a blockquote."
-    def __init__(self, mx=2000, showthink=True): self.outp = ''; self._inthink = False; store_attr()
+    def __init__(self, mx=2000, showthink=True, showcalls=False):
+        self.outp = ''; self._inthink = False; store_attr()
     def format_item(self, o):
         "Format one litert chunk dict (thinking, text, or a tool call)."
         res = ''
@@ -171,9 +177,10 @@ class StreamFormatter:
         if txt := resp_text(o):
             if self._inthink: res += '\n\n'; self._inthink = False
             res += txt
-        for p in (o.get('content', []) if isinstance(o, dict) else []):
-            if isinstance(p, dict) and p.get('type') == 'tool_call':
-                res += f"\n- ⏳ {tc_summary_(p.get('name', ''), p.get('arguments', {}))}\n"
+        if self.showcalls:
+            for p in (o.get('content', []) if isinstance(o, dict) else []):
+                if isinstance(p, dict) and p.get('type') == 'tool_call':
+                    res += f"\n- ⏳ {tc_summary_(p.get('name', ''), p.get('arguments', {}))}\n"
         self.outp += res
         return res
     def format_stream(self, rs):
@@ -270,10 +277,15 @@ def mk_tag_tc(s):
     return {'id': f"call_{uuid.uuid4().hex[:8]}", 'type': 'function',
             'function': {'name': d.get('name', ''), 'arguments': d.get('arguments') or {}}}
 
+_res_tags = ('tool_result', 'tool_results', 'function_result', 'function_results',
+             'tool_function_result', 'tool_function_results',
+             'tool_function_call', 'tool_function_calls',
+             'function_call', 'function_calls', 'tool_use')
+_toolres_re = re.compile('|'.join(rf'</?{t}>>?' for t in _res_tags) + r'|</?tool_call>', re.I)
 def parse_tool_tags(text):
     "Parse Hermes and Qwen style `<tool_call>{json}</tool_call>` blocks, returning `(clean_text, tool_calls)`."
     tcs = [tc for m in _toolcall_re.findall(text or '') if (tc := mk_tag_tc(m))]
-    return _toolcall_re.sub('', text or '').strip('\n'), tcs
+    return _toolres_re.sub('', _toolcall_re.sub('', text or '')).strip('\n'), tcs
 
 TAG_TOOLS_SP = """
 
@@ -287,14 +299,20 @@ You can call the functions below. Their signatures are given as JSON schemas ins
 </tools>
 
 To call one, emit a JSON object with the function's name and its arguments inside \
-<tool_call></tool_call>, and then stop and wait for the result:
+<tool_call></tool_call>. Then end your reply immediately and wait:
 
 <tool_call>
 {{"name": "the_function_name", "arguments": {{"first": "value"}}}}
 </tool_call>
 
-Call one function at a time. Do not describe the call in prose as well as emitting it, and \
-never invent a result -- the real one comes back in the next message."""
+Nothing may follow </tool_call> in the same message: not a comment, not a guess at what the \
+result will be, not another call. Stop there. Call one function at a time.
+
+Do not describe the call in prose as well as emitting it, and never invent a result -- the real \
+one comes back in the next message, under a "## Tool result (name)" heading. That heading is the \
+only form a result ever takes: do not write result markup of your own, do not wrap a result in \
+tags, and do not copy a result back into your reply. Say what you concluded from it, not what \
+it said."""
 
 
 def tag_tools_sp(toolspecs, sp='', template=TAG_TOOLS_SP):
@@ -381,7 +399,8 @@ def strip_media(m):
 
 
 # %% ../nbs/00_core.ipynb #8543932c7569294c
-_tags = ('<think>', '</think>', '<tool_call>', '</tool_call>')
+_tags = ('<think>', '</think>', '<tool_call>', '</tool_call>',
+         *(f'<{n}>' for n in _res_tags), *(f'</{n}>' for n in _res_tags))
 
 class StreamSplit:
     "Stateful splitter for streamed text: `<think>` -> thought chunks, `<tool_call>` blocks held back and parsed."
@@ -393,7 +412,8 @@ class StreamSplit:
             if any(t.startswith(self.buf[-n:]) for t in _tags): return n
         return 0
     def _emit_text(self, out):
-        if self._strip: out = out.lstrip('\n')
+        out = _toolres_re.sub('', out)   # invented result markup, dropped here too: the streamed
+        if self._strip: out = out.lstrip('\n')   # path never reaches `parse_tool_tags`
         if not out: return None
         self._strip = False; self.text += out
         return {'content': [{'type': 'text', 'text': out}]}
@@ -995,12 +1015,13 @@ class ToolLoopMixin:
             if self.turn_msg is not None: self.hist.append(self.turn_msg)
             fmt, us, recorded, cut = StreamFormatter(), [], False, False
             while True:
-                said, thought_ = [], []
+                said, thought_, announced = [], [], False
                 step = self._stream_step(max_output_tokens)
                 try:
                     for o in step:
                         if self.cancelled: cut = True; break
                         said.append(_chunk_text(o)); thought_.append(_chunk_thought(o))
+                        announced = announced or has_tool_call(o)
                         if (s := self._emit(o, fmt)): yield s
                 except Exception as e:
                     if not is_ctx_error(self, e): raise
@@ -1017,10 +1038,11 @@ class ToolLoopMixin:
                 res = self._step_res
                 us.append(res.get('usage'))
                 if not res.get('tool_calls') or self._budget_exceeded: break
-                for tc in res['tool_calls']:
-                    o = {'content': [{'type': 'tool_call', 'name': tc_name(tc),
-                                      'arguments': (tc.get('function') or {}).get('arguments', {})}]}
-                    if (s := self._emit(o, fmt)): yield s
+                if not announced:
+                    for tc in res['tool_calls']:
+                        o = {'content': [{'type': 'tool_call', 'name': tc_name(tc),
+                                          'arguments': (tc.get('function') or {}).get('arguments', {})}]}
+                        if (s := self._emit(o, fmt)): yield s
                 if self.cancelled: self._refuse_tools(res); recorded = True; break
                 self._run_tools(res)
                 if self.cancelled: recorded = True; break

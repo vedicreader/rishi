@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.23
+tool loop fixes to align aidialog tool part with rishi's
+
 ## 0.1.22
 setting claude context early to stop pooling everytime
 

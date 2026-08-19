@@ -12,7 +12,7 @@ __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'f
            'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
-import asyncio, json, os, shutil, subprocess, time
+import asyncio, atexit, json, os, shutil, subprocess, sys, time, weakref
 from base64 import b64encode
 from pathlib import Path
 from fastcore.all import store_attr, patch, ifnone, listify
@@ -269,6 +269,14 @@ def _sdk_events(self:ClaudeChat, prompt, sp):
     return sync_iter(_agen, stop=self._cancel)
 
 # %% ../nbs/06_claude.ipynb #95f0e8ec
+_live_sessions = weakref.WeakSet()
+@atexit.register
+def _close_sessions():
+    "Close every live session, so no `claude` subprocess outlives the interpreter."
+    for c in list(_live_sessions):
+        try: c._disconnect()
+        except Exception: pass
+
 @patch
 def _connect(self:ClaudeChat):
     "The live session, opened on first use. `_sp()` is fixed here: the SDK has no way to change it later."
@@ -277,7 +285,8 @@ def _connect(self:ClaudeChat):
     client = ClaudeSDKClient(options=self._opts(self._sp()))
     run_sync(asyncio.wait_for(client.connect(), self.timeout))
     self.client = client        # `_sent` belongs to `_disconnect`: resetting it here would
-    return client               # undo the delta this turn just computed
+    _live_sessions.add(self)    # undo the delta this turn just computed. Tracked so `atexit`
+    return client               # can close it: `__del__` is too late. See `_close_sessions`
 
 @patch
 def _disconnect(self:ClaudeChat):
@@ -285,6 +294,8 @@ def _disconnect(self:ClaudeChat):
     c = getattr(self, 'client', None)
     self.client, self._sent, self._last_res, self._stale = None, 0, None, False
     if c is None: return
+    _live_sessions.discard(self)
+    if sys.is_finalizing(): return   # the loop thread is stopped; `run_sync` would never return
     try: run_sync(asyncio.wait_for(c.disconnect(), self.timeout))
     except Exception: pass          # a dead subprocess is already disconnected
 
