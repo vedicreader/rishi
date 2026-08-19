@@ -6,13 +6,13 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_DISALLOWED',
-           'NO_MCP', 'ABORTED', 'claude_bin', 'sdk_available', 'claude_via', 'norm_claude_usage', 'norm_claude',
-           'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'UsageStats', 'ChatCallback',
-           'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy',
-           'extract_fence', 'mk_toolspec', 'ToolCall']
+           'NO_MCP', 'ABORTED', 'INTERRUPT_WAIT', 'claude_bin', 'sdk_available', 'claude_via', 'norm_claude_usage',
+           'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'UsageStats',
+           'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated',
+           'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
-import asyncio, json, os, shutil, subprocess
+import asyncio, json, os, shutil, subprocess, time
 from base64 import b64encode
 from pathlib import Path
 from fastcore.all import store_attr, patch, ifnone, listify
@@ -89,6 +89,10 @@ def norm_claude(d, model=None):
     res['usage'] = norm_claude_usage(d.get('usage'), model)
     return Resp(res)
 
+#: How long a cancel or a status read may wait on the session. `timeout` is the idle limit for a
+#: turn, which is minutes; neither of these may take minutes, because both are on somebody's UI.
+INTERRUPT_WAIT = 5
+
 # %% ../nbs/06_claude.ipynb #0b45f039
 def mk_claude_content(o):
     """`mk_oai_content`, plus the documents Claude Code takes and OpenAI content has no part for.
@@ -146,6 +150,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
         self.stateful = stateful
         self.client = self._last_res = None
         self._stale = False             # a cancelled turn leaves the transcript and `hist` disagreeing
+        self._ctx_live = 0              # occupancy the session last reported. See `token_count`
         self._sent = 0                  # how much of `hist` the live session has seen
         self.ctx_limit, self._ctx_tokens = ctx_limit, 0
         self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
@@ -175,9 +180,13 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     @property
     def token_count(self):
-        "What the live session holds, which it reports; else an estimate of the prompt it would send."
-        if (u := self._ctx_usage()) and (n := (u or {}).get('totalTokens')): return n
-        return est_tokens(self._prompt()) + est_tokens(self._sp())
+        """What the live session last reported holding, else an estimate of the prompt it would send.
+
+        Never asks the session here. A status bar reads this on the UI thread every repaint, and a
+        round-trip to the subprocess from there waits on the same loop the turn is using: the CLI
+        froze mid-turn. `_session_turn` refreshes it on the loop instead, once per turn.
+        """
+        return self._ctx_live or est_tokens(self._prompt()) + est_tokens(self._sp())
 
     def _sp(self):
         "The briefing plus the tool schemas, for the one channel a managed MCP policy cannot close."
@@ -306,7 +315,7 @@ def cancel(self:ClaudeChat):
     if self.in_session:
         # the session survives an interrupt, but `hist` and the transcript may now disagree about
         # what was said, so the next turn opens a fresh one seeded from `hist`
-        try: run_sync(asyncio.wait_for(self.client.interrupt(), self.timeout))
+        try: run_sync(asyncio.wait_for(self.client.interrupt(), INTERRUPT_WAIT))
         except Exception: pass
         self._stale = True
     return out
@@ -315,7 +324,7 @@ def cancel(self:ClaudeChat):
 def _ctx_usage(self:ClaudeChat):
     "What the live session says its window holds, or None."
     if not self.in_session: return None
-    try: return run_sync(asyncio.wait_for(self.client.get_context_usage(), self.timeout))
+    try: return run_sync(asyncio.wait_for(self.client.get_context_usage(), INTERRUPT_WAIT))
     except Exception: return None
 
 # %% ../nbs/06_claude.ipynb #da4e0a44
@@ -381,6 +390,9 @@ def _session_turn(self:ClaudeChat, prompt):
                     elif isinstance(b, TextBlock) and b.text: text.append(b.text); yield 'text', b.text
             elif isinstance(m, ResultMessage): res = m
         if res is None: raise RuntimeError('the Claude Code session ended without a result')
+        # already on the loop, so this is a local await rather than a cross-thread wait
+        try: self._ctx_live = (await client.get_context_usage() or {}).get('totalTokens') or self._ctx_live
+        except Exception: pass
         yield 'result', {'result': res.result or ''.join(text), 'usage': res.usage,
                          'is_error': res.is_error, 'subtype': res.subtype}
     return iter_sync(_agen())
