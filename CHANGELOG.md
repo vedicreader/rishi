@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.22
+setting claude context early to stop pooling everytime
+
 ## 0.1.21
 fixes claude wait
 

@@ -119,7 +119,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
                    "`stateful=True` with the Agent SDK, or `rishi.remote`/`rishi.ollama`/`rishi.litert`.")
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(mk_claude_content), staticmethod(mk_claude_msg), staticmethod(mk_claude_msgs)
-    local = False   #: the binary is local, the model is not
+    local, _ctx_live = False, 0
 
     def __init__(self, model=None, *, runtime=None, model_path=None, sp='', messages=None, tools=None,
                  ctx_limit=None, approve=None, tool_max_len=None, max_steps=10, parallel_tools=False,
@@ -303,8 +303,6 @@ def cancel(self:ClaudeChat):
     "Stop the turn, and tell the session to stop generating rather than only stopping the reader."
     out = super(ClaudeChat, self).cancel()
     if self.in_session:
-        # the session survives an interrupt, but `hist` and the transcript may now disagree about
-        # what was said, so the next turn opens a fresh one seeded from `hist`
         try: run_sync(asyncio.wait_for(self.client.interrupt(), INTERRUPT_WAIT))
         except Exception: pass
         self._stale = True
@@ -397,12 +395,7 @@ def _events(self:ClaudeChat):
 
 @patch
 def _session_events(self:ClaudeChat, prompt):
-    """`_session_turn`, with one reconnect if the session died before it said anything.
-
-    A subprocess that goes away mid-conversation used to be a hard failure. Retrying is only safe
-    before the first event: once text has been yielded, replaying the turn would repeat it, so a
-    session that dies mid-answer still raises and leaves `hist` to `_recreate_conv`.
-    """
+    "`_session_turn`, with one reconnect if the session died before it said anything."
     started = False
     try:
         for o in self._session_turn(prompt): started = True; yield o
