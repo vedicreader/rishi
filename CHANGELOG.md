@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.21
+fixes claude wait
+
 ## 0.1.20
 remove cursor, use claude sdk for claude chat. remove fastllm claude
 

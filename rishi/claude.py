@@ -26,8 +26,6 @@ _all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp'
 
 # %% ../nbs/06_claude.ipynb #cl_wire
 CLAUDE_BIN = 'claude'   #: the CLI rishi drives, overridden per chat with `bin=`
-
-# Claude Code's own aliases resolve to the latest build of each. The dated ids work too.
 opus5    = 'claude-opus-5'
 opus48   = 'claude-opus-4-8'
 sonnet5  = 'claude-sonnet-5'
@@ -38,12 +36,7 @@ fable5   = 'claude-fable-5'
 #: Every id above, for anything that wants to offer the list rather than reach for one of them.
 CLAUDE_MODELS = {'opus5': opus5, 'opus48': opus48, 'sonnet5': sonnet5, 'sonnet46': sonnet46,
                  'haiku45': haiku45, 'fable5': fable5}
-
-#: Claude Code's own tools this backend refuses by default. The agent gets its tools from the caller,
-#: and letting the harness shell out as well is a second, ungoverned way to touch the machine.
 CLAUDE_DISALLOWED = ('Bash', 'Write', 'Edit', 'NotebookEdit')
-
-#: Managed configurations accept only an empty declared MCP server list.
 NO_MCP = '{"mcpServers":{}}'
 
 def claude_bin(bin=CLAUDE_BIN):
@@ -88,9 +81,6 @@ def norm_claude(d, model=None):
     if tcs: res['tool_calls'] = tcs
     res['usage'] = norm_claude_usage(d.get('usage'), model)
     return Resp(res)
-
-#: How long a cancel or a status read may wait on the session. `timeout` is the idle limit for a
-#: turn, which is minutes; neither of these may take minutes, because both are on somebody's UI.
 INTERRUPT_WAIT = 5
 
 # %% ../nbs/06_claude.ipynb #0b45f039
