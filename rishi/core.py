@@ -383,7 +383,7 @@ def sum_usage(us):
     us = [u for u in us if u]
     if not us: return None
     out = {k: sum(u.get(k, 0) for u in us) for k in ('prompt_tokens', 'completion_tokens', 'total_tokens', 'cached_tokens')}
-    for k in ('reasoning_tokens', 'cache_creation_tokens'):   # hosted-only, so absent rather than 0
+    for k in ('reasoning_tokens', 'cache_creation_tokens', 'cost'):   # hosted-only, so absent rather than 0
         if (v := sum(u.get(k, 0) for u in us)): out[k] = v
     if (m := first(us, lambda u: u.get('model'))): out['model'] = m['model']
     return out
@@ -480,7 +480,8 @@ class UsageCallback(ChatCallback):
         self.chat.use += UsageStats(u.get('prompt_tokens', 0), u.get('completion_tokens', 0), u.get('total_tokens', 0),
                                     1, cached_tokens=u.get('cached_tokens', 0), model=u.get('model'),
                                     reasoning_tokens=u.get('reasoning_tokens', 0),
-                                    cache_creation_tokens=u.get('cache_creation_tokens', 0))
+                                    cache_creation_tokens=u.get('cache_creation_tokens', 0),
+                                    cost=u.get('cost', 0.0))
 
 class ToolReminderCallback(ChatCallback):
     'Inject a tool-summary reminder into the outgoing message when tools are registered.'

@@ -39,7 +39,7 @@ ollama = [
     "zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'",
 ]
 copilot = ["rishi[remote]", "httpx",]
-claude = ["claude-agent-sdk>=0.2",]
+claude = ["claude-agent-sdk>=0.2", "llmsurgery>=0.0.13",]
 record = ["diskcache>=5.6.3",]
 all = ["rishi[litert,remote,mlx,mlx-vlm,llama,ollama,claude,copilot,record]",]
 dev = ["rishi[all]",]

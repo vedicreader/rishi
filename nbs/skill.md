@@ -123,7 +123,7 @@ A Chat that built its own engine frees it on `close()`. A Chat handed an engine 
 - The log line `WebGPU sampler not available, falling back to statically linked C API` is harmless. Quiet the noise with `set_min_log_severity(3)`.
 - Tool and structured-output arguments arrive as floats (`21.0`) from the model's JSON. Cast inside the tool if you need strict ints.
 - `run_text_scoring` is not available on this runtime, so `classify` and `check` grade by generation, not log-likelihood scoring.
-- TLS behind a re-signing corporate proxy: `certifi` does not know the proxy's root certificate and every hosted backend fails with `CERTIFICATE_VERIFY_FAILED`. Importing rishi calls `use_system_certs()`, which verifies against the OS trust store through `truststore`; `RISHI_SYSTEM_CERTS=0` turns it off. It covers what Python dials (`remote`, `copilot`, the `claude` SDK path), not the CLI paths, which are separate binaries with trust stores of their own.
+- TLS behind a re-signing corporate proxy: `certifi` does not know the proxy's root certificate and every hosted backend fails with `CERTIFICATE_VERIFY_FAILED`. Importing rishi calls `use_system_certs()`, which verifies against the OS trust store through `truststore`; `RISHI_SYSTEM_CERTS=0` turns it off. It covers what Python dials (`remote`, `copilot`), not what a separate binary does: Claude Code and the Ollama daemon carry trust stores of their own.
 
 ## One interface for every backend
 
@@ -244,6 +244,29 @@ print(resp_text(chat("Say hello.")))
 - History conversion is `to_msg` and `to_hist`, between rishi's canonical dicts and fastllm's `Msg` and `Part`. Text, thinking, tool calls, tool results, images and audio all round-trip. Media is carried as a data URL rather than collapsed to a placeholder, so a local to hosted hop keeps the picture.
 - `structured` forces the tool call with `tool_choice=<name>`, so arguments parse reliably. It falls back to parsing a JSON reply.
 - `chat.use` gets `cached_tokens` from the provider's prompt-cache accounting, the same field MLX fills from prefix reuse, so a mixed local and hosted tally adds up in one `UsageStats`. `close()` is a no-op, because the HTTP client belongs to fastllm.
+
+## Claude Code (rishi.claude)
+
+`rishi[claude]`, plus Claude Code on `$PATH` and one `claude /login`. This is an agent with its own harness, not a completion endpoint: one turn is one `query()` on a live session, and rishi drives the binary as a subprocess without ever reading your credentials. `ClaudeChat.local` is `False`.
+
+```python
+from rishi import Chat
+from rishi.claude import ClaudeChat, sonnet5, CLAUDE_SERVER_TOOLS
+
+chat = Chat('claude/claude-sonnet-5', sp='You are concise.')   # or ClaudeChat(sonnet5)
+```
+
+- Tools never travel as MCP. Claude Code declares a caller's tools as an in-process MCP server, and an organisation-managed configuration forbids every dynamic MCP server there is, which would leave the model with no tools at all. rishi opens none, and the schemas go out as `<tool_call>` tags in the system prompt, which `parse_tool_tags` reads back. `chat.tool_channel` is `'tags'`. Never claim `strict_mcp_config=True` either: a managed machine refuses that flag outright.
+- The conversation travels as a session transcript. `anth_msgs` turns `hist` into Anthropic messages, `llmsurgery` writes them as records under `CLAUDE_WORK_DIR` (`~/.rishi-claude`), and the turn resumes that id. So the model reads real messages: an `image` block for a picture, `document` for a PDF, and a `tool_use` answered by the `tool_result` that carries its id. `transcript=False`, or no `llmsurgery`, falls back to one flattened prompt, which carries no media.
+- `stateful=True` (default) keeps one Claude Code session per chat: one subprocess for the whole conversation, and a mid-turn tool result goes up as text, since a live session takes user turns. `stateful=False` files every turn as records instead, at one subprocess each. Fast against faithful.
+- `workspace=` names the directory Claude Code works in, and is where its transcripts are then filed. Unset means `CLAUDE_WORK_DIR`, to keep synthesized records out of a real project's history; `workspace='.'` opts back in.
+- Claude Code's own tools are off. `claude_disallowed` is `('Bash', 'Write', 'Edit', 'NotebookEdit')` and `tools=[]` goes out whenever this chat carries tools of its own. `claude_tools=` allowlists some back. `claude_server_tools=CLAUDE_SERVER_TOOLS` is the exception worth having: `WebSearch` and `WebFetch` run on Claude Code's side, so they need no schema and never reach rishi's tool loop.
+- An ambient `ANTHROPIC_API_KEY` is blanked for the subprocess: it would silently turn a subscription session into a metered API one. `api_key=True` allows it.
+- `chat.use.cost` is what Claude Code itself reported for the turn, not a price table, and `cached_tokens`/`cache_creation_tokens` come straight off its usage block. Claude Code's own system prompt adds 48k to 53k prompt tokens per turn, most of it a cache read.
+- A failed turn raises `ClaudeError`, a `RuntimeError` carrying `.status` (429, 529, ...) and the raw `.raw` result, so a caller can tell a rate limit from a bad prompt. A cancelled turn is not a failure: whatever arrived first is the reply.
+- `ClaudeChat(model=None, *, sp='', messages=None, tools=None, permission_mode='auto', claude_tools=None, claude_disallowed=CLAUDE_DISALLOWED, claude_server_tools=(), workspace=None, effort=None, bare=True, stateful=True, transcript=True, api_key=False, max_buffer=MAX_BUFFER, bin='claude', timeout=600, settings=None, **kw)`, plus the usual `Chat` arguments. Model ids are `opus5`, `opus48`, `sonnet5`, `sonnet46`, `haiku45`, `fable5`, and `CLAUDE_MODELS` holds them all.
+- Prefix only. `Chat('claude/claude-sonnet-5')` or `ClaudeChat(...)`, because a bare `claude-...` id still means the hosted API through `remote`.
+- `bare=True` answers as a model rather than as your IDE agent: no `CLAUDE.md`, skills, plugins or hooks. Tool calls depend on the model emitting the tags correctly, so use a Sonnet-tier or stronger model for tool-using turns.
 
 ## GitHub Copilot (rishi.copilot)
 

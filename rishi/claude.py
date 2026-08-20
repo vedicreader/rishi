@@ -1,4 +1,4 @@
-"""Claude Code's models through the Agent SDK or the `claude` CLI. An agent with its own harness, not a completion endpoint.
+"""Claude Code's models through the Agent SDK. An agent with its own harness, not a completion endpoint.
 
 Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 
@@ -6,13 +6,14 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_DISALLOWED',
-           'NO_MCP', 'ABORTED', 'INTERRUPT_WAIT', 'claude_bin', 'sdk_available', 'claude_via', 'norm_claude_usage',
-           'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'UsageStats',
-           'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated',
-           'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
+           'CLAUDE_SERVER_TOOLS', 'CLAUDE_WORK_DIR', 'MAX_BUFFER', 'ABORTED', 'INTERRUPT_WAIT', 'CONT_PROMPT',
+           'claude_bin', 'claude_sdk', 'norm_claude_usage', 'ClaudeError', 'claude_status', 'norm_claude',
+           'sess_writer', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id',
+           'anth_msgs', 'claude_prompt', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp',
+           'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
-import asyncio, atexit, json, os, shutil, subprocess, sys, time, weakref
+import asyncio, atexit, json, os, re, shutil, sys, time, weakref
 from base64 import b64encode
 from pathlib import Path
 from fastcore.all import store_attr, patch, ifnone, listify
@@ -25,7 +26,7 @@ _all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp'
          'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_wire
-CLAUDE_BIN = 'claude'   #: the CLI rishi drives, overridden per chat with `bin=`
+CLAUDE_BIN = 'claude'   #: the binary the SDK spawns, overridden per chat with `bin=`
 opus5    = 'claude-opus-5'
 opus48   = 'claude-opus-4-8'
 sonnet5  = 'claude-sonnet-5'
@@ -37,7 +38,9 @@ fable5   = 'claude-fable-5'
 CLAUDE_MODELS = {'opus5': opus5, 'opus48': opus48, 'sonnet5': sonnet5, 'sonnet46': sonnet46,
                  'haiku45': haiku45, 'fable5': fable5}
 CLAUDE_DISALLOWED = ('Bash', 'Write', 'Edit', 'NotebookEdit')
-NO_MCP = '{"mcpServers":{}}'
+CLAUDE_SERVER_TOOLS = ('WebSearch', 'WebFetch')  #: Claude Code's own, run on its side and never in rishi's tool loop
+CLAUDE_WORK_DIR = Path.home()/'.rishi-claude'    #: where a conversation is filed, outside any real project
+MAX_BUFFER = 10*2**20                            #: the SDK's stdout cap. Its own default is 1MB, and it raises rather than truncating
 
 def claude_bin(bin=CLAUDE_BIN):
     "Absolute path to the `claude` binary, or a `FileNotFoundError` that says how to get one."
@@ -46,42 +49,63 @@ def claude_bin(bin=CLAUDE_BIN):
         f'{bin!r} is not on $PATH. Install Claude Code (https://claude.com/claude-code) and run '
         f'`{bin} /login`. rishi drives it as a subprocess and never reads your credentials.')
 
-def sdk_available():
-    "Is the Claude Agent SDK importable here?"
+def claude_sdk():
+    "The Claude Agent SDK, or an `ImportError` naming the extra that carries it."
     try:
-        from claude_agent_sdk import query  # noqa: F401
-        return True
-    except ImportError: return False
+        import claude_agent_sdk
+        return claude_agent_sdk
+    except ImportError: raise ImportError(
+        "rishi.claude needs the Claude Agent SDK: pip install 'rishi[claude]'. It drives the "
+        "`claude` binary as a subprocess and never reads your credentials.") from None
 
-def claude_via(via=None):
-    "Which path to take: what you named, else the SDK when it is installed, else the CLI."
-    if via not in (None, 'sdk', 'cli'): raise ValueError(f"via must be 'sdk', 'cli' or None, not {via!r}")
-    if via == 'sdk' and not sdk_available(): raise ImportError(
-        'via=\'sdk\' needs the Claude Agent SDK: pip install \'rishi[claude]\'. The CLI path needs '
-        'none of it. Leave via=None and rishi takes whichever is here.')
-    return via or ('sdk' if sdk_available() else 'cli')
-
-def norm_claude_usage(u, model=None):
+def norm_claude_usage(u, model=None, cost=None):
     "Claude Code's usage block -> rishi's, so a Claude turn adds up with a local one."
     if not u: return {}
-    cache = (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0)
-    pt, ct = (u.get('input_tokens') or 0) + cache, u.get('output_tokens') or 0
-    return {'prompt_tokens': pt, 'completion_tokens': ct, 'total_tokens': pt + ct,
-            'cached_tokens': u.get('cache_read_input_tokens') or 0, 'model': model}
+    read, made = u.get('cache_read_input_tokens') or 0, u.get('cache_creation_input_tokens') or 0
+    pt, ct = (u.get('input_tokens') or 0) + read + made, u.get('output_tokens') or 0
+    return {'prompt_tokens': pt, 'completion_tokens': ct, 'total_tokens': pt + ct, 'cached_tokens': read,
+            'cache_creation_tokens': made, 'cost': cost or 0.0, 'model': model}
 
 ABORTED = ('aborted_streaming', 'aborted')
+_status_re = re.compile(r'\b(\d{3})\b')
+
+class ClaudeError(RuntimeError):
+    "A failed Claude Code turn: what it said, the status behind it, and the raw result."
+    def __init__(self, msg, status=None, raw=None):
+        self.status, self.raw = status, raw
+        super().__init__(msg)
+
+def claude_status(d):
+    "The HTTP status behind a failed result: what Claude Code reported, else one read out of the text."
+    if (s := d.get('api_error_status')):
+        try: return int(s)
+        except (TypeError, ValueError): pass
+    m = _status_re.search(f"{d.get('result') or ''} {d.get('subtype') or ''}")
+    return int(m.group(1)) if m else None
+
 def norm_claude(d, model=None):
     "A Claude Code result -> a rishi `Resp`, with `<tool_call>` tags read out of the text."
     if d.get('is_error') and d.get('terminal_reason') not in ABORTED:
-        raise RuntimeError(f"claude failed: {d.get('result') or d.get('subtype')}")
+        raise ClaudeError(f"claude failed: {d.get('result') or d.get('subtype')}",
+                          status=claude_status(d), raw=d)
     text, th = split_think(d.get('result') or '')
     text, tcs = parse_tool_tags(text)
     res = {'role': 'assistant', 'content': text}
     if th: res['channels'] = {'thought': th}
     if tcs: res['tool_calls'] = tcs
-    res['usage'] = norm_claude_usage(d.get('usage'), model)
+    res['usage'] = norm_claude_usage(d.get('usage'), model, d.get('cost'))
     return Resp(res)
 INTERRUPT_WAIT = 5
+CONT_PROMPT = 'The tool results are in. Continue your answer.'  #: a turn whose tool result is already in the records
+                                                              #: ("continue from where you left off" reads as "was there
+                                                              #: anything left?", and the model says so in its reply)
+
+def sess_writer():
+    "`llmsurgery.ant`, which writes the transcript records, or None when it is not installed."
+    try:
+        from llmsurgery import ant
+        return ant
+    except ImportError: return None
 
 # %% ../nbs/06_claude.ipynb #0b45f039
 def mk_claude_content(o):
@@ -112,11 +136,12 @@ def mk_claude_msgs(msgs): return [mk_claude_msg(m) for m in listify(msgs)] if ms
 
 # %% ../nbs/06_claude.ipynb #cl_chat
 class ClaudeChat(ToolLoopMixin, Chat):
-    "Chat against a Claude Code model, with the same `rishi.core.Chat` API over the Agent SDK or the CLI."
+    "Chat against a Claude Code model, with the same `rishi.core.Chat` API over the Agent SDK."
     _runtime = 'claude'
-    _media_note = ("this Claude Code chat cannot carry a picture or a document: only a live session can, "
-                   "and this one renders the conversation to a text prompt. Use the default "
-                   "`stateful=True` with the Agent SDK, or `rishi.remote`/`rishi.ollama`/`rishi.litert`.")
+    _media_note = ("this Claude Code chat cannot carry a picture or a document: it is stateless and has "
+                   "no transcript to file, so the conversation goes as one text prompt, which has nowhere "
+                   "to put one. Keep the default `stateful=True`, or leave `transcript=True` and install "
+                   "`llmsurgery` (it comes with `rishi[claude]`), or use `rishi.remote`/`rishi.litert`.")
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(mk_claude_content), staticmethod(mk_claude_msg), staticmethod(mk_claude_msgs)
     local, _ctx_live = False, 0
@@ -127,17 +152,22 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  permission_mode='auto',    # Claude Code's gate on its *own* tools. Yours are rishi's
                  claude_tools=None,         # Claude Code's own tools, allowlisted. None -> none at all when this chat carries tools
                  claude_disallowed=CLAUDE_DISALLOWED,   # ...and the ones it may never use
-                 workspace=None,            # directory Claude Code works in. None -> the cwd
+                 claude_server_tools=(),    # its web tools, which run on its side and never reach rishi's loop
+                 workspace=None,            # directory Claude Code works in. None -> `CLAUDE_WORK_DIR`. See `_cwd`
                  effort=None,               # 'low'/'medium'/'high'/'xhigh'/'max'. None -> the default
-                 bare=True,                 # answer as a model: no CLAUDE.md, skills, plugins or hooks. See `_cmd`
-                 via=None,                  # 'sdk' or 'cli'. None -> the SDK when it is installed
+                 bare=True,                 # answer as a model: no CLAUDE.md, skills, plugins or hooks
                  stateful=True,             # keep one Claude Code session per chat. See `_connect`
+                 transcript=True,           # file the conversation as records rather than prose. See `_file_sess`
+                 api_key=False,             # let an ambient `ANTHROPIC_API_KEY` reach the subprocess. See `_opts`
+                 max_buffer=MAX_BUFFER,     # the SDK's stdout cap, in bytes
                  bin=CLAUDE_BIN, timeout=600, settings=None, cbs=None, default_cbs=True, **opts):
+        claude_sdk()      # fail here, naming the extra, rather than part-way into the first turn
         self.model_id = core.split_runtime(model)[1] or opus5
         self._set_tools(tools)
-        store_attr('permission_mode,claude_tools,claude_disallowed,workspace,effort,bare,bin,timeout,settings,opts')
-        self.via = claude_via(via)
+        store_attr('permission_mode,claude_tools,claude_disallowed,claude_server_tools,workspace,effort,'
+                   'bare,bin,timeout,settings,api_key,max_buffer,opts')
         self.stateful = stateful
+        self.transcript = bool(transcript) and sess_writer() is not None
         self.client = self._last_res = None
         self._stale = False             # a cancelled turn leaves the transcript and `hist` disagreeing
         self._ctx_live = 0              # occupancy the session last reported. See `token_count`
@@ -151,22 +181,28 @@ class ClaudeChat(ToolLoopMixin, Chat):
     @property
     def in_session_mode(self):
         "Does this chat drive one live session, rather than a fresh `query` per turn?"
-        return self.use_sdk and self.stateful
+        return self.stateful
 
     @property
     def _media_ok(self):
-        "A live session carries pictures and documents as content blocks. A text prompt cannot."
-        return self.in_session_mode
+        "A live session and a filed transcript both carry content blocks. A text prompt cannot."
+        return self.in_session_mode or self.transcript
+
+    @property
+    def _cwd(self):
+        """The directory Claude Code runs in, which is also where a filed transcript lives.
+
+        `workspace` when you named one, so a chat pointed at a project keeps its records with it.
+        Otherwise `CLAUDE_WORK_DIR`, to keep synthesized transcripts out of a real project's
+        history; pass `workspace='.'` to opt back into the current directory.
+        """
+        d = Path(self.workspace).expanduser() if self.workspace else CLAUDE_WORK_DIR
+        return d.resolve()
 
     @property
     def tool_channel(self):
         "Where this chat's tool schemas travel. Always the prompt, to get past a managed MCP policy."
         return 'tags'
-
-    @property
-    def use_sdk(self):
-        "Is this chat going through the Agent SDK rather than the CLI?"
-        return self.via == 'sdk'
 
     @property
     def token_count(self):
@@ -197,134 +233,64 @@ class ClaudeChat(ToolLoopMixin, Chat):
         return getattr(self, 'client', None) is not None
 
     def _recreate_conv(self):
-        "Drop the session, so the next turn opens a fresh one and replays `hist` into it."
+        "Drop the session, so the next turn opens a fresh one and refiles `hist` into it."
         self._disconnect()
 
     def close(self):
         "End the session. A leaked chat would otherwise leak a `node` process; the loop is fastcore's."
         self._disconnect()
 
-# %% ../nbs/06_claude.ipynb #cl_cli
-@patch
-def _cmd(self:ClaudeChat, fmt):
-    "The `claude` command line for one turn, minus the prompt."
-    cmd = [claude_bin(self.bin), '-p', '--output-format', fmt, '--model', self.model_id,
-           '--mcp-config', NO_MCP]   # no `--strict-mcp-config`: see `NO_MCP`
-    if fmt == 'stream-json': cmd += ['--verbose']   # `-p` refuses stream-json without it
-    if self.bare: cmd += ['--safe-mode']
-    if (sp := self._sp()): cmd += ['--system-prompt', sp]
-    if self.permission_mode: cmd += ['--permission-mode', self.permission_mode]
-    if self.effort: cmd += ['--effort', self.effort]
-    if self.settings: cmd += ['--settings', str(self.settings)]
-    if self.workspace: cmd += ['--add-dir', str(self.workspace)]
-    if self.claude_tools: cmd += ['--allowed-tools', *self.claude_tools]
-    elif self.toolspecs: cmd += ['--tools', '']
-    if self.claude_disallowed: cmd += ['--disallowed-tools', *self.claude_disallowed]
-    return cmd
-
-@patch
-def _run(self:ClaudeChat, fmt, prompt=None):
-    "Run one turn and return the finished process. A non-zero exit is the CLI's message, not a traceback."
-    r = subprocess.run(self._cmd(fmt), input=ifnone(prompt, self._prompt()), capture_output=True,
-                       text=True, timeout=self.timeout, cwd=str(self.workspace) if self.workspace else None)
-    if r.returncode != 0: raise RuntimeError(f'claude exited {r.returncode}: {(r.stderr or r.stdout).strip()[:400]}')
-    return r
-
 # %% ../nbs/06_claude.ipynb #cl_sdk
 @patch
-def _opts(self:ClaudeChat, sp):
+def _opts(self:ClaudeChat, sp, resume=None, fork=False):
     "Agent SDK options for one turn, with no MCP server for a managed policy to refuse."
-    from claude_agent_sdk import ClaudeAgentOptions
-    kw = dict(model=self.model_id, system_prompt=sp or None,
-              cwd=str(self.workspace) if self.workspace else None,
+    sdk = claude_sdk()
+    cwd = self._cwd
+    cwd.mkdir(parents=True, exist_ok=True)
+    srv, native = list(self.claude_server_tools or ()), (list(self.claude_tools) if self.claude_tools is not None else None)
+    kw = dict(model=self.model_id, system_prompt=sp or None, cwd=str(cwd),
               permission_mode=self.permission_mode, settings=self.settings,
-              mcp_servers={}, strict_mcp_config=False,   # see `NO_MCP`
-              include_partial_messages=True,             # token deltas, as `_cmd` already asks for
+              mcp_servers={}, strict_mcp_config=False,        # see `The wire`
+              include_partial_messages=True,                 # token deltas
+              max_buffer_size=self.max_buffer,               # the SDK's own 1MB cap loses a long reply
+              env={} if self.api_key else {'ANTHROPIC_API_KEY': ''},   # a subscription session, not a metered one
               disallowed_tools=list(self.claude_disallowed or ()))
-    if self.claude_tools is not None: kw['allowed_tools'] = list(self.claude_tools)
-    elif self.toolspecs: kw['tools'] = []   # rishi's tools are the only channel - see `_cmd`
+    if native is not None: kw['allowed_tools'] = native + srv
+    elif srv: kw['allowed_tools'] = srv
+    if srv: kw['tools'] = sorted(set((native or []) + srv))   # available: exactly these
+    elif native is None and self.toolspecs: kw['tools'] = []  # rishi's tools are the only channel
     if self.effort: kw['effort'] = self.effort
-    if self.bare: kw.update(setting_sources=[], skills=[])   # the SDK's `--safe-mode`; see `_cmd`
-    return ClaudeAgentOptions(**{**kw, **self.opts})
+    if self.bare: kw.update(setting_sources=[], skills=[])    # no CLAUDE.md, plugins, hooks or skills
+    if resume: kw.update(resume=resume, fork_session=fork)
+    return sdk.ClaudeAgentOptions(**{**kw, **self.opts})
 
 @patch
-def _sdk_events(self:ClaudeChat, prompt, sp):
+def _result(self:ClaudeChat, res, text):
+    "A `ResultMessage` as the dict `norm_claude` reads, cost and error status included."
+    return {'result': res.result or ''.join(text), 'usage': res.usage, 'is_error': res.is_error,
+            'subtype': res.subtype, 'cost': res.total_cost_usd,
+            'api_error_status': getattr(res, 'api_error_status', None)}
+
+@patch
+def _sdk_events(self:ClaudeChat, prompt, sp, resume=None):
     "One `query` as `(kind, value)` pairs: `thought`, `text`, and one final `result` dict."
-    from claude_agent_sdk import query, AssistantMessage, ResultMessage, TextBlock, ThinkingBlock
+    sdk = claude_sdk()
     async def _agen():
         text, res = [], None
-        ait = query(prompt=prompt, options=self._opts(sp)).__aiter__()
+        ait = sdk.query(prompt=claude_prompt(prompt), options=self._opts(sp, resume=resume)).__aiter__()
         while True:
             try: m = await asyncio.wait_for(ait.__anext__(), self.timeout)
             except StopAsyncIteration: break
             except asyncio.TimeoutError:
                 raise TimeoutError(f'Claude Code sent nothing for {self.timeout}s') from None
-            if isinstance(m, AssistantMessage):
+            if isinstance(m, sdk.AssistantMessage):
                 for b in m.content:
-                    if isinstance(b, ThinkingBlock) and b.thinking: yield 'thought', b.thinking
-                    elif isinstance(b, TextBlock) and b.text: text.append(b.text); yield 'text', b.text
-            elif isinstance(m, ResultMessage): res = m
+                    if isinstance(b, sdk.ThinkingBlock) and b.thinking: yield 'thought', b.thinking
+                    elif isinstance(b, sdk.TextBlock) and b.text: text.append(b.text); yield 'text', b.text
+            elif isinstance(m, sdk.ResultMessage): res = m
         if res is None: raise RuntimeError('the Agent SDK ended without a result')
-        yield 'result', {'result': res.result or ''.join(text), 'usage': res.usage, 'is_error': res.is_error, 'subtype': res.subtype}
+        yield 'result', self._result(res, text)
     return sync_iter(_agen, stop=self._cancel)
-
-# %% ../nbs/06_claude.ipynb #95f0e8ec
-_live_sessions = weakref.WeakSet()
-@atexit.register
-def _close_sessions():
-    "Close every live session, so no `claude` subprocess outlives the interpreter."
-    for c in list(_live_sessions):
-        try: c._disconnect()
-        except Exception: pass
-
-@patch
-def _connect(self:ClaudeChat):
-    "The live session, opened on first use. `_sp()` is fixed here: the SDK has no way to change it later."
-    if self.client is not None: return self.client
-    from claude_agent_sdk import ClaudeSDKClient
-    client = ClaudeSDKClient(options=self._opts(self._sp()))
-    run_sync(asyncio.wait_for(client.connect(), self.timeout))
-    self.client = client        # `_sent` belongs to `_disconnect`: resetting it here would
-    _live_sessions.add(self)    # undo the delta this turn just computed. Tracked so `atexit`
-    return client               # can close it: `__del__` is too late. See `_close_sessions`
-
-@patch
-def _disconnect(self:ClaudeChat):
-    "End the session if there is one. The loop outlives it, ready for the next."
-    c = getattr(self, 'client', None)
-    self.client, self._sent, self._last_res, self._stale = None, 0, None, False
-    if c is None: return
-    _live_sessions.discard(self)
-    if sys.is_finalizing(): return   # the loop thread is stopped; `run_sync` would never return
-    try: run_sync(asyncio.wait_for(c.disconnect(), self.timeout))
-    except Exception: pass          # a dead subprocess is already disconnected
-
-@patch
-def _delta(self:ClaudeChat):
-    "The slice of `hist` the session has not been sent, as one rendered prompt."
-    if self._sent < len(self.hist) and self.hist[self._sent] is self._last_res:
-        self._sent += 1             # the session wrote this one; sending it back would echo it
-    out = render_prompt(self.hist[self._sent:])
-    self._sent = len(self.hist)
-    return out
-
-# %% ../nbs/06_claude.ipynb #d3ad2ce7
-@patch
-def cancel(self:ClaudeChat):
-    "Stop the turn, and tell the session to stop generating rather than only stopping the reader."
-    out = super(ClaudeChat, self).cancel()
-    if self.in_session:
-        try: run_sync(asyncio.wait_for(self.client.interrupt(), INTERRUPT_WAIT))
-        except Exception: pass
-        self._stale = True
-    return out
-
-@patch
-def _ctx_usage(self:ClaudeChat):
-    "What the live session says its window holds, or None."
-    if not self.in_session: return None
-    try: return run_sync(asyncio.wait_for(self.client.get_context_usage(), INTERRUPT_WAIT))
-    except Exception: return None
 
 # %% ../nbs/06_claude.ipynb #da4e0a44
 @patch
@@ -349,33 +315,184 @@ def _to_parts(self:ClaudeChat, msgs):
                 'Claude Code takes no audio input. Use `rishi.remote`, `rishi.ollama` or `rishi.litert`.')
     return out
 
+# %% ../nbs/06_claude.ipynb #cl_sess
+def anth_blocks(content):
+    "rishi's OpenAI-shaped message content as Anthropic content blocks."
+    if not content: return []
+    if isinstance(content, str): return [{'type': 'text', 'text': content}]
+    out = []
+    for p in content:
+        if not isinstance(p, dict): continue
+        t = p.get('type')
+        if t == 'text':
+            if p.get('text'): out.append({'type': 'text', 'text': p['text']})
+        elif t == 'image_url':
+            url = (p.get('image_url') or {}).get('url', '')
+            head, sep, data = url.partition(';base64,')
+            if not sep:                        # a link, not bytes: Anthropic takes no URL source here
+                out.append({'type': 'text', 'text': url})
+                continue
+            mime = head[5:] if head.startswith('data:') else 'application/octet-stream'
+            out.append({'type': 'document' if mime == 'application/pdf' else 'image',
+                        'source': {'type': 'base64', 'media_type': mime, 'data': data}})
+        elif t == 'input_audio': raise TypeError(
+            'Claude Code takes no audio input. Use `rishi.remote`, `rishi.ollama` or `rishi.litert`.')
+    return out
+
+def tu_id(tid, ant):
+    "A tool call's id as Anthropic spells one, the same way every time it is filed."
+    tid = tid or ''
+    return tid if tid.startswith('toolu_') else 'toolu_' + ant.stable_uuid(f'rishi-tu:{tid}').replace('-', '')[:24]
+
+def anth_msgs(hist, ant):
+    "rishi's history as Anthropic messages, with tool calls answered in place as real blocks."
+    out, called = [], set()
+    for m in hist:
+        role = m.get('role')
+        if role == 'system': continue                  # the briefing has a channel of its own
+        if role == 'tool':
+            tid, txt = tu_id(m.get('tool_call_id'), ant), str(ifnone(m.get('content'), ''))
+            # a `tool_result` answering no `tool_use` is a 400, and a hand-built history can hold one
+            blocks = ([{'type': 'tool_result', 'tool_use_id': tid, 'content': txt}] if tid in called
+                      else [{'type': 'text', 'text': f"Tool result ({m.get('name', '?')})\n{txt}"}])
+            role = 'user'
+        else:
+            blocks = anth_blocks(m.get('content'))
+            if role == 'assistant':
+                tus = [{'type': 'tool_use', 'id': tu_id(tc.get('id'), ant), 'name': tc_name(tc),
+                        'input': parse_args((tc.get('function') or {}).get('arguments'))}
+                       for tc in (m.get('tool_calls') or [])]
+                called |= {b['id'] for b in tus}
+                blocks += tus
+        if not blocks: continue                        # an empty turn is not a message
+        role = 'assistant' if role == 'assistant' else 'user'
+        if out and out[-1]['role'] == role: out[-1]['content'] += blocks   # a transcript reads these as one turn
+        else: out.append({'role': role, 'content': blocks})
+    return out
+
+def claude_prompt(prompt):
+    "A turn's prompt for `query`: a string as it is, content blocks as the streaming-input shape."
+    if isinstance(prompt, str): return prompt
+    async def _one():
+        yield {'type': 'user', 'message': {'role': 'user', 'content': prompt},
+               'parent_tool_use_id': None, 'session_id': 'default'}
+    return _one()
+
+# %% ../nbs/06_claude.ipynb #cl_sess2
+@patch
+def _file_sess(self:ClaudeChat, hist=None):
+    "File `hist` as a resumable Claude Code transcript, returning its session id, or None if empty."
+    ant = sess_writer()
+    if not (ant and self.transcript): return None
+    msgs = anth_msgs(ifnone(hist, self.hist), ant)
+    if not msgs: return None
+    cwd = self._cwd
+    cwd.mkdir(parents=True, exist_ok=True)
+    sid = ant.stable_uuid(f'rishi-claude:{ant.canon(msgs)}')
+    recs = ant.msgs2recs(msgs, key=sid, cwd=cwd, model=self.model_id, entrypoint='sdk-py')
+    for r in recs:
+        c = r['message']['content']
+        # An assistant record's content must be a list: Claude Code calls `.some()` on it, and
+        # `mk_rec` leaves a text-only assistant turn as a bare string. See the section above.
+        if r['type'] == 'assistant' and isinstance(c, str): r['message']['content'] = [{'type': 'text', 'text': c}]
+    return ant.save_sess(recs, sid, cwd)
+
+@patch
+def _split_turn(self:ClaudeChat):
+    """What to file and what to send: `(past, prompt)`.
+
+    A `tool_use` record has to be answered by the `tool_result` that carries its id, so a turn that
+    already holds the result files the whole conversation and asks the model to carry on. Anything
+    else files the past and sends the last message as the turn.
+    """
+    if self.hist and self.hist[-1].get('role') == 'tool': return self.hist, CONT_PROMPT
+    return self.hist[:-1], self._as_turn(self.hist[-1:])
+
+@patch
+def _as_turn(self:ClaudeChat, msgs):
+    "`msgs` as one prompt: the text itself for a lone user turn, headed prose for several, blocks for media."
+    if any(is_media(p) for m in msgs for p in (m.get('content') or []) if isinstance(p, dict)):
+        from aidialog.msg_parts import Msg
+        from fastllm.anthropic import denorm_user
+        return denorm_user(Msg(role='user', content=self._to_parts(msgs)))['content']
+    if len(msgs) == 1 and msgs[0].get('role') == 'user' and not msgs[0].get('tool_calls'):
+        return resp_text(msgs[0])            # a real user turn, with no role heading to read past
+    return render_prompt(msgs)
+
+# %% ../nbs/06_claude.ipynb #95f0e8ec
+_live_sessions = weakref.WeakSet()
+@atexit.register
+def _close_sessions():
+    "Close every live session, so no `claude` subprocess outlives the interpreter."
+    for c in list(_live_sessions):
+        try: c._disconnect()
+        except Exception: pass
+
+@patch
+def _connect(self:ClaudeChat):
+    """The live session, opened on first use. `_sp()` is fixed here: the SDK has no way to change it later.
+
+    The past is filed and resumed rather than replayed as prose, so the session opens already holding
+    the conversation as records. `fork_session` keeps its own turns out of that file.
+    """
+    if self.client is not None: return self.client
+    sdk = claude_sdk()
+    past, _ = self._split_turn()
+    sid = self._file_sess(past)
+    client = sdk.ClaudeSDKClient(options=self._opts(self._sp(), resume=sid, fork=True))
+    run_sync(asyncio.wait_for(client.connect(), self.timeout))
+    self.client = client            # `_events` connects before computing the delta, so the watermark
+    self._sent = len(past) if sid else 0             # can start at what the resumed session holds
+    _live_sessions.add(self)        # tracked so `atexit` can close it: `__del__` is too late
+    return client
+
+@patch
+def _disconnect(self:ClaudeChat):
+    "End the session if there is one. The loop outlives it, ready for the next."
+    c = getattr(self, 'client', None)
+    self.client, self._sent, self._last_res, self._stale = None, 0, None, False
+    if c is None: return
+    _live_sessions.discard(self)
+    if sys.is_finalizing(): return   # the loop thread is stopped; `run_sync` would never return
+    try: run_sync(asyncio.wait_for(c.disconnect(), self.timeout))
+    except Exception: pass          # a dead subprocess is already disconnected
+
 @patch
 def _delta(self:ClaudeChat):
-    "What the session has not been sent: a rendered string, or Anthropic blocks when media is in it."
+    "The slice of `hist` the session has not been sent, as one prompt."
     if self._sent < len(self.hist) and self.hist[self._sent] is self._last_res:
         self._sent += 1             # the session wrote this one; sending it back would echo it
     new = self.hist[self._sent:]
     self._sent = len(self.hist)
-    if not any(is_media(p) for m in new for p in (m.get('content') or []) if isinstance(p, dict)):
-        return render_prompt(new)
-    from aidialog.msg_parts import Msg
-    from fastllm.anthropic import denorm_user
-    return denorm_user(Msg(role='user', content=self._to_parts(new)))['content']
+    return self._as_turn(new)
+
+# %% ../nbs/06_claude.ipynb #d3ad2ce7
+@patch
+def cancel(self:ClaudeChat):
+    "Stop the turn, and tell the session to stop generating rather than only stopping the reader."
+    out = super(ClaudeChat, self).cancel()
+    if self.in_session:
+        try: run_sync(asyncio.wait_for(self.client.interrupt(), INTERRUPT_WAIT))
+        except Exception: pass
+        self._stale = True
+    return out
+
+@patch
+def _ctx_usage(self:ClaudeChat):
+    "What the live session says its window holds, or None."
+    if not self.in_session: return None
+    try: return run_sync(asyncio.wait_for(self.client.get_context_usage(), INTERRUPT_WAIT))
+    except Exception: return None
 
 # %% ../nbs/06_claude.ipynb #26df6fe0
 @patch
 def _session_turn(self:ClaudeChat, prompt):
     "One turn on the live session, in `_sdk_events`' `(kind, value)` shape."
-    from claude_agent_sdk import AssistantMessage, ResultMessage, TextBlock, ThinkingBlock
+    sdk = claude_sdk()
     client = self._connect()
     async def _agen():
         text, res = [], None
-        if isinstance(prompt, str): await client.query(prompt)
-        else:                                          # content blocks need the streaming-input shape
-            async def _one():
-                yield {'type': 'user', 'message': {'role': 'user', 'content': prompt},
-                       'parent_tool_use_id': None, 'session_id': 'default'}
-            await client.query(_one())
+        await client.query(claude_prompt(prompt))
         ait = client.receive_response().__aiter__()
         while True:
             if self._cancel.is_set(): break
@@ -383,26 +500,28 @@ def _session_turn(self:ClaudeChat, prompt):
             except StopAsyncIteration: break
             except asyncio.TimeoutError:
                 raise TimeoutError(f'Claude Code sent nothing for {self.timeout}s') from None
-            if isinstance(m, AssistantMessage):
+            if isinstance(m, sdk.AssistantMessage):
                 for b in m.content:
-                    if isinstance(b, ThinkingBlock) and b.thinking: yield 'thought', b.thinking
-                    elif isinstance(b, TextBlock) and b.text: text.append(b.text); yield 'text', b.text
-            elif isinstance(m, ResultMessage): res = m
+                    if isinstance(b, sdk.ThinkingBlock) and b.thinking: yield 'thought', b.thinking
+                    elif isinstance(b, sdk.TextBlock) and b.text: text.append(b.text); yield 'text', b.text
+            elif isinstance(m, sdk.ResultMessage): res = m
         if res is None: raise RuntimeError('the Claude Code session ended without a result')
         # already on the loop, so this is a local await rather than a cross-thread wait
         try: self._ctx_live = (await client.get_context_usage() or {}).get('totalTokens') or self._ctx_live
         except Exception: pass
-        yield 'result', {'result': res.result or ''.join(text), 'usage': res.usage,
-                         'is_error': res.is_error, 'subtype': res.subtype}
+        yield 'result', self._result(res, text)
     return iter_sync(_agen())
 
 @patch
 def _events(self:ClaudeChat):
-    "This turn's events: the delta on a live session, else the whole conversation on a fresh query."
-    if not self.in_session_mode: return self._sdk_events(self._prompt(), self._sp())
+    "This turn's events: the delta on a live session, else one query resuming the filed conversation."
+    if not self.in_session_mode:
+        if not self.transcript: return self._sdk_events(self._prompt(), self._sp())
+        past, prompt = self._split_turn()             # the past as records, this turn as the prompt
+        return self._sdk_events(prompt, self._sp(), resume=self._file_sess(past))
     if self._stale: self._disconnect()   # a cancelled turn: start again from what rishi holds
     self._connect()                      # before the delta, not after: connecting must not
-    return self._session_events(self._delta())   # come between computing it and sending it
+    return self._session_events(self._delta() or CONT_PROMPT)   # come between computing it and sending it
 
 @patch
 def _session_events(self:ClaudeChat, prompt):
@@ -412,54 +531,31 @@ def _session_events(self:ClaudeChat, prompt):
         for o in self._session_turn(prompt): started = True; yield o
     except Exception:
         if started: raise
-        self._disconnect(); self._connect()
-        for o in self._session_turn(render_prompt(self.hist)): yield o
-        self._sent = len(self.hist)
+        self._disconnect(); self._connect()   # a fresh session, refiled from `hist` by `_connect`
+        for o in self._session_turn(self._delta() or CONT_PROMPT): yield o
 
 # %% ../nbs/06_claude.ipynb #cl_steps
 @patch
 def _model_step(self:ClaudeChat, max_output_tokens=None):
-    "One wire call, through whichever path this chat uses."
-    if self.use_sdk:
-        out = next(v for k, v in self._events() if k == 'result')
-        self._last_res = res = self._note_usage(norm_claude(out, self.model_id))
-        return res
-    return self._note_usage(norm_claude(json.loads(self._run('json').stdout), self.model_id))
+    "One wire call."
+    out = next(v for k, v in self._events() if k == 'result')
+    self._last_res = res = self._note_usage(norm_claude(out, self.model_id))
+    return res
 
 @patch
 def _stream_step(self:ClaudeChat, max_output_tokens=None):
     "The same turn, streamed. Thinking gets its own channel, and tag calls are never rendered as prose."
     split, out = StreamSplit(), None
-    if self.use_sdk:
-        for kind, v in self._events():
-            if kind == 'thought': yield {'channels': {'thought': v}}
-            elif kind == 'text': yield from split.feed(v)
-            else: out = v
-    else:
-        proc = subprocess.Popen(self._cmd('stream-json') + ['--include-partial-messages'],
-                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                text=True, cwd=str(self.workspace) if self.workspace else None)
-        # `with proc` waits for the CLI on the way out, without a timeout. A cancelled turn abandons
-        # this generator, so kill the process rather than block the caller until it finishes alone.
-        with killed_on_exit(proc):
-            proc.stdin.write(self._prompt()); proc.stdin.close()   # stdin, not argv: see `_run`
-            for line in proc.stdout:
-                if not (line := line.strip()): continue
-                try: o = json.loads(line)
-                except json.JSONDecodeError: continue
-                if o.get('type') == 'stream_event':
-                    dl = (o.get('event') or {}).get('delta') or {}
-                    if (t := dl.get('thinking')): yield {'channels': {'thought': t}}
-                    elif (t := dl.get('text')): yield from split.feed(t)
-                elif o.get('type') == 'result': out = o
-        if out is None: raise RuntimeError(f'claude ended without a result: {proc.stderr.read()[:400]}')
+    for kind, v in self._events():
+        if kind == 'thought': yield {'channels': {'thought': v}}
+        elif kind == 'text': yield from split.feed(v)
+        else: out = v
     yield from split.finish()
+    if out is None: raise RuntimeError('the turn ended without a result')
     self._step_res = self._last_res = self._note_usage(norm_claude(out, self.model_id))
 
 @patch
 def _oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None):
-    "Stateless one-shot text, through whichever path this chat uses."
-    if self.use_sdk:
-        out = next(v for k, v in self._sdk_events(prompt, sp) if k == 'result')
-        return resp_text(norm_claude(out, self.model_id))
-    return resp_text(norm_claude(json.loads(self._run('json', prompt).stdout), self.model_id))
+    "Stateless one-shot text: no history to file and no session to keep."
+    out = next(v for k, v in self._sdk_events(prompt, sp) if k == 'result')
+    return resp_text(norm_claude(out, self.model_id))

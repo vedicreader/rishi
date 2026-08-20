@@ -15,7 +15,7 @@ pip install 'rishi[llama]'     # any GGUF
 pip install 'rishi[mlx]'       # Apple Silicon (add mlx-vlm for vision and audio)
 pip install 'rishi[ollama]'    # any Ollama model; rishi installs and runs the daemon
 pip install 'rishi[remote]'    # Claude, GPT, Gemini and friends, via fastllm
-pip install 'rishi[claude]'    # Claude Code via the Agent SDK (the `claude` CLI needs nothing)
+pip install 'rishi[claude]'    # Claude Code, through the Agent SDK
 pip install 'rishi[copilot]'   # GitHub Copilot, on your Copilot subscription
 pip install 'rishi[all]'       # everything your platform supports
 ```
@@ -275,7 +275,7 @@ print(chat.check('Capital of France?', 'Paris'))
 | MLX | `rishi[mlx]` | Apple Silicon, with an explicit prompt cache, `kv_bits` and LoRA |
 | ollama | `rishi[ollama]` | any Ollama model, on a daemon rishi installs and runs for you |
 | remote | `rishi[remote]` plus a vendor key | the same tools and HITL as local, with `tool_choice` and `reasoning_effort` |
-| claude | `rishi[claude]`, or just Claude Code plus `claude /login` | your tools without MCP, through the `claude/` prefix or [`ClaudeChat`](https://vedicreader.github.io/rishi/claude.html#claudechat) |
+| claude | `rishi[claude]` plus Claude Code and `claude /login` | your tools without MCP, through the `claude/` prefix or [`ClaudeChat`](https://vedicreader.github.io/rishi/claude.html#claudechat) |
 | copilot | `rishi[copilot]` plus a Copilot subscription | many vendors’ models on one subscription, through the `copilot/` prefix or [`CopilotChat`](https://vedicreader.github.io/rishi/copilot.html#copilotchat) |
 
 ``` python
@@ -291,18 +291,31 @@ print(resp_text(big('What is my name and favourite number?'))); loc.close(); big
 
 ## Claude Code
 
-`Chat('claude/claude-sonnet-5')` runs through Claude Code. `via='sdk'` uses the
-`claude-agent-sdk` package from `rishi[claude]`. `via='cli'` uses the `claude` binary. `via=None`
-prefers the SDK when installed. `ClaudeChat.local` is `False`.
+`Chat('claude/claude-sonnet-5')` runs through Claude Code, over the Agent SDK from
+`rishi[claude]`. `ClaudeChat.local` is `False`.
 
 Managed Claude Code installations can reject dynamic MCP servers. Rishi instead puts tool schemas
 in the system prompt and receives calls as `<tool_call>` tags. It opens no MCP server and does not
-set `--strict-mcp-config`.
+set `strict_mcp_config`.
 
-The briefing and tool schemas use Claude Code’s system-prompt channel. Only the conversation is
-rendered into the prompt. Claude Code’s own system prompt adds 48k to 53k prompt tokens per turn.
-Tool calls also depend on the model producing the tags correctly. Use a Sonnet-tier or stronger
-model for tool-using turns.
+The conversation travels as a Claude Code session transcript that each turn resumes, so the model
+reads real messages: a picture as an `image` block, a PDF as a `document`, and a tool call answered
+by a `tool_result` carrying its id. `rishi[claude]` installs `llmsurgery`, which writes those
+records; without it `transcript` is off and the conversation is flattened into one prompt, which
+carries no media.
+
+`stateful=True`, the default, keeps one Claude Code session per chat: one subprocess for the whole
+conversation, and mid-turn tool results go up as text. `stateful=False` files every turn as records
+instead, at the cost of a subprocess each. Transcripts are filed under `CLAUDE_WORK_DIR`
+(`~/.rishi-claude`) unless you name a `workspace`, so they stay out of a real project’s history.
+
+An ambient `ANTHROPIC_API_KEY` is blanked for the subprocess, because it would silently turn a
+subscription session into a metered API one; pass `api_key=True` to allow it. `chat.use.cost` is
+what Claude Code itself reported for the turn.
+
+The briefing and tool schemas use Claude Code’s system-prompt channel. Claude Code’s own system
+prompt adds 48k to 53k prompt tokens per turn. Tool calls also depend on the model producing the
+tags correctly. Use a Sonnet-tier or stronger model for tool-using turns.
 
 ## GitHub Copilot
 
