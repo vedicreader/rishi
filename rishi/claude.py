@@ -101,11 +101,13 @@ CONT_PROMPT = 'The tool results are in. Continue your answer.'  #: a turn whose 
                                                               #: anything left?", and the model says so in its reply)
 
 def sess_writer():
-    "`llmsurgery.ant`, which writes the transcript records, or None when it is not installed."
+    "`llmsurgery.ant`, which writes the transcript records, or None when it will not import."
     try:
         from llmsurgery import ant
         return ant
-    except ImportError: return None
+    # not just ImportError: it reaches fastllm and aidialog, and anything that fails on the way in
+    # would otherwise take out every `ClaudeChat`, when the answer is to file no transcript
+    except Exception: return None
 
 # %% ../nbs/06_claude.ipynb #0b45f039
 def mk_claude_content(o):
