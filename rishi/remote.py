@@ -49,20 +49,6 @@ _all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp'
          'ToolCall', 'mk_tool_res_msg']
 
 # %% ../nbs/04_remote.ipynb #rm_msgs
-def _img_url(p):
-    "Data URL for an OpenAI-style image part (`image_url` may be a dict or a bare string)."
-    u = p.get('image_url')
-    return u.get('url') if isinstance(u, dict) else u
-
-def _aud_url(p):
-    "Data URL for an OpenAI-style `input_audio` part."
-    a = p.get('input_audio') or {}
-    return f"data:audio/{a.get('format', 'wav')};base64,{a.get('data', '')}"
-
-def _media(cls, url):
-    "A media part carrying `url`, with the mime read off the data URL itself."
-    return cls(text=url, mime=(data_url(url) or (None, None))[0])
-
 def _parts(content):
     "Canonical rishi content (str or list of parts) -> aidialog `Part`s."
     if content is None: return []
@@ -72,8 +58,7 @@ def _parts(content):
         if not isinstance(p, dict): continue
         t = p.get('type')
         if   t == 'text' and (text := p.get('text', '')): out.append(Text(text=text))
-        elif t == 'image_url':   out.append(_media(InputImage, _img_url(p)))
-        elif t == 'input_audio': out.append(_media(InputAudio, _aud_url(p)))
+        elif t in ('image_url','input_audio') and (media := core._to_media_part(p)): out.append(media)
     return out
 
 def to_msg(m):

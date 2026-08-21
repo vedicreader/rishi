@@ -16,7 +16,7 @@ signature changed. What follows is the work each consumer needs to make the back
 | `rishi.copilot.copilot_default` | `'gpt-4.1'` |
 | `rishi.core.runtimes['copilot']` | `('rishi.copilot', 'CopilotChat')` |
 
-Install with the new extra, `rishi[copilot]`. It pulls `rishi[remote]` plus `httpx`.
+Plain `rishi` now includes Copilot, `remote`, and `httpx`. No extra is required.
 
 Two properties matter to a caller:
 
@@ -61,7 +61,7 @@ any transport code.
 5. **Tools.** Nothing to do. `CopilotChat` inherits `RemoteChat`'s native tool channel, so
    ramabana's tool specs, approval gate and budget work unchanged. Note that tool-call quality varies
    by the model Copilot is fronting, the same caveat that applies on `remote`.
-6. **`pyproject.toml`.** If ramabana pins rishi extras, add `copilot` to the set it requests.
+6. **`pyproject.toml`.** Depend on plain `rishi`. Do not add or pin the `copilot` extra.
 
 ## Leela
 

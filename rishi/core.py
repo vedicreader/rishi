@@ -213,6 +213,7 @@ class TruncationCallback(ChatCallback):
         if self.chat.use.completion_tokens >= self.max_tokens: self.chat.turn_res['truncated'] = True
 
 # %% ../nbs/00_core.ipynb #f02c8e2c277593eb
+from aidialog.msg_parts import InputImage, InputAudio, data_url
 _audio_fmts = {'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/wave': 'wav', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3'}
 
 def _audio_fmt(mime):
@@ -245,6 +246,17 @@ def mk_oai_msgs(msgs):
 def is_media(p):
     "Is `p` an image or audio content part?"
     return isinstance(p, dict) and p.get('type') in ('image_url', 'input_audio')
+
+def _to_media_part(p):
+    "Convert an OpenAI-style media content part to a typed aidialog part."
+    if not is_media(p): return None
+    if p['type'] == 'image_url':
+        image = p.get('image_url')
+        url = image.get('url') if isinstance(image, dict) else image
+        return InputImage(text=url, mime=(data_url(url) or (None, None))[0])
+    audio = p.get('input_audio') or {}
+    url = f"data:audio/{audio.get('format', 'wav')};base64,{audio.get('data', '')}"
+    return InputAudio(text=url, mime=(data_url(url) or (None, None))[0])
 
 
 # %% ../nbs/00_core.ipynb #3f2b3d4940ad273f
@@ -508,6 +520,7 @@ runtimes = {'litert': ('rishi.litert','LitertChat'), 'llama': ('rishi.llama','Ll
             'mlx': ('rishi.mlx','MlxChat'), 'remote': ('rishi.remote','RemoteChat'),
             'ollama': ('rishi.ollama','OllamaChat'),
             'claude': ('rishi.claude','ClaudeChat'), 'copilot': ('rishi.copilot','CopilotChat')}
+_optional_runtimes = {'litert', 'llama', 'mlx', 'ollama'}
 dflt_runtime = 'litert'
 # checked in order, so the local file/repo shapes win over the hosted model-name patterns
 _pats = {'litert': ('.litertlm','litertlm','litert-community','litert-lm'),
@@ -541,9 +554,10 @@ def resolve_runtime(model=None, runtime=None, model_path=None):
     return nm, model
 
 def _runtime_mod(nm):
-    "Import and return the backend module for `nm`, with an actionable error when its deps are missing."
+    "Import a backend, adding install guidance only when an optional runtime is unavailable."
     try: return import_module(runtimes[nm][0])
     except ImportError as e:
+        if nm not in _optional_runtimes: raise
         raise ImportError(f"The {nm!r} runtime is unavailable ({e}). "
                           f"Install it with: pip install \'rishi[{nm}]\'") from None
 

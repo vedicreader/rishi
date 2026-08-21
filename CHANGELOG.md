@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.25
+remove claude cli. reuse llmsurgery
+
 ## 0.1.24
 anthropic messages can sometimes have empty text blocks
 

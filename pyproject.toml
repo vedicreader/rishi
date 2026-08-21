@@ -7,7 +7,7 @@ name = "rishi"
 dynamic = ["version"]
 description = "fast local llm driver with tools"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = {text = "Apache-2.0"}
 authors = [{name = "Karthik", email = "karthik.rajgopal@hotmail.com"}]
 keywords = ['nbdev']
@@ -20,12 +20,17 @@ dependencies = [
     "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",
     "truststore>=0.10",
-    "liteparse<2.13"
+    "liteparse<2.13",
+    "python-fastllm==0.0.41",
+    "aidialog>=0.0.10",
+    "claude-agent-sdk>=0.2",
+    "llmsurgery>=0.0.13",
+    "httpx",
 ]
 
 [project.optional-dependencies]
 litert = ["litert-lm-api>=0.14.0"]
-remote = ["python-fastllm==0.0.41", "aidialog>=0.0.10"]
+remote = []
 mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 mlx-vlm = [
     "mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'",
@@ -38,10 +43,10 @@ llama = [
 ollama = [
     "zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'",
 ]
-copilot = ["rishi[remote]", "httpx",]
-claude = ["claude-agent-sdk>=0.2", "llmsurgery>=0.0.13",]
+copilot = []
+claude = []
 record = ["diskcache>=5.6.3",]
-all = ["rishi[litert,remote,mlx,mlx-vlm,llama,ollama,claude,copilot,record]",]
+all = ["rishi[litert,mlx,mlx-vlm,llama,ollama,record]"]
 dev = ["rishi[all]",]
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"

@@ -7,13 +7,15 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_DISALLOWED',
            'CLAUDE_SERVER_TOOLS', 'CLAUDE_WORK_DIR', 'MAX_BUFFER', 'ABORTED', 'INTERRUPT_WAIT', 'CONT_PROMPT',
-           'claude_bin', 'claude_sdk', 'norm_claude_usage', 'ClaudeError', 'claude_status', 'norm_claude',
-           'sess_writer', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id',
-           'anth_msgs', 'claude_prompt', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp',
-           'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
+           'claude_bin', 'norm_claude_usage', 'ClaudeError', 'claude_status', 'norm_claude', 'mk_claude_content',
+           'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id', 'anth_msgs', 'claude_prompt',
+           'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream',
+           'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import asyncio, atexit, json, os, re, shutil, sys, time, weakref
+import claude_agent_sdk
+from llmsurgery import ant
 from base64 import b64encode
 from pathlib import Path
 from fastcore.all import store_attr, patch, ifnone, listify
@@ -49,14 +51,6 @@ def claude_bin(bin=CLAUDE_BIN):
         f'{bin!r} is not on $PATH. Install Claude Code (https://claude.com/claude-code) and run '
         f'`{bin} /login`. rishi drives it as a subprocess and never reads your credentials.')
 
-def claude_sdk():
-    "The Claude Agent SDK, or an `ImportError` naming the extra that carries it."
-    try:
-        import claude_agent_sdk
-        return claude_agent_sdk
-    except ImportError: raise ImportError(
-        "rishi.claude needs the Claude Agent SDK: pip install 'rishi[claude]'. It drives the "
-        "`claude` binary as a subprocess and never reads your credentials.") from None
 
 def norm_claude_usage(u, model=None, cost=None):
     "Claude Code's usage block -> rishi's, so a Claude turn adds up with a local one."
@@ -96,18 +90,8 @@ def norm_claude(d, model=None):
     res['usage'] = norm_claude_usage(d.get('usage'), model, d.get('cost'))
     return Resp(res)
 INTERRUPT_WAIT = 5
-CONT_PROMPT = 'The tool results are in. Continue your answer.'  #: a turn whose tool result is already in the records
-                                                              #: ("continue from where you left off" reads as "was there
-                                                              #: anything left?", and the model says so in its reply)
+CONT_PROMPT = 'The tool results are in. Continue your answer.'
 
-def sess_writer():
-    "`llmsurgery.ant`, which writes the transcript records, or None when it will not import."
-    try:
-        from llmsurgery import ant
-        return ant
-    # not just ImportError: it reaches fastllm and aidialog, and anything that fails on the way in
-    # would otherwise take out every `ClaudeChat`, when the answer is to file no transcript
-    except Exception: return None
 
 # %% ../nbs/06_claude.ipynb #0b45f039
 def mk_claude_content(o):
@@ -142,8 +126,8 @@ class ClaudeChat(ToolLoopMixin, Chat):
     _runtime = 'claude'
     _media_note = ("this Claude Code chat cannot carry a picture or a document: it is stateless and has "
                    "no transcript to file, so the conversation goes as one text prompt, which has nowhere "
-                   "to put one. Keep the default `stateful=True`, or leave `transcript=True` and install "
-                   "`llmsurgery` (it comes with `rishi[claude]`), or use `rishi.remote`/`rishi.litert`.")
+                   "to put one. Keep the default `stateful=True`, leave `transcript=True`, or use "
+                   "`rishi.remote`/`rishi.litert`.")
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(mk_claude_content), staticmethod(mk_claude_msg), staticmethod(mk_claude_msgs)
     local, _ctx_live = False, 0
@@ -163,13 +147,12 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  api_key=False,             # let an ambient `ANTHROPIC_API_KEY` reach the subprocess. See `_opts`
                  max_buffer=MAX_BUFFER,     # the SDK's stdout cap, in bytes
                  bin=CLAUDE_BIN, timeout=600, settings=None, cbs=None, default_cbs=True, **opts):
-        claude_sdk()      # fail here, naming the extra, rather than part-way into the first turn
         self.model_id = core.split_runtime(model)[1] or opus5
         self._set_tools(tools)
         store_attr('permission_mode,claude_tools,claude_disallowed,claude_server_tools,workspace,effort,'
                    'bare,bin,timeout,settings,api_key,max_buffer,opts')
         self.stateful = stateful
-        self.transcript = bool(transcript) and sess_writer() is not None
+        self.transcript = bool(transcript)
         self.client = self._last_res = None
         self._stale = False             # a cancelled turn leaves the transcript and `hist` disagreeing
         self._ctx_live = 0              # occupancy the session last reported. See `token_count`
@@ -246,7 +229,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
 @patch
 def _opts(self:ClaudeChat, sp, resume=None, fork=False):
     "Agent SDK options for one turn, with no MCP server for a managed policy to refuse."
-    sdk = claude_sdk()
+    sdk = claude_agent_sdk
     cwd = self._cwd
     cwd.mkdir(parents=True, exist_ok=True)
     srv, native = list(self.claude_server_tools or ()), (list(self.claude_tools) if self.claude_tools is not None else None)
@@ -270,13 +253,14 @@ def _opts(self:ClaudeChat, sp, resume=None, fork=False):
 def _result(self:ClaudeChat, res, text):
     "A `ResultMessage` as the dict `norm_claude` reads, cost and error status included."
     return {'result': res.result or ''.join(text), 'usage': res.usage, 'is_error': res.is_error,
-            'subtype': res.subtype, 'cost': res.total_cost_usd,
+            'subtype': res.subtype, 'terminal_reason': getattr(res, 'terminal_reason', None),
+            'cost': res.total_cost_usd,
             'api_error_status': getattr(res, 'api_error_status', None)}
 
 @patch
 def _sdk_events(self:ClaudeChat, prompt, sp, resume=None):
     "One `query` as `(kind, value)` pairs: `thought`, `text`, and one final `result` dict."
-    sdk = claude_sdk()
+    sdk = claude_agent_sdk
     async def _agen():
         text, res = [], None
         ait = sdk.query(prompt=claude_prompt(prompt), options=self._opts(sp, resume=resume)).__aiter__()
@@ -298,7 +282,7 @@ def _sdk_events(self:ClaudeChat, prompt, sp, resume=None):
 @patch
 def _to_parts(self:ClaudeChat, msgs):
     "rishi's OpenAI-shaped messages as aidialog `Part`s, media included."
-    from aidialog.msg_parts import Text, InputImage, InputFile
+    from aidialog.msg_parts import Text, InputImage, InputAudio, InputFile
     out = []
     for m in msgs:
         who = core._roles.get(m.get('role'), m.get('role', '?'))   # private, so not via the star import
@@ -311,8 +295,8 @@ def _to_parts(self:ClaudeChat, msgs):
             t = prt.get('type')
             if t == 'text': out.append(Text(f'## {who}\n{prt.get("text","")}'))
             elif t == 'image_url':
-                url = (prt.get('image_url') or {}).get('url', '')
-                out.append(InputFile(url) if 'application/pdf' in url[:40] else InputImage(url))
+                media = core._to_media_part(prt)
+                out.append(InputFile(text=media.text, mime=media.mime) if media.mime == 'application/pdf' else media)
             elif t == 'input_audio': raise TypeError(
                 'Claude Code takes no audio input. Use `rishi.remote`, `rishi.ollama` or `rishi.litert`.')
     return out
@@ -384,8 +368,7 @@ def claude_prompt(prompt):
 @patch
 def _file_sess(self:ClaudeChat, hist=None):
     "File `hist` as a resumable Claude Code transcript, returning its session id, or None if empty."
-    ant = sess_writer()
-    if not (ant and self.transcript): return None
+    if not self.transcript: return None
     msgs = anth_msgs(ifnone(hist, self.hist), ant)
     if not msgs: return None
     cwd = self._cwd
@@ -438,10 +421,9 @@ def _connect(self:ClaudeChat):
     the conversation as records. `fork_session` keeps its own turns out of that file.
     """
     if self.client is not None: return self.client
-    sdk = claude_sdk()
     past, _ = self._split_turn()
     sid = self._file_sess(past)
-    client = sdk.ClaudeSDKClient(options=self._opts(self._sp(), resume=sid, fork=True))
+    client = claude_agent_sdk.ClaudeSDKClient(options=self._opts(self._sp(), resume=sid, fork=True))
     run_sync(asyncio.wait_for(client.connect(), self.timeout))
     self.client = client            # `_events` connects before computing the delta, so the watermark
     self._sent = len(past) if sid else 0             # can start at what the resumed session holds
@@ -490,7 +472,7 @@ def _ctx_usage(self:ClaudeChat):
 @patch
 def _session_turn(self:ClaudeChat, prompt):
     "One turn on the live session, in `_sdk_events`' `(kind, value)` shape."
-    sdk = claude_sdk()
+    sdk = claude_agent_sdk
     client = self._connect()
     async def _agen():
         text, res = [], None

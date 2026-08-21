@@ -7,7 +7,7 @@ description: Run models through rishi's one Chat API. Local engines are Gemma .l
 
 rishi wraps seven backends in one callable `Chat`. Four are on-device, and need no API key and no network once weights are cached. The backend-agnostic API lives in `rishi.core`. The local engines are `rishi.litert` (Gemma `.litertlm` over litert_lm), `rishi.llama` (any GGUF over llama-cpp-python), `rishi.mlx` (Apple silicon over mlx-lm and mlx-vlm) and `rishi.ollama` (whatever a local Ollama daemon serves). The hosted ones are `rishi.remote` for vendor APIs over fastllm, plus `rishi.claude` and `rishi.copilot`. `Chat(model)` picks one from the model name.
 
-The core install is small, and every runtime is an extra: `rishi[litert]`, `rishi[llama]`, `rishi[mlx]`, `rishi[ollama]`, `rishi[remote]`, `rishi[claude]`, `rishi[copilot]`, or `rishi[all]` for everything your platform supports. Backend modules load lazily, and asking for one without its extra raises an ImportError naming it.
+The base `rishi` install includes `rishi.remote`, `rishi.claude` and `rishi.copilot`. Local runtimes use named extras: `rishi[litert]`, `rishi[llama]`, `rishi[mlx]` and `rishi[ollama]`. `rishi[all]` adds all local and platform runtimes. Backend modules load lazily, and asking for a local runtime without its extra raises an ImportError naming it.
 
 ## The one thing to remember
 
@@ -229,7 +229,7 @@ cl.pull('gemma3:4b', on_progress=print)    # streamed progress records
 
 ## Hosted models (rishi.remote)
 
-Install `rishi[remote]` for [fastllm](https://github.com/AnswerDotAI/fastllm), then set the vendor's key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and so on) to use the same `Chat` API against Anthropic, OpenAI, Gemini, DeepSeek, Moonshot, OpenRouter and the rest:
+Plain `rishi` includes [fastllm](https://github.com/AnswerDotAI/fastllm). Set the vendor's key (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and so on) to use the same `Chat` API against Anthropic, OpenAI, Gemini, DeepSeek, Moonshot, OpenRouter and the rest:
 
 ```python
 from rishi import Chat
@@ -247,7 +247,7 @@ print(resp_text(chat("Say hello.")))
 
 ## Claude Code (rishi.claude)
 
-`rishi[claude]`, plus Claude Code on `$PATH` and one `claude /login`. This is an agent with its own harness, not a completion endpoint: one turn is one `query()` on a live session, and rishi drives the binary as a subprocess without ever reading your credentials. `ClaudeChat.local` is `False`.
+Plain `rishi` includes this backend, but it needs Claude Code on `$PATH` and one `claude /login`. This is an agent with its own harness, not a completion endpoint: one turn is one `query()` on a live session, and rishi drives the binary as a subprocess without ever reading your credentials. `ClaudeChat.local` is `False`.
 
 ```python
 from rishi import Chat
@@ -270,7 +270,7 @@ chat = Chat('claude/claude-sonnet-5', sp='You are concise.')   # or ClaudeChat(s
 
 ## GitHub Copilot (rishi.copilot)
 
-`rishi[copilot]`, plus a GitHub account with a Copilot subscription. Copilot answers OpenAI chat completions, but fastllm has no vendor entry for it and cannot have one. The endpoint takes a token that lasts about half an hour, and rejects any request that does not carry an editor's headers. `rishi.copilot` does that handshake and then reuses `RemoteChat` for the turn itself.
+Plain `rishi` includes this backend, but it needs a GitHub account with a Copilot subscription. Copilot answers OpenAI chat completions, but fastllm has no vendor entry for it and cannot have one. The endpoint takes a token that lasts about half an hour, and rejects any request that does not carry an editor's headers. `rishi.copilot` does that handshake and then reuses `RemoteChat` for the turn itself.
 
 ```python
 from rishi import Chat

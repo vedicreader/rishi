@@ -1,13 +1,11 @@
-__version__ = "0.1.24"
+__version__ = "0.1.25"
 
 from .core import *
 from .core import Chat, AsyncChat
 
-# Backends are optional extras (`pip install 'rishi[litert]'`, `[llama]`, `[mlx]`), so importing one
-# eagerly here would make `import rishi` fail on a machine that only has the others. `Chat(model)`
-# imports the backend it actually needs, lazily, via `core.get_runtime`. `rishi.litert` and friends
-# still work as ordinary submodule imports; this only stops them being *required*.
-_backends = ('litert', 'llama', 'mlx', 'ollama', 'remote')
+# Hosted remote/claude/copilot dependencies are baseline, but backend modules remain lazy.
+# Local litert/llama/mlx/ollama dependencies are optional extras.
+_backends = ('litert', 'llama', 'mlx', 'ollama', 'remote', 'claude', 'copilot')
 
 def __getattr__(name):
     "Import a backend submodule on first attribute access (`rishi.llama` without a hard dependency)."

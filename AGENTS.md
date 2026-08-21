@@ -16,17 +16,20 @@ through `Chat`.
 - Managed with `uv`, through `pyproject.toml`'s `[dependency-groups]` and `[tool.uv]`. The startup
   update script runs `uv sync`, which creates `.venv` and installs the `dev` group, which pulls
   `rishi[all]`.
-- Sync on Python 3.12 or newer (`uv sync -p 3.13`). `aidialog`, which `rishi[remote]` and
-  `rishi[copilot]` both pull in, uses a backslash inside an f-string expression and fails to import
-  on 3.11.
+- Sync and run on Python 3.12 or newer (`uv sync -p 3.13`).
+- `python-fastllm`, `aidialog`, `claude-agent-sdk`, `llmsurgery` and `httpx` are base dependencies.
+  They support the remote, Claude and Copilot backends. The empty `remote`, `claude` and `copilot`
+  extras are compatibility aliases. Credentials and the external `claude` binary remain operational
+  requirements.
 - On Linux the `mlx` and `mlx-vlm` extras are skipped by platform markers, and `llama-cpp-python`
   installs the CPU wheel from the configured `llama-cpu` index. `rishi.mlx` will not import there,
   which is expected.
-- `rishi[remote]` tracks fastllm closely. 0.0.41 needs `aidialog>=0.0.10`, whose parts are typed
+- The remote backend tracks fastllm closely. 0.0.41 needs `aidialog>=0.0.10`, whose parts are typed
   classes (`Text`, `Thinking`, `ToolUse`, `ToolResult`) rather than `Part(type=...)`. A stream now
   yields those parts and a `Status` marker, not dicts. `rishi.remote` reads that shape.
-- The `ollama` extra is `httpx`, plus `zstandard` on Linux below Python 3.14 to unpack the
-  `.tar.zst` release archive. Ollama itself is not a Python package. `rishi.ollama` downloads it
+- The `ollama` extra adds `zstandard` on Linux below Python 3.14 to unpack the `.tar.zst` release
+  archive. The backend uses the base `httpx` dependency. Ollama itself is not a Python package.
+  `rishi.ollama` downloads it
   into `~/.cache/rishi/ollama` and runs `ollama serve` there. That needs no root and touches
   nothing system-wide.
 - Run tooling through the venv, as `uv run <cmd>`. The nbdev console scripts are HYPHENATED

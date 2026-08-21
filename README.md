@@ -10,17 +10,15 @@ the same tools, approval gate, callbacks and streaming interface.
 ## Install
 
 ``` sh
+pip install rishi              # remote APIs, Claude Code and GitHub Copilot integrations
 pip install 'rishi[litert]'    # .litertlm Gemma builds
 pip install 'rishi[llama]'     # any GGUF
 pip install 'rishi[mlx]'       # Apple Silicon (add mlx-vlm for vision and audio)
 pip install 'rishi[ollama]'    # any Ollama model; rishi installs and runs the daemon
-pip install 'rishi[remote]'    # Claude, GPT, Gemini and friends, via fastllm
-pip install 'rishi[claude]'    # Claude Code, through the Agent SDK
-pip install 'rishi[copilot]'   # GitHub Copilot, on your Copilot subscription
-pip install 'rishi[all]'       # everything your platform supports
+pip install 'rishi[all]'       # all local and platform runtimes
 ```
 
-Extras combine, as in `rishi[litert,remote]`. Backend modules load only when used. `import rishi`
+Extras combine, as in `rishi[litert,mlx]`. Remote vendors need API keys. Claude needs a Claude Code login with `claude /login`. Copilot needs a GitHub Copilot subscription. Backend modules load only when used. `import rishi`
 does not require wheels for other backends.
 
 Contributors install with `pip install -e '.[dev]'`, then run `nbdev-prepare`. Edit the source
@@ -274,9 +272,9 @@ print(chat.check('Capital of France?', 'Paris'))
 |----|----|----|
 | MLX | `rishi[mlx]` | Apple Silicon, with an explicit prompt cache, `kv_bits` and LoRA |
 | ollama | `rishi[ollama]` | any Ollama model, on a daemon rishi installs and runs for you |
-| remote | `rishi[remote]` plus a vendor key | the same tools and HITL as local, with `tool_choice` and `reasoning_effort` |
-| claude | `rishi[claude]` plus Claude Code and `claude /login` | your tools without MCP, through the `claude/` prefix or [`ClaudeChat`](https://vedicreader.github.io/rishi/claude.html#claudechat) |
-| copilot | `rishi[copilot]` plus a Copilot subscription | many vendors’ models on one subscription, through the `copilot/` prefix or [`CopilotChat`](https://vedicreader.github.io/rishi/copilot.html#copilotchat) |
+| remote | plain `rishi` plus a vendor key | the same tools and HITL as local, with `tool_choice` and `reasoning_effort` |
+| claude | plain `rishi` plus Claude Code and `claude /login` | your tools without MCP, through the `claude/` prefix or [`ClaudeChat`](https://vedicreader.github.io/rishi/claude.html#claudechat) |
+| copilot | plain `rishi` plus a Copilot subscription | many vendors’ models on one subscription, through the `copilot/` prefix or [`CopilotChat`](https://vedicreader.github.io/rishi/copilot.html#copilotchat) |
 
 ``` python
 # MLX (Apple Silicon)
@@ -291,18 +289,16 @@ print(resp_text(big('What is my name and favourite number?'))); loc.close(); big
 
 ## Claude Code
 
-`Chat('claude/claude-sonnet-5')` runs through Claude Code, over the Agent SDK from
-`rishi[claude]`. `ClaudeChat.local` is `False`.
+`Chat('claude/claude-sonnet-5')` runs through Claude Code over the Claude Agent SDK. The SDK and
+`llmsurgery` ship with plain `rishi`. `ClaudeChat.local` is `False`.
 
 Managed Claude Code installations can reject dynamic MCP servers. Rishi instead puts tool schemas
 in the system prompt and receives calls as `<tool_call>` tags. It opens no MCP server and does not
 set `strict_mcp_config`.
 
-The conversation travels as a Claude Code session transcript that each turn resumes, so the model
-reads real messages: a picture as an `image` block, a PDF as a `document`, and a tool call answered
-by a `tool_result` carrying its id. `rishi[claude]` installs `llmsurgery`, which writes those
-records; without it `transcript` is off and the conversation is flattened into one prompt, which
-carries no media.
+The conversation travels as a Claude Code session transcript that each turn resumes. `llmsurgery`
+writes these resumable records, so the model reads real messages: a picture as an `image` block, a
+PDF as a `document`, and a tool call answered by a `tool_result` carrying its id.
 
 `stateful=True`, the default, keeps one Claude Code session per chat: one subprocess for the whole
 conversation, and mid-turn tool results go up as text. `stateful=False` files every turn as records
