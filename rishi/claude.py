@@ -435,6 +435,7 @@ def _disconnect(self:ClaudeChat):
     "End the session if there is one. The loop outlives it, ready for the next."
     c = getattr(self, 'client', None)
     self.client, self._sent, self._last_res, self._stale = None, 0, None, False
+    self._ctx_live = 0
     if c is None: return
     _live_sessions.discard(self)
     if sys.is_finalizing(): return   # the loop thread is stopped; `run_sync` would never return

@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.26
+claude model context fixes
+
 ## 0.1.25
 remove claude cli. reuse llmsurgery
 
