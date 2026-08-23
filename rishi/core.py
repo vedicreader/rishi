@@ -322,13 +322,7 @@ def lone_tag_tc(text):
     return mk_tag_tc(s)
 
 def tag_call_shape(text, names=None):
-    """Whether `text` still shows a call the parser did not take.
-
-    `lone_tag_tc` reads a bare call object when it is the whole reply. A model that writes the
-    object and then invents the result after it leaves one the parser must refuse, and the caller
-    is the only one that can ask for it again. `names` limits this to tools that exist, which is
-    what keeps a reply merely discussing JSON from counting.
-    """
+    "Whether `text` still shows a call the parser did not take."
     t = text or ''
     if '<tool_call' in t: return True
     if not any(f'"{k}"' in t for k in TAG_ARG_KEYS): return False
