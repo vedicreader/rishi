@@ -21,7 +21,7 @@ __all__ = ['system_certs', 'tool_reminder_', 'TAG_TOOLS_SP', 'CHARS_PER_TOKEN', 
            'repo_root', 'mv_skill_md', 'ChatBroker', 'BrokerChat']
 
 # %% ../nbs/00_core.ipynb #655b2174ec1d6506
-import json, re, os, asyncio, io, ast, inspect, subprocess, threading, warnings, uuid
+import json, re, os, asyncio, io, ast, inspect, math, subprocess, threading, warnings, uuid
 from html import escape
 from urllib.request import Request, urlopen
 from mimetypes import guess_type
@@ -334,10 +334,13 @@ def tag_tools_sp(toolspecs, sp='', template=TAG_TOOLS_SP):
     return (sp or '') + template.format(tools=block)
 
 
-CHARS_PER_TOKEN = 4
+#: Measured, not assumed: ornith and qwen3 both tokenise this at 3.50 chars/token, so the old 4
+#: ran 12% under and a prompt built to fill a window overflowed it. Estimating high costs a
+#: shorter prompt; estimating low costs the request.
+CHARS_PER_TOKEN = 3.25
 def est_tokens(text):
     "Rough tokens in `text`, for a transport with no tokenizer of its own."
-    return max(1, (len(text) + CHARS_PER_TOKEN - 1)//CHARS_PER_TOKEN) if text else 0
+    return max(1, math.ceil(len(text)/CHARS_PER_TOKEN)) if text else 0
 
 _roles = {'user': 'User', 'assistant': 'Assistant', 'tool': 'Tool result', 'system': 'System'}
 

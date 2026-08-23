@@ -462,10 +462,23 @@ class OllamaChat(ToolLoopMixin, Chat):
         if self._own_client and getattr(self, 'client', None) is not None: self.client.close()
         self.client = None
 
+    def _note_usage(self, res):
+        "Keep the last turn's counts. Reported for cost, never for occupancy: see `token_count`."
+        n = ((res or {}).get('usage') or {}).get('total_tokens') or 0
+        if n: self._ctx_tokens = int(n)
+        return res
+
     @property
     def token_count(self):
-        "Tokens the last turn reported (prompt + completion). Ollama has no live context read-out."
-        return self._ctx_tokens
+        """What the conversation holds, estimated from it.
+
+        `_ctx_tokens` was initialised to 0 and never assigned, so this answered 0 for the life of
+        every chat: `should_compact` never crossed its threshold and auto-compaction never fired.
+        The turn's own counts are the wrong replacement -- `prompt_eval_count` is work done, not
+        occupancy, and it *falls* when the daemon serves a cached prefix, so a growing conversation
+        read as a shrinking one. Ollama exposes no live context read-out, so the history is it.
+        """
+        return est_tokens(render_prompt(self.hist)) + est_tokens(self.sp or '')
 
     def count_tokens(self, text):
         "Estimated tokens in `text`. Ollama exposes no tokenizer, so the real count only arrives in `use`, after a turn."
@@ -520,7 +533,7 @@ class OllamaChat(ToolLoopMixin, Chat):
 
     def _model_step(self, max_output_tokens=None):
         "One completion, normalized to a `Resp`. The single wire call `ToolLoopMixin` drives."
-        return norm_ochat(self._ask(self._payload(max_output_tokens=max_output_tokens)), self.model_id)
+        return self._note_usage(norm_ochat(self._ask(self._payload(max_output_tokens=max_output_tokens)), self.model_id))
 
     def _stream_step(self, max_output_tokens=None):
         "Stream one completion, yielding chunk dicts and leaving the merged `Resp` on `self._step_res`."
@@ -539,7 +552,7 @@ class OllamaChat(ToolLoopMixin, Chat):
         if (calls := _tcs(tcs) + _tag_tcs(split.tool_calls)): res['tool_calls'] = calls
         if last.get('done_reason') == 'length': res['truncated'] = True
         res['usage'] = ollama_usage(last, self.model_id)
-        self._step_res = Resp(res)
+        self._step_res = self._note_usage(Resp(res))
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
         "Stateless completion text: no history, no tools. It shares the daemon, which caches per conversation."
