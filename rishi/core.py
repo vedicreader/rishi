@@ -333,11 +333,7 @@ def tag_tools_sp(toolspecs, sp='', template=TAG_TOOLS_SP):
     block = '\n'.join(json.dumps(t, ensure_ascii=False) for t in toolspecs)
     return (sp or '') + template.format(tools=block)
 
-
-#: Measured, not assumed: ornith and qwen3 both tokenise this at 3.50 chars/token, so the old 4
-#: ran 12% under and a prompt built to fill a window overflowed it. Estimating high costs a
-#: shorter prompt; estimating low costs the request.
-CHARS_PER_TOKEN = 3.25
+CHARS_PER_TOKEN = 3.25   #: measured on ornith-1.5:9b and qwen3:0.6b, which both give 3.50
 def est_tokens(text):
     "Rough tokens in `text`, for a transport with no tokenizer of its own."
     return max(1, math.ceil(len(text)/CHARS_PER_TOKEN)) if text else 0

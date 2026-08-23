@@ -470,14 +470,7 @@ class OllamaChat(ToolLoopMixin, Chat):
 
     @property
     def token_count(self):
-        """What the conversation holds, estimated from it.
-
-        `_ctx_tokens` was initialised to 0 and never assigned, so this answered 0 for the life of
-        every chat: `should_compact` never crossed its threshold and auto-compaction never fired.
-        The turn's own counts are the wrong replacement -- `prompt_eval_count` is work done, not
-        occupancy, and it *falls* when the daemon serves a cached prefix, so a growing conversation
-        read as a shrinking one. Ollama exposes no live context read-out, so the history is it.
-        """
+        "What the conversation holds, estimated from it."
         return est_tokens(render_prompt(self.hist)) + est_tokens(self.sp or '')
 
     def count_tokens(self, text):
