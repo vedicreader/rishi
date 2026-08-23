@@ -8,10 +8,10 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_ALIASES',
            'CLAUDE_ENTRYPOINT', 'CLAUDE_DISALLOWED', 'CLAUDE_SERVER_TOOLS', 'CLAUDE_WORK_DIR', 'MAX_BUFFER', 'ABORTED',
            'INTERRUPT_WAIT', 'CONT_PROMPT', 'claude_bin', 'claude_model', 'claude_fallback', 'claude_version',
-           'prune_sessions', 'norm_claude_usage', 'ClaudeError', 'claude_status', 'norm_claude', 'mk_claude_content',
-           'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id', 'anth_msgs', 'claude_prompt',
-           'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream',
-           'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
+           'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError', 'claude_status', 'norm_claude',
+           'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id', 'anth_msgs',
+           'claude_prompt', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
+           'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import asyncio, atexit, json, os, re, shutil, subprocess, sys, time, uuid, weakref
@@ -74,12 +74,7 @@ def claude_fallback(models):
 
 _cc_version = {}
 def claude_version(bin=CLAUDE_BIN):
-    """The installed Claude Code's version, cached per binary, for the `version` a record carries.
-
-    `llmsurgery.ant` pins one, and a pin goes stale: a transcript claiming a version older than the
-    binary about to read it is a transcript that binary may read as an older format. Asking costs
-    one subprocess per process. Where it cannot be asked, ant's constant stands.
-    """
+    "The installed Claude Code's version, cached per binary, for the `version` a record carries."
     if bin not in _cc_version:
         try: out = subprocess.run([claude_bin(bin), '--version'], capture_output=True, text=True, timeout=30).stdout
         except Exception: out = ''
@@ -87,25 +82,32 @@ def claude_version(bin=CLAUDE_BIN):
         _cc_version[bin] = m.group(0) if m else ant.CC_VERSION
     return _cc_version[bin]
 
-def prune_sessions(cwd=None, keep=0, age=None, entrypoint=CLAUDE_ENTRYPOINT):
-    """Delete filed transcripts under `cwd`, sparing the newest `keep`, and return what went.
+def sess_entrypoint(p, mx=50):
+    """What a transcript says wrote it, or None.
 
-    A chat with `cleanup=True` clears up after itself, so this is for the backlog a crash or an
-    older rishi left behind. Only a transcript whose first record names `entrypoint` is touched, so
-    a session the CLI itself wrote (`'cli'`) is safe -- but a real project's SDK sessions say
-    `'sdk-py'` too, which is why the default is rishi's own `CLAUDE_WORK_DIR`. `age`, in seconds,
-    spares anything younger.
+    Claude Code writes its own bookkeeping first: `queue-operation` and `mode` records sit ahead of
+    the session header, so the first line does not carry `entrypoint` and reading only that line
+    read every transcript as somebody else's.
     """
+    try:
+        with p.open() as f:
+            for i, l in enumerate(f):
+                if i >= mx: return None
+                try: rec = json.loads(l)
+                except Exception: continue
+                if (e := rec.get('entrypoint')): return e
+    except OSError: return None
+    return None
+
+def prune_sessions(cwd=None, keep=0, age=None, entrypoint=CLAUDE_ENTRYPOINT):
+    "Delete filed transcripts under `cwd`, sparing the newest `keep`, and return what went."
     d = ant.sess_dir(cwd or CLAUDE_WORK_DIR)
     if not d.is_dir(): return []
     fs = sorted(d.glob('*.jsonl'), key=lambda p: p.stat().st_mtime, reverse=True)
     out, now = [], time.time()
     for p in fs[keep:]:
         if age is not None and now - p.stat().st_mtime < age: continue
-        try:
-            with p.open() as f: rec = json.loads(f.readline() or '{}')
-        except Exception: continue          # not a transcript, so not ours to remove
-        if rec.get('entrypoint') != entrypoint: continue
+        if sess_entrypoint(p) != entrypoint: continue
         p.unlink(missing_ok=True)
         out.append(p)
     return out
@@ -254,12 +256,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     @property
     def token_count(self):
-        """What the live session last reported holding, else an estimate of the prompt it would send.
-
-        Never asks the session here. A status bar reads this on the UI thread every repaint, and a
-        round-trip to the subprocess from there waits on the same loop the turn is using: the CLI
-        froze mid-turn. `_session_turn` refreshes it on the loop instead, once per turn.
-        """
+        "What the live session last reported holding, else an estimate of the prompt it would send."
         return self._ctx_live or est_tokens(self._prompt()) + est_tokens(self._sp())
 
     def _sp(self):
@@ -465,17 +462,11 @@ def _note_filed(self:ClaudeChat, p):
 
 @patch
 def _sweep(self:ClaudeChat, keep=None):
-    """Remove the transcripts this chat filed, except `keep`, and return what went.
-
-    Only its own files, tracked as it wrote them, so no conversation but this one's can go. Safe on a
-    half-built chat: `__del__` reaches `close` and there may be no `_filed` yet.
-    """
+    "Remove the transcripts this chat filed, except `keep`, and return what went."
     out = []
     for p in list(getattr(self, '_filed', None) or []):
         if p == keep: continue
         try: p.unlink(missing_ok=True)
-        # a read-only store is not worth failing a turn over. A file that survived is still this
-        # chat's to remove, and leaving it in `_filed` is what makes the next sweep try again
         except OSError: continue
         self._filed.remove(p)
         out.append(p)
@@ -483,12 +474,7 @@ def _sweep(self:ClaudeChat, keep=None):
 
 @patch
 def _split_turn(self:ClaudeChat):
-    """What to file and what to send: `(past, prompt)`.
-
-    A `tool_use` record has to be answered by the `tool_result` that carries its id, so a turn that
-    already holds the result files the whole conversation and asks the model to carry on. Anything
-    else files the past and sends the last message as the turn.
-    """
+    "What to file and what to send: `(past, prompt)`."
     if self.hist and self.hist[-1].get('role') == 'tool': return self.hist, CONT_PROMPT
     return self.hist[:-1], self._as_turn(self.hist[-1:])
 
