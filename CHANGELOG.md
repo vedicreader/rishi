@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.28
+claude tags fixes
+
 ## 0.1.27
 claude cli addition and context compaction for ollama and local models
 
