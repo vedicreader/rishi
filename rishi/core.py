@@ -11,8 +11,8 @@ __all__ = ['system_certs', 'tool_reminder_', 'TAG_ARG_KEYS', 'TAG_TOOLS_SP', 'CH
            'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'quote_', 'Resp', 'tc_summary_', 'mk_tr_details',
            'has_tool_call', 'StreamFormatter', 'display_stream', 'truncated', 'TruncationCallback', 'mk_oai_content',
            'mk_oai_msg', 'mk_oai_msgs', 'is_media', 'mk_toolspec', 'split_think', 'tag_args', 'mk_tag_tc',
-           'parse_tool_tags', 'tag_tools_sp', 'est_tokens', 'render_prompt', 'parse_args', 'norm_resp', 'to_oai_msg',
-           'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback', 'ToolReminderCallback',
+           'lone_tag_tc', 'parse_tool_tags', 'tag_tools_sp', 'est_tokens', 'render_prompt', 'parse_args', 'norm_resp',
+           'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback', 'ToolReminderCallback',
            'common_prefix_len', 'split_runtime', 'infer_runtime', 'resolve_runtime', 'get_runtime', 'Caps',
            'model_caps', 'ToolCall', 'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError',
            'is_ctx_error', 'Chat', 'ToolLoopMixin', 'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'AsyncChat',
@@ -282,11 +282,7 @@ def split_think(text):
         ths.append(rest.strip())
     return text.strip('\n'), '\n'.join(th for th in ths if th)
 
-#: Where a tagged call keeps its arguments. `arguments` is what `TAG_TOOLS_SP` asks for; `input` is
-#: Anthropic's own wire shape and `parameters` is MCP's, and a model reaches for the one it was
-#: trained on when the prompt gets long. Reading only the first dropped the arguments in silence.
 TAG_ARG_KEYS = ('arguments', 'input', 'parameters')
-
 def tag_args(d):
     "The argument dict of a tagged call, decoding the JSON string some models send instead."
     for k in TAG_ARG_KEYS:
@@ -310,9 +306,25 @@ _res_tags = ('tool_result', 'tool_results', 'function_result', 'function_results
              'tool_function_call', 'tool_function_calls',
              'function_call', 'function_calls', 'tool_use')
 _toolres_re = re.compile('|'.join(rf'</?{t}>>?' for t in _res_tags) + r'|</?tool_call>', re.I)
+_fence_re = re.compile(r'^```(?:json)?\s*|\s*```$')
+def lone_tag_tc(text):
+    """A whole reply that is one bare call object: what the tags asked for, without the tags.
+
+    Narrow on purpose. The object must be the entire reply and must carry both a name and one of
+    `TAG_ARG_KEYS`, so a reply that merely discusses JSON is not read as a call.
+    """
+    s = _fence_re.sub('', (text or '').strip()).strip()
+    if not (s.startswith('{') and s.endswith('}')): return None
+    try: d = json.loads(s)
+    except json.JSONDecodeError: return None
+    if not isinstance(d, dict) or not d.get('name'): return None
+    if not any(k in d for k in TAG_ARG_KEYS): return None
+    return mk_tag_tc(s)
+
 def parse_tool_tags(text):
     "Parse Hermes and Qwen style `<tool_call>{json}</tool_call>` blocks, returning `(clean_text, tool_calls)`."
     tcs = [tc for m in _toolcall_re.findall(text or '') if (tc := mk_tag_tc(m))]
+    if not tcs and (tc := lone_tag_tc(text)): return '', [tc]
     return _toolres_re.sub('', _toolcall_re.sub('', text or '')).strip('\n'), tcs
 
 TAG_TOOLS_SP = """
@@ -423,7 +435,6 @@ def strip_media(m):
     if not isinstance(c, list): return m
     return {**m, 'content': '\n'.join(_media_ph.get(p.get('type'), '[media]') if is_media(p) else p.get('text', '')
                                       for p in c)}
-
 
 # %% ../nbs/00_core.ipynb #8543932c7569294c
 _tags = ('<think>', '</think>', '<tool_call>', '</tool_call>',
