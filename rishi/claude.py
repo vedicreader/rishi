@@ -7,11 +7,11 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_ALIASES',
            'CLAUDE_ENTRYPOINT', 'CLAUDE_DISALLOWED', 'CLAUDE_SERVER_TOOLS', 'CLAUDE_WORK_DIR', 'MAX_BUFFER', 'ABORTED',
-           'INTERRUPT_WAIT', 'CONT_PROMPT', 'claude_bin', 'claude_model', 'claude_fallback', 'claude_version',
-           'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError', 'claude_status', 'norm_claude',
-           'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id', 'anth_msgs',
-           'claude_prompt', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
-           'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
+           'INTERRUPT_WAIT', 'CONT_PROMPT', 'EMPTY_RESULT', 'claude_bin', 'claude_model', 'claude_fallback',
+           'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError', 'claude_status',
+           'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id',
+           'anth_msgs', 'claude_prompt', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp',
+           'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import asyncio, atexit, json, os, re, shutil, subprocess, sys, time, uuid, weakref
@@ -396,6 +396,8 @@ def tu_id(tid, ant):
     tid = tid or ''
     return tid if tid.startswith('toolu_') else 'toolu_' + ant.stable_uuid(f'rishi-tu:{tid}').replace('-', '')[:24]
 
+EMPTY_RESULT = '(no output)'   #: what a tool that returned nothing says. See `anth_msgs`.
+
 def anth_msgs(hist, ant):
     "rishi's history as Anthropic messages, with tool calls answered in place as real blocks."
     out, called = [], set()
@@ -404,6 +406,9 @@ def anth_msgs(hist, ant):
         if role == 'system': continue                  # the briefing has a channel of its own
         if role == 'tool':
             tid, txt = tu_id(m.get('tool_call_id'), ant), str(ifnone(m.get('content'), ''))
+            # a tool that found nothing answers with nothing, and an empty block is a 400:
+            # "messages: text content blocks must be non-empty". Say it ran and said nothing.
+            if not txt.strip(): txt = EMPTY_RESULT
             # a `tool_result` answering no `tool_use` is a 400, and a hand-built history can hold one
             blocks = ([{'type': 'tool_result', 'tool_use_id': tid, 'content': txt}] if tid in called
                       else [{'type': 'text', 'text': f"Tool result ({m.get('name', '?')})\n{txt}"}])
