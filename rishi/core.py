@@ -11,15 +11,15 @@ __all__ = ['system_certs', 'tool_reminder_', 'TAG_ARG_KEYS', 'TAG_TOOLS_SP', 'CH
            'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'quote_', 'Resp', 'tc_summary_', 'mk_tr_details',
            'has_tool_call', 'StreamFormatter', 'display_stream', 'truncated', 'TruncationCallback', 'mk_oai_content',
            'mk_oai_msg', 'mk_oai_msgs', 'is_media', 'mk_toolspec', 'split_think', 'tag_args', 'mk_tag_tc',
-           'lone_tag_tc', 'parse_tool_tags', 'tag_tools_sp', 'est_tokens', 'render_prompt', 'parse_args', 'norm_resp',
-           'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc', 'UsageCallback', 'ToolReminderCallback',
-           'common_prefix_len', 'split_runtime', 'infer_runtime', 'resolve_runtime', 'get_runtime', 'Caps',
-           'model_caps', 'ToolCall', 'tc_name', 'mk_tool_res_msg', 'mk_tool_res_msgs', 'ContextWindowExceededError',
-           'is_ctx_error', 'Chat', 'ToolLoopMixin', 'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'AsyncChat',
-           'adisplay_stream', 'browser_approval', 'hitl_policy', 'extract_code', 'extract_fence', 'matches_',
-           'mk_result_fence', 'run_coro', 'killed_on_exit', 'sync_iter', 'task_complete', 'output_matches',
-           'PyFenceCallback', 'is_transient', 'RecordCache', 'CachedChat', 'repo_root', 'mv_skill_md', 'ChatBroker',
-           'BrokerChat']
+           'lone_tag_tc', 'tag_call_shape', 'parse_tool_tags', 'tag_tools_sp', 'est_tokens', 'render_prompt',
+           'parse_args', 'norm_resp', 'to_oai_msg', 'sum_usage', 'strip_media', 'StreamSplit', 'acc_tc',
+           'UsageCallback', 'ToolReminderCallback', 'common_prefix_len', 'split_runtime', 'infer_runtime',
+           'resolve_runtime', 'get_runtime', 'Caps', 'model_caps', 'ToolCall', 'tc_name', 'mk_tool_res_msg',
+           'mk_tool_res_msgs', 'ContextWindowExceededError', 'is_ctx_error', 'Chat', 'ToolLoopMixin', 'msg_groups',
+           'evict_middle', 'SlidingWindowCallback', 'AsyncChat', 'adisplay_stream', 'browser_approval', 'hitl_policy',
+           'extract_code', 'extract_fence', 'matches_', 'mk_result_fence', 'run_coro', 'killed_on_exit', 'sync_iter',
+           'task_complete', 'output_matches', 'PyFenceCallback', 'is_transient', 'RecordCache', 'CachedChat',
+           'repo_root', 'mv_skill_md', 'ChatBroker', 'BrokerChat']
 
 # %% ../nbs/00_core.ipynb #655b2174ec1d6506
 import json, re, os, asyncio, io, ast, inspect, math, subprocess, threading, warnings, uuid
@@ -320,6 +320,20 @@ def lone_tag_tc(text):
     if not isinstance(d, dict) or not d.get('name'): return None
     if not any(k in d for k in TAG_ARG_KEYS): return None
     return mk_tag_tc(s)
+
+def tag_call_shape(text, names=None):
+    """Whether `text` still shows a call the parser did not take.
+
+    `lone_tag_tc` reads a bare call object when it is the whole reply. A model that writes the
+    object and then invents the result after it leaves one the parser must refuse, and the caller
+    is the only one that can ask for it again. `names` limits this to tools that exist, which is
+    what keeps a reply merely discussing JSON from counting.
+    """
+    t = text or ''
+    if '<tool_call' in t: return True
+    if not any(f'"{k}"' in t for k in TAG_ARG_KEYS): return False
+    pat = '|'.join(re.escape(str(n)) for n in (names or []) if n) if names is not None else r'[A-Za-z_]\w*'
+    return bool(pat) and bool(re.search(rf'"name"\s*:\s*"(?:{pat})"', t))
 
 def parse_tool_tags(text):
     "Parse Hermes and Qwen style `<tool_call>{json}</tool_call>` blocks, returning `(clean_text, tool_calls)`."
