@@ -474,7 +474,9 @@ def _sweep(self:ClaudeChat, keep=None):
     for p in list(getattr(self, '_filed', None) or []):
         if p == keep: continue
         try: p.unlink(missing_ok=True)
-        except OSError: pass                  # a read-only store is not worth failing a turn over
+        # a read-only store is not worth failing a turn over, but a file that survived is still
+        # this chat's to remove: leaving it in `_filed` is what makes the next sweep try again
+        except OSError: continue
         self._filed.remove(p)
         out.append(p)
     return out
