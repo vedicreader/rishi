@@ -932,6 +932,14 @@ class Chat:
     @property
     def cancelled(self): return self._cancel.is_set()
 
+    @property
+    def steps(self): return self._steps
+
+    @property
+    def steps_exhausted(self):
+        "Whether this turn stopped calling tools because it ran out of them rather than finished."
+        return self._budget_exceeded
+
     def close(self):
         "Release backend resources (overridden per backend)."
         pass
