@@ -217,20 +217,26 @@ class MlxChat(ToolLoopMixin, Chat):
             n = n - 1 if self._trim(1) else 0
         return ids, ids[n:], n
 
+    _turn_samp = ('temp', 'top_k', 'top_p', 'min_p')   #: these build a sampler, not a generate call
+    #: ...and these have no `stream_generate` argument at all
+    _turn_drop = ('ctx_limit', 'think', 'effort', 'tool_mode', 'seed')
+
     def _turn_sampler(self, turn):
         "This turn's sampler, when it overrode any sampling setting, else the chat's own."
-        samp = {k: v for k, v in turn.items() if k in ('temp', 'top_k', 'top_p', 'min_p')}
+        samp = {k: v for k, v in turn.items() if k in self._turn_samp}
         return make_sampler(**samp) if samp else self.sampler
 
     def _gen_kw(self, **turn):
         "Keyword arguments for `stream_generate`: sampler, prompt cache, KV quantization, draft model."
-        t = self.map_opts(turn); t.pop('ctx_limit', None)   # a window is not a generation argument
+        t = self.map_opts(turn)
+        s = self._turn_sampler(t)
+        for k in self._turn_samp + self._turn_drop: t.pop(k, None)
         kw = dict(max_tokens=ifnone(t.pop('max_output_tokens', None), self.max_output_tokens))
-        if (s := self._turn_sampler(t)) is not None: kw['sampler'] = s
+        if s is not None: kw['sampler'] = s
         if self._cache is not None: kw['prompt_cache'] = self._cache
         if self.kv_bits: kw.update(kv_bits=self.kv_bits, kv_group_size=self.kv_group_size, quantized_kv_start=self.quantized_kv_start)
         if self.engine.draft_model is not None: kw['draft_model'] = self.engine.draft_model
-        return {**kw, **self.gen_kw}
+        return {**kw, **self.gen_kw, **t}
 
     def _generate(self, feed, **turn):
         "Yield mlx-lm `GenerationResponse` chunks for the token ids in `feed`."
@@ -385,15 +391,17 @@ class MlxVlmChat(MlxChat):
         "Stream one completion through mlx-vlm, leaving the merged `Resp` on `self._step_res`."
         from mlx_vlm import stream_generate as vlm_stream
         imgs, auds = self._turn_media()
-        t = self.map_opts(turn); t.pop('ctx_limit', None)
+        t = self.map_opts(turn)
+        s = self._turn_sampler(t)
+        for k in self._turn_samp + self._turn_drop: t.pop(k, None)
         kw = dict(max_tokens=ifnone(t.pop('max_output_tokens', None), self.max_output_tokens),
-                  **self.gen_kw)
+                  **self.gen_kw, **t)
         if imgs: kw['image'] = imgs
         # mlx-vlm decodes each audio file and resamples it to the processor's own feature-extractor
         # rate, so the source rate is its business, not ours - handing it one is how you get silence
         if auds: kw['audio'] = auds
         split, fin, pt, gt = StreamSplit(), None, 0, 0
-        if (s := self._turn_sampler(t)) is not None: kw['sampler'] = s
+        if s is not None: kw['sampler'] = s
         for r in vlm_stream(self.engine.model, self.tokenizer, self._prompt(imgs, auds), **kw):
             fin = getattr(r, 'finish_reason', None) or fin
             pt, gt = getattr(r, 'prompt_tokens', pt), getattr(r, 'generation_tokens', gt)

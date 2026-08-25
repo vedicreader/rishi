@@ -193,7 +193,7 @@ class LlamaChat(ToolLoopMixin, Chat):
                      chat_handler=ch, verbose=verbose, **kw)
 
     #: what llama.cpp calls each portable option
-    _opt_map = {'ctx': 'n_ctx', 'temp': 'temperature'}
+    _opt_map = {'ctx': 'n_ctx', 'temp': 'temperature', 'max_output_tokens': 'max_tokens'}
     _opt_skip = ('effort', 'tool_mode', 'api_key', 'base_url')   # nothing local takes these
 
     def __init__(self, model=None, *, runtime=None, model_path=None, opts=None,
@@ -320,11 +320,15 @@ class LlamaChat(ToolLoopMixin, Chat):
         "OpenAI-style messages. Media in earlier turns is stripped to a placeholder so only the live turn is re-encoded, because llama.cpp re-tokenizes the whole list each call."
         return self._sys_msgs() + [_oai_msg(m if m is self.turn_msg else _strip_media(m)) for m in self.hist]
 
+    #: portable options llama.cpp's completion call has no argument for. `think` is a system-prompt
+    #: switch here and the window was fixed when the engine was built, so neither can move per turn.
+    _turn_drop = ('n_ctx', 'think', 'effort', 'tool_mode')
+
     def _samp_kw(self, turn):
         "This chat's sampling settings, with the turn's own overrides on top."
-        t = self.map_opts(turn); t.pop('n_ctx', None)   # a window is not a completion argument
-        mx = t.pop('max_tokens', None)
-        return ifnone(mx, self.max_output_tokens), {**self._samp, **t}
+        t = self.map_opts(turn)
+        for k in self._turn_drop: t.pop(k, None)
+        return ifnone(t.pop('max_tokens', None), self.max_output_tokens), {**self._samp, **t}
 
     def _step(self, stream=False, **turn):
         mx, samp = self._samp_kw(turn)
