@@ -63,7 +63,7 @@ HF_HOSTS = ('hf.co/', 'huggingface.co/')
 def ollama_model(model=None, quant='Q4_K_M'):
     "A rishi model id as Ollama addresses it: a hub GGUF repo becomes `hf.co/<repo>:<quant>`, an Ollama id passes through."
     m = str(model or dflt_model).strip()
-    if core._is_path(m): raise ValueError(
+    if is_path(m): raise ValueError(
         f"Ollama serves models from its own store, not a path: {m!r}. Use runtime='llama' for a "
         f"local GGUF file, or import it into Ollama first with `ollama create`.")
     if m.lower().startswith(HF_HOSTS) or '/' not in m: return m
@@ -430,32 +430,38 @@ class OllamaChat(ToolLoopMixin, Chat):
         "Canonical rishi history dicts -> Ollama messages."
         return [to_ollama_msg(m) for m in listify(msgs)]
 
-    def __init__(self, model=None, *, runtime=None, model_path=None, host=None, client=None,
-                 quant='Q4_K_M', pull=True, install=True, serve=True, srv_kw=None, on_progress=None,
-                 n_ctx=None, n_gpu_layers=None, keep_alive=None, options=None,
-                 sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None,
-                 max_steps=10, parallel_tools=False, max_parallel_tools=None, final_prompt=dflt_final_prompt_,
-                 think=None, temp=None, top_k=None, top_p=None, seed=None,
-                 max_output_tokens=None, comp_kw=None, cbs=None, default_cbs=True):
+    #: what Ollama calls each portable option, inside its `options` block
+    _opt_map = {'ctx': 'num_ctx', 'temp': 'temperature', 'max_output_tokens': 'num_predict'}
+    _opt_skip = ('effort', 'tool_mode', 'api_key', 'base_url')   # nothing local takes these
+
+    def __init__(self, model=None, *, runtime=None, model_path=None, opts=None,
+                 host=None, client=None,   # a daemon to use instead of finding or starting one
+                 quant='Q4_K_M',           # which quantization to name when pulling
+                 pull=True, install=True, serve=True, srv_kw=None, on_progress=None,
+                 n_gpu_layers=None,
+                 keep_alive=None,          # how long the daemon holds the weights after a turn
+                 options=None,             # Ollama's own `options` block, merged last
+                 comp_kw=None,             # merged into the request body verbatim
+                 **kw):                    # portable options; see `urai.ChatOpts`
+        o = ChatOpts.create(opts, **kw)
         model = core.split_runtime(model)[1]
         self.model_id = ollama_model(model or model_path, quant)
         self._own_client = client is None
         self.client = client or ensure_ollama(host, install=install, serve=serve, srv_kw=srv_kw,
                                               on_progress=on_progress)
-        self._opts = {k: v for k, v in dict(temperature=temp, top_k=top_k, top_p=top_p, seed=seed,
-                                            num_ctx=n_ctx, num_gpu=n_gpu_layers).items() if v is not None}
+        self._opts = {k: v for k, v in dict(temperature=o.temp, top_k=o.top_k, top_p=o.top_p,
+                                            seed=o.seed, num_ctx=o.ctx or None,
+                                            num_gpu=n_gpu_layers).items() if v is not None}
         self._opts.update(options or {})
-        store_attr('think,keep_alive,max_output_tokens', self)
+        self.think, self.keep_alive = o.think, keep_alive
+        self.max_output_tokens = o.max_output_tokens or None
         # a model with no thinking refuses `think`; this goes false on the first refusal
-        self._think_ok, self.comp_kw, self._ctx_tokens = think is not None, comp_kw or {}, 0
-        self._set_tools(tools)
+        self._think_ok, self.comp_kw, self._ctx_tokens = o.think is not None, comp_kw or {}, 0
+        self._set_tools(o.tools)
         if pull and not self.client.have(self.model_id):
             self.client.pull(self.model_id, ifnone(on_progress, pull_progress()))
-        self.ctx_limit = ctx_limit or n_ctx or dflt_ctx()
-        self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
-                    tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
-                    max_parallel_tools=max_parallel_tools, final_prompt=final_prompt, cbs=cbs,
-                    default_cbs=default_cbs)
+        self.ctx_limit = o.ctx or dflt_ctx()
+        self._setup(model, o)
 
     def close(self):
         "Release this chat's HTTP client. The daemon is shared, so it stays up; `stop_ollama()` ends one rishi started."
@@ -486,10 +492,13 @@ class OllamaChat(ToolLoopMixin, Chat):
         "The whole conversation as Ollama messages, system prompt first."
         return to_ollama_msgs(self.hist, self.sp)
 
-    def _payload(self, stream=False, max_output_tokens=None, msgs=None, tools=True, fmt=None, think=...):
-        "One `/api/chat` request body."
-        opts = dict(self._opts)
-        if (n := ifnone(max_output_tokens, self.max_output_tokens)) is not None: opts['num_predict'] = int(n)
+    def _payload(self, stream=False, msgs=None, tools=True, fmt=None, think=..., **turn):
+        "One `/api/chat` request body, with this turn's own generation options applied."
+        t = self.map_opts(turn)
+        if (th := t.pop('think', ...)) is not ...: think = th   # top-level, not an option
+        n = ifnone(t.pop('num_predict', None), self.max_output_tokens)
+        opts = {**self._opts, **t}
+        if n is not None: opts['num_predict'] = int(n)
         p = {'model': self.model_id, 'messages': ifnone(msgs, self._msgs()), 'stream': stream}
         if opts: p['options'] = opts
         if tools and self.toolspecs: p['tools'] = self.toolspecs
@@ -524,14 +533,14 @@ class OllamaChat(ToolLoopMixin, Chat):
         yield first_chunk
         yield from it
 
-    def _model_step(self, max_output_tokens=None):
+    def _model_step(self, **kw):
         "One completion, normalized to a `Resp`. The single wire call `ToolLoopMixin` drives."
-        return self._note_usage(norm_ochat(self._ask(self._payload(max_output_tokens=max_output_tokens)), self.model_id))
+        return self._note_usage(norm_ochat(self._ask(self._payload(**kw)), self.model_id))
 
-    def _stream_step(self, max_output_tokens=None):
+    def _stream_step(self, **kw):
         "Stream one completion, yielding chunk dicts and leaving the merged `Resp` on `self._step_res`."
         split, tcs, native_th, last = StreamSplit(), [], '', {}
-        for d in self._ask_stream(self._payload(stream=True, max_output_tokens=max_output_tokens)):
+        for d in self._ask_stream(self._payload(stream=True, **kw)):
             msg = d.get('message') or {}
             if (th := msg.get('thinking')):
                 native_th += th
@@ -550,7 +559,7 @@ class OllamaChat(ToolLoopMixin, Chat):
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
         "Stateless completion text: no history, no tools. It shares the daemon, which caches per conversation."
         msgs = ([{'role': 'system', 'content': sp}] if sp else []) + [{'role': 'user', 'content': prompt}]
-        p = self._payload(max_output_tokens=max_tokens, msgs=msgs, tools=False, think=think)
+        p = self._payload(msgs=msgs, tools=False, think=think, max_output_tokens=max_tokens)
         return resp_text(norm_ochat(self._ask(p), self.model_id))
 
     def _structured_call(self, prompt, schema, sp):

@@ -253,33 +253,46 @@ class LitertChat(core.Chat):
                               'CPU. Set RISHI_LITERT_GPU=0 to stop asking for it.')
         return _mk(Backend.CPU())
 
-    def __init__(self, model=None, *, runtime=None, model_path=None, engine=None, backend=None,
-                 multimodal=True, cache_dir=None, enable_speculative_decoding=None, eng_kw=None,
-                 sp='', messages=None, tools=None, ctx_limit=None, approve=None, tool_max_len=None,
-                 max_steps=10, final_prompt=dflt_final_prompt_, parallel_tools=False, max_parallel_tools=None,
-                 think=False, filter_think=True, temp=None, top_k=None, top_p=None,
-                 seed=None, sampler_config=None, max_output_tokens=None, constrain=None, conv_kw=None,
-                 cbs=None, default_cbs=True):
-        if parallel_tools: raise NotImplementedError(
+    #: litert takes the window when it builds the engine, and nests it inside `eng_kw`
+    _opt_map = {'ctx': 'eng_kw.max_num_tokens'}
+    _opt_skip = ('effort', 'tool_mode', 'api_key', 'base_url')   # nothing local takes these
+
+    def __init__(self, model=None, *, runtime=None, model_path=None, opts=None,
+                 engine=None,        # an engine to share instead of building one
+                 backend=None,       # litert's hardware backend: `Backend.CPU()` or `Backend.GPU()`
+                 multimodal=True,    # build the vision and audio backends too
+                 cache_dir=None, enable_speculative_decoding=None,
+                 eng_kw=None,        # passed to `create_engine` verbatim
+                 filter_think=True,  # keep thought tokens out of the KV cache
+                 sampler_config=None,  # a litert `SamplerConfig`, instead of the portable sampling options
+                 constrain=None,     # constrained decoding; default is on when there are tools
+                 conv_kw=None,       # passed to `create_conversation` verbatim
+                 **kw):              # portable options; see `urai.ChatOpts`
+        o = ChatOpts.create(opts, **kw)
+        if o.parallel_tools: raise NotImplementedError(
             "litert runs its tool loop inside the engine, so it can't dispatch calls in parallel; "
             "use runtime='llama' (or 'mlx') for parallel_tools=True.")
         model = core.split_runtime(model)[1]
-        model_id = None if model is None or core._is_path(model) else model
-        model_path = model_path or (model if model and core._is_path(model) else None)
+        model_id = None if model is None or is_path(model) else model
+        model_path = model_path or (model if model and is_path(model) else None)
         self._stack, self._conv_stack = ExitStack(), ExitStack()
+        ekw = dict(eng_kw or {})
+        if o.ctx: ekw.setdefault('max_num_tokens', o.ctx)
         self._own_engine = engine is None
         if self._own_engine:
             engine = self.create_engine(model_id or gemma4_e2b, model_path, backend,
-                multimodal=multimodal, cache_dir=cache_dir, enable_speculative_decoding=enable_speculative_decoding, **(eng_kw or {}))
+                multimodal=multimodal, cache_dir=cache_dir,
+                enable_speculative_decoding=enable_speculative_decoding, **ekw)
             self.engine = self._stack.enter_context(engine)
         else: self.engine = engine
-        # the system prompt is kept apart from `hist` and re-applied on every rebuild, so eviction can
-        # never drop it - it is the anchor a sliding window is supposed to preserve
-        self._sys_pre = [{'role': 'system', 'content': sp}] if sp else []
-        if sampler_config is None and any(x is not None for x in (temp, top_k, top_p, seed)):
-            sampler_config = SamplerConfig(temperature=temp, top_k=top_k, top_p=top_p, seed=seed)
-        cvk = dict(sampler_config=sampler_config, max_output_tokens=max_output_tokens, **(conv_kw or {}))
-        if think: cvk['extra_context'] = {**cvk.get('extra_context', {}), 'enable_thinking': True}
+        # the system prompt is kept apart from `hist` and re-applied on every rebuild, so eviction
+        # can never drop it: it is the anchor a sliding window is supposed to preserve
+        self._sys_pre = [{'role': 'system', 'content': o.sp}] if o.sp else []
+        if sampler_config is None and any(x is not None for x in (o.temp, o.top_k, o.top_p, o.seed)):
+            sampler_config = SamplerConfig(temperature=o.temp, top_k=o.top_k, top_p=o.top_p, seed=o.seed)
+        cvk = dict(sampler_config=sampler_config, max_output_tokens=o.max_output_tokens or None,
+                   **(conv_kw or {}))
+        if o.think: cvk['extra_context'] = {**cvk.get('extra_context', {}), 'enable_thinking': True}
         if filter_think: cvk['filter_channel_content_from_kv_cache'] = True
         if (legacy := cvk.pop('enable_constrained_decoding', None)) is not None:
             warnings.warn("enable_constrained_decoding was litert's own name for this and is "
@@ -287,13 +300,11 @@ class LitertChat(core.Chat):
                           DeprecationWarning, stacklevel=2)
             if constrain is None: constrain = bool(legacy)
         self._constrain = constrain
-        self._conv_kw, self.tools, self.conv = cvk, L(tools), None
+        self._conv_kw, self.tools, self.conv = cvk, L(o.tools), None
         self.tool_handler = ChatToolHandler(self)
-        self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in listify(messages)])
-        self.ctx_limit = ctx_limit
-        self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
-                    tool_max_len=tool_max_len, max_steps=max_steps, max_parallel_tools=max_parallel_tools,
-                    final_prompt=final_prompt, cbs=cbs, default_cbs=default_cbs)
+        self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in listify(o.messages)])
+        self.ctx_limit = o.ctx or None
+        self._setup(model, o)
 
     def _constrained(self):
         "The `constrained_decoding_config` to build with, or `None`. Default is on when there are tools."
@@ -320,11 +331,11 @@ class LitertChat(core.Chat):
         "Rebuild the `Conversation` from the current (possibly evicted) `hist`, re-applying the system prompt."
         self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in self.hist])
 
-    def recover_context(self, err, max_output_tokens=None):
+    def recover_context(self, err, **kw):
         "Recover a full context by evicting the middle of history and retrying the current message."
-        return self._retry_evicted(err, max_output_tokens)
+        return self._retry_evicted(err, **kw)
 
-    def _retry_evicted(self, err, max_output_tokens=None, keep_first=2, keep_last=6):
+    def _retry_evicted(self, err, keep_first=2, keep_last=6, **turn):
         "The window filled up mid-turn: evict the middle of `hist`, rebuild, and send the same turn again."
         kept, dropped = evict_middle(self.hist, keep_first, keep_last)
         if not dropped:
@@ -336,7 +347,7 @@ class LitertChat(core.Chat):
         prior = self.hist[:-1] if self._turn_msg_recorded else self.hist
         self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in prior])
         self._tc0 = self.conv.token_count            # the rebuilt cache is a new baseline for usage
-        try: return self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens)
+        try: return self.conv.send_message(self.turn_msg, **self._turn_kw(turn))
         except RuntimeError as e:
             raise ContextWindowExceededError(
                 f"could not recover after evicting {len(dropped)} messages: {err}") from err
@@ -358,28 +369,33 @@ class LitertChat(core.Chat):
     def render(self, msg):
         "The exact templated string litert will send for `msg`."
         return self.conv.render_message_to_string(_mk_msg(msg))
-    def _send(self, msg, max_output_tokens=None):
-        'Send one message through the callback pipeline, evicting and retrying once if the context window fills up.'
+    def _turn_kw(self, turn):
+        "What litert's `send_message` takes from this turn's generation options."
+        t = self.map_opts(turn); t.pop('eng_kw', None)   # the window was fixed when the engine built
+        return {'max_output_tokens': t.get('max_output_tokens')}
+
+    def _send(self, msg, **kw):
+        'Send one message through the callback pipeline, evicting and retrying once if the window fills.'
         self.turn_msg = _mk_msg(msg)
         self._turn_msg_recorded = False
         for _ in run_cbs(self, 'before_send'): pass
-        self._tc0 = self.conv.token_count      # after the callbacks: one of them may have rebuilt `conv`
-        try: r = self.conv.send_message(self.turn_msg, max_output_tokens=max_output_tokens)
+        self._tc0 = self.conv.token_count      # after the callbacks: one may have rebuilt `conv`
+        try: r = self.conv.send_message(self.turn_msg, **self._turn_kw(kw))
         except RuntimeError as e:
             if not is_ctx_error(self, e): raise
-            r = self.recover_context(e, max_output_tokens)
+            r = self.recover_context(e, **kw)
         self.turn_res = Resp(r)
         for _ in run_cbs(self, 'after_response'): pass
         return self.turn_res
-    def _stream(self, msg, max_output_tokens=None, cbs=None):
+    def _stream(self, msg, cbs=None, **kw):
         'Stream a turn as markdown chunks. Per-call `cbs` live only for this turn.'
         added = self.add_cbs(cbs); prev = getattr(self, '_streaming', False); self._streaming = True
         try:
             self.turn_msg = _mk_msg(msg)
             for _ in run_cbs(self, 'before_send'): pass
-            self._tc0 = self.conv.token_count   # after the callbacks: one of them may have rebuilt `conv`
+            self._tc0 = self.conv.token_count   # after the callbacks: one may have rebuilt `conv`
             fmt, chunks = StreamFormatter(), []
-            for o in self.conv.send_message_async(self.turn_msg, max_output_tokens=max_output_tokens):
+            for o in self.conv.send_message_async(self.turn_msg, **self._turn_kw(kw)):
                 chunks.append(o); yield self._emit(o, fmt)
             self.turn_res = _merge_chunks(chunks)
             yield from run_cbs(self, 'after_response')

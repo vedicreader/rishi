@@ -7,6 +7,12 @@ Pass a model id to [`Chat`](https://vedicreader.github.io/rishi/core.html#chat),
 `chat.hist`. Use `resp_text(r)` for the answer and `thought(r)` for reasoning. Every backend uses
 the same tools, approval gate, callbacks and streaming interface.
 
+That shared interface is [urai](https://github.com/vedicreader/urai), which rishi depends on and
+re-exports: `Chat`, the tool loop, options, capabilities and record-and-replay all live there. rishi
+is the seven backends. One option has one name whichever backend runs it, so `Chat(model, ctx=32_000,
+temp=0.2)` means the same thing against llama.cpp, litert or a hosted API, and each backend says once
+what it calls that thing. See `urai.ChatOpts` for the full set.
+
 ## Install
 
 ``` sh
@@ -22,7 +28,8 @@ Extras combine, as in `rishi[litert,mlx]`. Remote vendors need API keys. Claude 
 does not require wheels for other backends.
 
 Contributors install with `pip install -e '.[dev]'`, then run `nbdev-prepare`. Edit the source
-notebooks in `nbs/`. `nbdev-export` generates `rishi/*.py`.
+notebooks in `nbs/`. `nbdev-export` generates `rishi/*.py`. Anything backend-agnostic belongs in
+urai rather than here.
 
 ## Quickstart
 

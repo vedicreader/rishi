@@ -19,6 +19,7 @@ import claude_agent_sdk
 from llmsurgery import ant
 from base64 import b64encode
 from pathlib import Path
+from contextlib import contextmanager
 from fastcore.all import store_attr, patch, ifnone, listify
 from fastcore.aio import run_sync, iter_sync
 from . import core
@@ -193,15 +194,17 @@ class ClaudeChat(ToolLoopMixin, Chat):
     mk_content, mk_msg, mk_msgs = staticmethod(mk_claude_content), staticmethod(mk_claude_msg), staticmethod(mk_claude_msgs)
     local, _ctx_live = False, 0
 
-    def __init__(self, model=None, *, runtime=None, model_path=None, sp='', messages=None, tools=None,
-                 ctx_limit=None, approve=None, tool_max_len=None, max_steps=10, parallel_tools=False,
-                 max_parallel_tools=None, final_prompt=dflt_final_prompt_,
+    #: Claude Code takes an effort grade and nothing else a caller can turn
+    _opt_map = {}
+    _opt_skip = ('temp', 'top_k', 'top_p', 'seed', 'max_output_tokens', 'tool_mode', 'think',
+                 'api_key', 'base_url')
+
+    def __init__(self, model=None, *, runtime=None, model_path=None, opts=None,
                  permission_mode='auto',    # Claude Code's gate on its *own* tools. Yours are rishi's
                  claude_tools=None,         # Claude Code's own tools, allowlisted. None -> none at all when this chat carries tools, its default set when it carries none
                  claude_disallowed=CLAUDE_DISALLOWED,   # ...and the ones it may never use
                  claude_server_tools=(),    # its web tools, which run on its side and never reach rishi's loop
                  workspace=None,            # directory Claude Code works in. None -> `CLAUDE_WORK_DIR`. See `_cwd`
-                 effort=None,               # 'low'/'medium'/'high'/'xhigh'/'max'. None -> the default
                  fallback=None,             # model, or models tried in order, for when this one is overloaded or retired
                  cleanup=True,              # remove the transcripts this chat filed when it closes. See `prune_sessions`
                  bare=True,                 # answer as a model: no CLAUDE.md, skills, plugins or hooks
@@ -209,11 +212,15 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  transcript=True,           # file the conversation as records rather than prose. See `_file_sess`
                  api_key=False,             # let an ambient `ANTHROPIC_API_KEY` reach the subprocess. See `_opts`
                  max_buffer=MAX_BUFFER,     # the SDK's stdout cap, in bytes
-                 bin=CLAUDE_BIN, timeout=600, settings=None, cbs=None, default_cbs=True, **opts):
+                 bin=CLAUDE_BIN, timeout=600, settings=None,
+                 **kw):                     # portable options; see `urai.ChatOpts`
+        o = ChatOpts.create(opts, **kw)
         self.model_id = claude_model(core.split_runtime(model)[1])
-        self._set_tools(tools)
-        store_attr('permission_mode,claude_tools,claude_disallowed,claude_server_tools,workspace,effort,'
-                   'fallback,cleanup,bare,bin,timeout,settings,api_key,max_buffer,opts')
+        self._set_tools(o.tools)
+        self.effort = o.effort or None      # 'low'/'medium'/'high'/'xhigh'/'max'
+        store_attr('permission_mode,claude_tools,claude_disallowed,claude_server_tools,workspace,'
+                   'fallback,cleanup,bare,bin,timeout,settings,api_key,max_buffer')
+        self.opts_ = dict(o.extra)          # anything else, straight through to the SDK
         self.stateful = stateful
         self.transcript = bool(transcript)
         self.client = self._last_res = None
@@ -222,11 +229,8 @@ class ClaudeChat(ToolLoopMixin, Chat):
         self._sent = 0                  # how much of `hist` the live session has seen
         self._nonce = uuid.uuid4().hex  # this chat's salt for a session id. See `_file_sess`
         self._filed = []                # the transcripts it wrote, its own to remove. See `_sweep`
-        self.ctx_limit, self._ctx_tokens = ctx_limit, 0
-        self._setup(model=model, sp=sp, messages=messages, tools=tools, approve=approve,
-                    tool_max_len=tool_max_len, max_steps=max_steps, parallel_tools=parallel_tools,
-                    max_parallel_tools=max_parallel_tools, final_prompt=final_prompt, cbs=cbs,
-                    default_cbs=default_cbs)
+        self.ctx_limit, self._ctx_tokens = o.ctx or None, 0
+        self._setup(model, o)
 
     @property
     def in_session_mode(self):
@@ -313,7 +317,7 @@ def _opts(self:ClaudeChat, sp, resume=None, fork=False):
         kw['fallback_model'] = claude_fallback(self.fallback)   # an overloaded model, not a failed turn
     if self.bare: kw.update(setting_sources=[], skills=[])    # no CLAUDE.md, plugins, hooks or skills
     if resume: kw.update(resume=resume, fork_session=fork)
-    return sdk.ClaudeAgentOptions(**{**kw, **self.opts})
+    return sdk.ClaudeAgentOptions(**{**kw, **self.opts_})
 
 @patch
 def _result(self:ClaudeChat, res, text):
@@ -351,7 +355,7 @@ def _to_parts(self:ClaudeChat, msgs):
     from aidialog.msg_parts import Text, InputImage, InputAudio, InputFile
     out = []
     for m in msgs:
-        who = core._roles.get(m.get('role'), m.get('role', '?'))   # private, so not via the star import
+        who = ROLE_NAMES.get(m.get('role'), m.get('role', '?'))
         c = m.get('content')
         if isinstance(c, str):
             if c: out.append(Text(f'## {who}\n{c}'))
@@ -361,7 +365,7 @@ def _to_parts(self:ClaudeChat, msgs):
             t = prt.get('type')
             if t == 'text': out.append(Text(f'## {who}\n{prt.get("text","")}'))
             elif t == 'image_url':
-                media = core._to_media_part(prt)
+                media = to_media_part(prt)
                 out.append(InputFile(text=media.text, mime=media.mime) if media.mime == 'application/pdf' else media)
             elif t == 'input_audio': raise TypeError(
                 'Claude Code takes no audio input. Use `rishi.remote`, `rishi.ollama` or `rishi.litert`.')
@@ -631,23 +635,36 @@ def _session_events(self:ClaudeChat, prompt):
 
 # %% ../nbs/06_claude.ipynb #cl_steps
 @patch
-def _model_step(self:ClaudeChat, max_output_tokens=None):
+@contextmanager
+def _turn_opts(self:ClaudeChat, kw):
+    "Apply this turn's `effort` for one wire call. Claude Code takes no other generation control."
+    t = self.map_opts(kw)
+    old = self.effort
+    if t.get('effort'): self.effort = t['effort']
+    try: yield
+    finally: self.effort = old
+
+@patch
+def _model_step(self:ClaudeChat, **kw):
     "One wire call."
-    out = next(v for k, v in self._events() if k == 'result')
+    with self._turn_opts(kw):
+        out = next(v for k, v in self._events() if k == 'result')
     self._last_res = res = self._note_usage(norm_claude(out, self.model_id))
     return res
 
 @patch
-def _stream_step(self:ClaudeChat, max_output_tokens=None):
+def _stream_step(self:ClaudeChat, **kw):
     "The same turn, streamed. Thinking gets its own channel, and tag calls are never rendered as prose."
     split, out = StreamSplit(), None
-    for kind, v in self._events():
-        if kind == 'thought': yield {'channels': {'thought': v}}
-        elif kind == 'text': yield from split.feed(v)
-        else: out = v
+    with self._turn_opts(kw):
+        for kind, v in self._events():
+            if kind == 'thought': yield {'channels': {'thought': v}}
+            elif kind == 'text': yield from split.feed(v)
+            else: out = v
     yield from split.finish()
     if out is None: raise RuntimeError('the turn ended without a result')
     self._step_res = self._last_res = self._note_usage(norm_claude(out, self.model_id))
+
 
 @patch
 def _oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None):

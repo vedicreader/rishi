@@ -196,11 +196,16 @@ class CopilotChat(RemoteChat):
     _runtime = 'copilot'
     local = False   #: the subscription is yours, the machine is GitHub's
 
-    def __init__(self, model=None, *, oauth_token=None, api_key=None, base_url=None, auth=None,
-                 integration_id=INTEGRATION_ID, hdrs=None, **kw):
-        self.auth = auth or CopilotAuth(oauth_token, key=api_key, base_url=base_url)
+    def __init__(self, model=None, *,
+                 oauth_token=None,   # a GitHub OAuth token, instead of the one on disk
+                 auth=None,          # a `CopilotAuth` to share, instead of building one
+                 integration_id=INTEGRATION_ID,
+                 hdrs=None,          # extra headers, merged over Copilot's own
+                 **kw):              # portable options; see `urai.ChatOpts`
+        o = ChatOpts.create(kw.pop('opts', None), **kw)
+        self.auth = auth or CopilotAuth(oauth_token, key=o.key, base_url=o.base_url or None)
         self.integration_id, self.hdrs = integration_id, dict(hdrs or {})
-        super().__init__(model or copilot_default, **kw)
+        super().__init__(model or copilot_default, opts=o)
 
     def _has_media(self):
         "Does the history carry an image or audio part? Copilot gates those behind a header."
@@ -211,9 +216,9 @@ class CopilotChat(RemoteChat):
         "`user` for a turn a person opened, `agent` once the model is round-tripping its own tool calls."
         return 'agent' if any(m.get('role') in ('assistant', 'tool') for m in self.hist) else 'user'
 
-    def _kw(self, stream=False, max_output_tokens=None):
+    def _kw(self, stream=False, **turn):
         "`RemoteChat._kw` plus Copilot's endpoint, a live token, and the headers it insists on."
-        kw = super()._kw(stream, max_output_tokens)
+        kw = super()._kw(stream, **turn)
         t  = self.auth.token()
         kw.update(api_key=t.key, base_url=t.base_url, vendor_name=None, api_name='openai_chat')
         kw['xtra_hdrs'] = {**copilot_hdrs(integration_id=self.integration_id, vision=self._has_media(),
