@@ -158,3 +158,6 @@ checklink/cookies.txt
 # Quarto
 .quarto
 .claude/
+# Local agent and tool scaffolding, not part of the package
+.gheasy/
+docs/superpowers/
