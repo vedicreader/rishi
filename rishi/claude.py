@@ -9,9 +9,10 @@ __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'f
            'CLAUDE_ENTRYPOINT', 'CLAUDE_DISALLOWED', 'CLAUDE_SERVER_TOOLS', 'CLAUDE_WORK_DIR', 'MAX_BUFFER', 'ABORTED',
            'INTERRUPT_WAIT', 'CONT_PROMPT', 'EMPTY_RESULT', 'claude_bin', 'claude_model', 'claude_fallback',
            'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError', 'claude_status',
-           'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id',
-           'anth_msgs', 'claude_prompt', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp',
-           'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
+           'claude_tool_use', 'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat',
+           'anth_blocks', 'tu_id', 'anth_msgs', 'claude_prompt', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text',
+           'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy', 'extract_fence',
+           'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import asyncio, atexit, json, os, re, shutil, subprocess, sys, time, uuid, weakref
@@ -139,6 +140,19 @@ def claude_status(d):
     m = _status_re.search(f"{d.get('result') or ''} {d.get('subtype') or ''}")
     return int(m.group(1)) if m else None
 
+def claude_tool_use(b, sdk):
+    """A `ToolUseBlock` as a plain record, or None for any other block.
+
+    Claude Code runs its own tools and any MCP server's on its side, so these are a report of what
+    already happened rather than a call rishi has to make. An MCP tool is named
+    `mcp__<server>__<tool>`, which is how a caller tells one apart from Claude Code's own.
+    """
+    if not isinstance(b, getattr(sdk, 'ToolUseBlock', ())): return None
+    name = getattr(b, 'name', '') or ''
+    server = name.split('__')[1] if name.startswith('mcp__') and name.count('__') >= 2 else ''
+    return {'id': getattr(b, 'id', '') or '', 'name': name, 'server': server,
+            'input': getattr(b, 'input', None) or {}}
+
 def norm_claude(d, model=None):
     "A Claude Code result -> a rishi `Resp`, with `<tool_call>` tags read out of the text."
     if d.get('is_error') and d.get('terminal_reason') not in ABORTED:
@@ -148,6 +162,8 @@ def norm_claude(d, model=None):
     text, tcs = parse_tool_tags(text)
     res = {'role': 'assistant', 'content': text}
     if th: res['channels'] = {'thought': th}
+    # tools Claude Code ran itself. Not `tool_calls`: nothing here is waiting on rishi to answer it.
+    if (ran := d.get('server_tools')): res.setdefault('channels', {})['server_tools'] = ran
     if tcs: res['tool_calls'] = tcs
     res['usage'] = norm_claude_usage(d.get('usage'), model, d.get('cost'))
     return Resp(res)
@@ -204,6 +220,10 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  claude_tools=None,         # Claude Code's own tools, allowlisted. None -> none at all when this chat carries tools, its default set when it carries none
                  claude_disallowed=CLAUDE_DISALLOWED,   # ...and the ones it may never use
                  claude_server_tools=(),    # its web tools, which run on its side and never reach rishi's loop
+                 mcp_servers=None,          # MCP servers to declare. None -> none at all. See `The wire`
+                 mcp_tools=None,            # which of their tools to allow. None -> every tool of every server named
+                 strict_mcp_config=False,   # refused outright where an enterprise MCP config exists
+                 tool_channel='tags',       # where *rishi's* schemas travel. See `The options`
                  workspace=None,            # directory Claude Code works in. None -> `CLAUDE_WORK_DIR`. See `_cwd`
                  fallback=None,             # model, or models tried in order, for when this one is overloaded or retired
                  cleanup=True,              # remove the transcripts this chat filed when it closes. See `prune_sessions`
@@ -219,7 +239,9 @@ class ClaudeChat(ToolLoopMixin, Chat):
         self._set_tools(o.tools)
         self.effort = o.effort or None      # 'low'/'medium'/'high'/'xhigh'/'max'
         store_attr('permission_mode,claude_tools,claude_disallowed,claude_server_tools,workspace,'
-                   'fallback,cleanup,bare,bin,timeout,settings,api_key,max_buffer')
+                   'fallback,cleanup,bare,bin,timeout,settings,api_key,max_buffer,'
+                   'mcp_servers,mcp_tools,strict_mcp_config')
+        self._tool_channel = tool_channel
         self.opts_ = dict(o.extra)          # anything else, straight through to the SDK
         self.stateful = stateful
         self.transcript = bool(transcript)
@@ -255,8 +277,14 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     @property
     def tool_channel(self):
-        "Where this chat's tool schemas travel. Always the prompt, to get past a managed MCP policy."
-        return 'tags'
+        "Where this chat's tool schemas travel. The prompt, to get past a managed MCP policy."
+        return self._tool_channel
+
+    @property
+    def mcp_toolnames(self):
+        "The MCP tools this chat allows. Every tool of every server it named, unless told otherwise."
+        if self.mcp_tools is not None: return list(self.mcp_tools)
+        return [f'mcp__{name}' for name in (self.mcp_servers or {})]
 
     @property
     def token_count(self):
@@ -265,6 +293,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     def _sp(self):
         "The briefing plus the tool schemas, for the one channel a managed MCP policy cannot close."
+        if self.tool_channel != 'tags': return self.sp   # the caller routed them somewhere itself
         return tag_tools_sp(self.toolspecs, self.sp)
 
     def _prompt(self):
@@ -289,6 +318,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
         "End the session and sweep its transcripts. A leaked chat would otherwise leak a `node` process."
         self._disconnect()
 
+
 # %% ../nbs/06_claude.ipynb #cl_sdk
 @patch
 def _opts(self:ClaudeChat, sp, resume=None, fork=False):
@@ -296,10 +326,12 @@ def _opts(self:ClaudeChat, sp, resume=None, fork=False):
     sdk = claude_agent_sdk
     cwd = self._cwd
     cwd.mkdir(parents=True, exist_ok=True)
-    srv, native = list(self.claude_server_tools or ()), (list(self.claude_tools) if self.claude_tools is not None else None)
+    srv = list(self.claude_server_tools or ()) + self.mcp_toolnames   # both run on Claude Code's side
+    native = list(self.claude_tools) if self.claude_tools is not None else None
     kw = dict(model=self.model_id, system_prompt=sp or None, cwd=str(cwd),
               permission_mode=self.permission_mode, settings=self.settings,
-              mcp_servers={}, strict_mcp_config=False,        # see `The wire`
+              mcp_servers=dict(self.mcp_servers or {}),       # see `The wire`
+              strict_mcp_config=bool(self.strict_mcp_config),
               include_partial_messages=True,                 # token deltas
               max_buffer_size=self.max_buffer,               # the SDK's own 1MB cap loses a long reply
               env={} if self.api_key else {'ANTHROPIC_API_KEY': ''},   # a subscription session, not a metered one
@@ -320,11 +352,11 @@ def _opts(self:ClaudeChat, sp, resume=None, fork=False):
     return sdk.ClaudeAgentOptions(**{**kw, **self.opts_})
 
 @patch
-def _result(self:ClaudeChat, res, text):
+def _result(self:ClaudeChat, res, text, server_tools=()):
     "A `ResultMessage` as the dict `norm_claude` reads, cost and error status included."
     return {'result': res.result or ''.join(text), 'usage': res.usage, 'is_error': res.is_error,
             'subtype': res.subtype, 'terminal_reason': getattr(res, 'terminal_reason', None),
-            'cost': res.total_cost_usd,
+            'cost': res.total_cost_usd, 'server_tools': list(server_tools),
             'api_error_status': getattr(res, 'api_error_status', None)}
 
 @patch
@@ -332,7 +364,7 @@ def _sdk_events(self:ClaudeChat, prompt, sp, resume=None):
     "One `query` as `(kind, value)` pairs: `thought`, `text`, and one final `result` dict."
     sdk = claude_agent_sdk
     async def _agen():
-        text, res = [], None
+        text, res, ran = [], None, []
         ait = sdk.query(prompt=claude_prompt(prompt), options=self._opts(sp, resume=resume)).__aiter__()
         while True:
             try: m = await asyncio.wait_for(ait.__anext__(), self.timeout)
@@ -343,10 +375,12 @@ def _sdk_events(self:ClaudeChat, prompt, sp, resume=None):
                 for b in m.content:
                     if isinstance(b, sdk.ThinkingBlock) and b.thinking: yield 'thought', b.thinking
                     elif isinstance(b, sdk.TextBlock) and b.text: text.append(b.text); yield 'text', b.text
+                    elif (u := claude_tool_use(b, sdk)): ran.append(u); yield 'tool_use', u
             elif isinstance(m, sdk.ResultMessage): res = m
         if res is None: raise RuntimeError('the Agent SDK ended without a result')
-        yield 'result', self._result(res, text)
+        yield 'result', self._result(res, text, ran)
     return sync_iter(_agen, stop=self._cancel)
+
 
 # %% ../nbs/06_claude.ipynb #da4e0a44
 @patch
@@ -590,7 +624,7 @@ def _session_turn(self:ClaudeChat, prompt):
     sdk = claude_agent_sdk
     client = self._connect()
     async def _agen():
-        text, res = [], None
+        text, res, ran = [], None, []
         await client.query(claude_prompt(prompt))
         ait = client.receive_response().__aiter__()
         while True:
@@ -603,12 +637,13 @@ def _session_turn(self:ClaudeChat, prompt):
                 for b in m.content:
                     if isinstance(b, sdk.ThinkingBlock) and b.thinking: yield 'thought', b.thinking
                     elif isinstance(b, sdk.TextBlock) and b.text: text.append(b.text); yield 'text', b.text
+                    elif (u := claude_tool_use(b, sdk)): ran.append(u); yield 'tool_use', u
             elif isinstance(m, sdk.ResultMessage): res = m
         if res is None: raise RuntimeError('the Claude Code session ended without a result')
         # already on the loop, so this is a local await rather than a cross-thread wait
         try: self._ctx_live = (await client.get_context_usage() or {}).get('totalTokens') or self._ctx_live
         except Exception: pass
-        yield 'result', self._result(res, text)
+        yield 'result', self._result(res, text, ran)
     return iter_sync(_agen())
 
 @patch
@@ -660,7 +695,8 @@ def _stream_step(self:ClaudeChat, **kw):
         for kind, v in self._events():
             if kind == 'thought': yield {'channels': {'thought': v}}
             elif kind == 'text': yield from split.feed(v)
-            else: out = v
+            elif kind == 'tool_use': yield {'channels': {'server_tools': [v]}}
+            elif kind == 'result': out = v
     yield from split.finish()
     if out is None: raise RuntimeError('the turn ended without a result')
     self._step_res = self._last_res = self._note_usage(norm_claude(out, self.model_id))
@@ -671,3 +707,4 @@ def _oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None):
     "Stateless one-shot text: no history to file and no session to keep."
     out = next(v for k, v in self._sdk_events(prompt, sp) if k == 'result')
     return resp_text(norm_claude(out, self.model_id))
+
