@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.29
+codex requires stream=True for one shot
+
 ## 0.1.28
 claude tags fixes
 

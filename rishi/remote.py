@@ -267,7 +267,14 @@ class RemoteChat(ToolLoopMixin, Chat):
         "Stateless completion text, with no history and no tools. `think=False` asks for `NO_THINK_EFFORT`."
         msgs = [to_msg({'role': 'user', 'content': prompt})]
         kw = {**self._kw(max_output_tokens=max_tokens), 'system': sp or None, 'tools': None, 'tool_choice': None}
-        send = lambda k: resp_text(norm_completion(run_coro(acomplete(msgs, self.model_id, **k))))
+        async def _send(k):
+            comp = None
+            agen = await acomplete(msgs, self.model_id, **{**k, 'stream': True})
+            async for part in agen:
+                if isinstance(part, Completion): comp = part
+            if comp is None: raise RuntimeError('stream ended without a final Completion')
+            return comp
+        send = lambda k: resp_text(norm_completion(run_coro(_send(k))))
         if think is not False: return send(kw)
         try: return send({**kw, 'reasoning_effort': NO_THINK_EFFORT})
         except Exception: return send(kw)   # a provider that spells the effort differently
