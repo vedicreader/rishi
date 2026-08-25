@@ -6,9 +6,9 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['BACKENDS', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs', 'browser_approval', 'runtimes', 'MODEL_CACHE_ENV',
-           'litert_caps', 'ollama_caps_', 'use_system_certs_', 'repo_root', 'mv_skill_md', 'system_certs',
-           'tool_reminder_', 'use_system_certs', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought',
-           'truncated', 'has_tool_call', 'quote_', 'tc_summary_', 'mk_tr_details', 'Resp', 'StreamFormatter',
+           'litert_caps', 'ollama_caps_', 'use_system_certs_', 'RecordedChat', 'repo_root', 'mv_skill_md',
+           'system_certs', 'tool_reminder_', 'use_system_certs', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text',
+           'thought', 'truncated', 'has_tool_call', 'quote_', 'tc_summary_', 'mk_tr_details', 'Resp', 'StreamFormatter',
            'display_stream', 'TruncationCallback', 'TAG_ARG_KEYS', 'TAG_TOOLS_SP', 'split_think', 'tag_args',
            'mk_tag_tc', 'lone_tag_tc', 'parse_tool_tags', 'tag_call_shape', 'tag_tools_sp', 'StreamSplit', 'acc_tc',
            'MODALITIES', 'ENDPOINT_TOOLS', 'CAPS_FALLBACK', 'DFLT_CTX', 'MODEL_EXTS', 'Caps', 'tool_modalities',
@@ -140,6 +140,86 @@ MODEL_CACHE_ENV = 'RISHI_RECORD_CHAT'   #: what `RecordCache` read before `URAI_
 def use_system_certs_(force=False):
     "Deprecated alias for `urai.core.use_system_certs`."
     return use_system_certs(force)
+
+# %% ../nbs/00_core.ipynb #72174ab5
+class RecordedChat(ToolLoopMixin, Chat):
+    "A real `Chat` whose wire calls are recorded once and replayed after. See `CachedChat` for the wrapper it replaces."
+
+    _runtime = 'recorded'
+    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
+
+    def __new__(cls, *args, **kw): return object.__new__(cls)   # never re-routed by runtime
+
+    def __init__(self, model=None, *, path=None, record=None, env=None, runtime=None,
+                 model_path=None, opts=None, ctx_limit=None, **kw):
+        o = ChatOpts.create(opts, **({'ctx_limit': ctx_limit} if ctx_limit else {}), **kw)
+        self.model, self.model_path, self._rt = model, model_path, runtime
+        # the loose keywords, kept as they arrived: a backend's own constructor arguments
+        # (`workspace`, `engine`, `quant`) are named parameters there, not portable options,
+        # and `ChatOpts` would carry them into `extra` and hand them to the wire instead
+        self._kw = {**({'ctx_limit': ctx_limit} if ctx_limit else {}), **kw}
+        self.rec = RecordCache(path, record, env=env or MODEL_CACHE_ENV)
+        self._chat, self._ctx_tokens = None, 0
+        self._set_tools(o.tools)
+        self.ctx_limit = o.ctx or DFLT_CTX
+        self._setup(model, o)
+
+    @property
+    def chat(self):
+        "The live `Chat`, built on the first miss. A full replay never touches this."
+        if self._chat is None:
+            self._chat = Chat(self.model, runtime=self._rt, model_path=self.model_path,
+                              **self._kw)
+        return self._chat
+
+    def _live(self):
+        "The live chat, holding exactly the conversation this one holds."
+        c = self.chat
+        c.hist = [dict(m) for m in self.hist]
+        c._recreate_conv()
+        return c
+
+    def _key(self, kind, *args, hist=True):
+        "What one call is recorded under: the model, the briefing, the tools, and the conversation."
+        return self.rec.key(self.model, self._rt, kind, self.sp,
+                            [getattr(t, '__name__', str(t)) for t in self.tools],
+                            [canon_msg(m) for m in self.hist] if hist else [], *args)
+
+    def _what(self, kind):
+        last = resp_text(self.hist[-1]) if self.hist else ''
+        return f'{kind} for {self.model} after {len(self.hist)} messages: {last[:80]}'
+
+    def _model_step(self, max_output_tokens=None, **kw):
+        res = self.rec(self._key('step', kw), lambda: dict(self._live()._model_step(**kw)),
+                       self._what('step'))
+        return Resp(res)
+
+    def _stream_step(self, max_output_tokens=None, **kw):
+        def live():
+            c = self._live()
+            chunks = [o for o in c._stream_step(**kw)]
+            return {'chunks': chunks, 'res': dict(c._step_res)}
+        rec = self.rec(self._key('stream', kw), live, self._what('stream'))
+        yield from rec['chunks']
+        self._step_res = Resp(rec['res'])
+
+    def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
+        return self.rec(self._key('oneshot', prompt, sp, think, max_tokens, hist=False),
+                        lambda: self.chat.oneshot(prompt, sp, think=think, max_tokens=max_tokens),
+                        f'oneshot for {self.model}: {str(prompt)[:80]}')
+
+    @property
+    def token_count(self):
+        "The live chat's count where there is one, else the estimate every backend falls back to."
+        if self._chat is not None: return self._chat.token_count
+        return est_tokens(render_prompt(self.hist)) + est_tokens(self.sp)
+
+    def count_tokens(self, text):
+        f = getattr(self._chat, 'count_tokens', None)
+        return f(text) if f else est_tokens(str(text or ''))
+
+    def close(self):
+        if self._chat is not None: self._chat.close(); self._chat = None
 
 # %% ../nbs/00_core.ipynb #1086ffd6
 def repo_root() -> Path:

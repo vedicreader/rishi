@@ -212,7 +212,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     #: Claude Code takes an effort grade and nothing else a caller can turn
     _opt_map = {}
-    _opt_skip = ('temp', 'top_k', 'top_p', 'seed', 'max_output_tokens', 'tool_mode', 'think',
+    _opt_skip = ('temp', 'top_k', 'top_p', 'seed', 'max_output_tokens', 'think',
                  'api_key', 'base_url')
 
     def __init__(self, model=None, *, runtime=None, model_path=None, opts=None,
@@ -223,7 +223,6 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  mcp_servers=None,          # MCP servers to declare. None -> none at all. See `The wire`
                  mcp_tools=None,            # which of their tools to allow. None -> every tool of every server named
                  strict_mcp_config=False,   # refused outright where an enterprise MCP config exists
-                 tool_channel='tags',       # where *rishi's* schemas travel. See `The options`
                  workspace=None,            # directory Claude Code works in. None -> `CLAUDE_WORK_DIR`. See `_cwd`
                  fallback=None,             # model, or models tried in order, for when this one is overloaded or retired
                  cleanup=True,              # remove the transcripts this chat filed when it closes. See `prune_sessions`
@@ -241,7 +240,6 @@ class ClaudeChat(ToolLoopMixin, Chat):
         store_attr('permission_mode,claude_tools,claude_disallowed,claude_server_tools,workspace,'
                    'fallback,cleanup,bare,bin,timeout,settings,api_key,max_buffer,'
                    'mcp_servers,mcp_tools,strict_mcp_config')
-        self._tool_channel = tool_channel
         self.opts_ = dict(o.extra)          # anything else, straight through to the SDK
         self.stateful = stateful
         self.transcript = bool(transcript)
@@ -278,7 +276,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
     @property
     def tool_channel(self):
         "Where this chat's tool schemas travel. The prompt, to get past a managed MCP policy."
-        return self._tool_channel
+        return self.opts.tool_mode or 'tags'   # urai's portable name for the same question
 
     @property
     def mcp_toolnames(self):
