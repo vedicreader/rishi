@@ -141,6 +141,14 @@ def use_system_certs_(force=False):
     "Deprecated alias for `urai.core.use_system_certs`."
     return use_system_certs(force)
 
+# %% ../nbs/00_core.ipynb #9aedadfe
+@patch
+def __sub__(self:UsageStats, other):
+    "What this counter has added since `other`. A backend counts cumulatively; a turn is a delta."
+    if other is None: return self
+    return UsageStats(**{k: max(0, getattr(self, k) - getattr(other, k)) for k in self._sums},
+                      model=self.model or other.model)
+
 # %% ../nbs/00_core.ipynb #72174ab5
 class RecordedChat(ToolLoopMixin, Chat):
     "A real `Chat` whose wire calls are recorded once and replayed after. See `CachedChat` for the wrapper it replaces."
