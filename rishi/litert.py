@@ -12,7 +12,7 @@ import json, re, os, asyncio, io, base64, uuid, warnings
 from html import escape
 from mimetypes import guess_type
 from contextlib import ExitStack, redirect_stdout
-from litert_lm import (Engine, Backend, ConstrainedDecodingConfig, Conversation, Session, Message, Contents, Content, Role, ToolCall,
+from litert_lm import (ActivationDataType, Engine, Backend, ConstrainedDecodingConfig, Conversation, Session, Message, Contents, Content, Role, ToolCall,
                        ToolEventHandler, SamplerConfig, Benchmark, set_min_log_severity)
 from litert_lm._messages import Text, ImageBytes, ImageFile, AudioBytes, AudioFile, ToolResponse, normalize_message
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
@@ -210,6 +210,14 @@ def _get_model(model_id, model_path=None):
     if not (fn := _litertlm(list_repo_files(model_id))): raise FileNotFoundError(f"No .litertlm file found for {model_id}")
     return hf_hub_download(model_id, fn)
 
+def _is_gpu(be):
+    "Whether `be` is litert's GPU backend, as an instance or as the class."
+    return isinstance(be, Backend.GPU) or (isinstance(be, type) and issubclass(be, Backend.GPU))
+
+def _gpu_act(be, kw):
+    "Activation dtype to build a GPU engine with: litert's float16 default drops and repeats tokens once a prompt passes 2048."
+    return {} if 'activation_data_type' in kw or not _is_gpu(be) else {'activation_data_type': ActivationDataType.FLOAT32}
+
 def _merge_chunks(chunks):
     "Reconstruct an assistant response dict (text + thinking) from streamed litert chunks."
     text, th = ''.join(resp_text(c) for c in chunks), ''.join(thought(c) for c in chunks)
@@ -244,7 +252,8 @@ class LitertChat(core.Chat):
         def _mk(b):
             mm = dict(vision_backend=ifnone(vbe, Backend.CPU()), audio_backend=ifnone(abe, Backend.CPU()))
             return Engine(mod, backend=b, cache_dir=cache_dir or '',
-                          enable_speculative_decoding=enable_speculative_decoding, **(mm if multimodal else {}), **kw)
+                          enable_speculative_decoding=enable_speculative_decoding,
+                          **_gpu_act(b, kw), **(mm if multimodal else {}), **kw)
         if be is not None: return _mk(be)
         if LITERT_GPU:
             try: return _mk(Backend.GPU())
