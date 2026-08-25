@@ -40,6 +40,27 @@ print(resp_text(r))
 - Streaming has two modes: `chat(msg, stream=True)` yields **markdown strings** (print them, or hand to `display_stream`); `chat(msg, stream='raw')` yields the underlying **chunk dicts** (`{'content': [{'type': 'text', ...}]}`, `{'channels': {'thought': ...}}`, `{'content': [{'type': 'tool_call', ...}]}`) for programmatic consumers that want structure rather than rendered text. Both run the same tool loop.
 - `ToolCall(name, arguments, id=None, server=False)` builds a canonical tool call. It is a `dict` subclass, so indexing still works, with `.name`, `.arguments` and `.server` accessors. A call with `server=True` is one the *provider* runs, and the tool loop records it and never executes it locally. `mk_tool_res_msg(tc, result)` and `mk_tool_res_msgs(tcs, results)` build the `role='tool'` reply messages, if you're driving a loop by hand.
 
+## Options: one name per setting
+
+Everything backend-agnostic lives in [urai](https://github.com/vedicreader/urai), which rishi depends on and re-exports, so `from rishi.core import *` reaches it all. The part that matters when writing code against rishi is that a setting has one name whichever backend runs it:
+
+```python
+Chat('qwen3-4b.gguf', ctx=32_000, temp=0.2, max_output_tokens=512)   # llama.cpp
+Chat('gpt-5.1',       ctx=32_000, temp=0.2, effort='high')           # a hosted API
+```
+
+`ctx` is the context window on every runtime; each backend translates it to whatever its engine calls it (`n_ctx`, `num_ctx`, `eng_kw['max_num_tokens']`, `ctx_limit`). The full portable set is `urai.ChatOpts`: `sp`, `tools`, `messages`, `approve`, `max_steps`, `tool_max_len`, `parallel_tools`, `max_parallel_tools`, `final_prompt`, `cbs`, `default_cbs`, `ctx`, `max_output_tokens`, `temp`, `top_k`, `top_p`, `seed`, `think`, `effort`, `tool_mode`, `api_key`, `api_key_env`, `base_url`. Backend-specific knobs stay named on that backend's constructor (`quant`, `mmproj`, `keep_alive`, `conv_kw`, `comp_kw`, ...), and anything else passes through untouched.
+
+Generation settings also work for a single turn, so nothing has to be mutated to make one turn think harder:
+
+```python
+chat('a hard question', effort='high', temp=0.9, max_output_tokens=2048)
+```
+
+An option a backend cannot honour is dropped with a warning rather than in silence. The older spellings still work everywhere: `reasoning_effort`, `temperature`, `max_tokens`, `ctx_limit`, `n_ctx` and `system` alias onto their portable names.
+
+`resolve(name)` returns a `ModelSpec` (runtime, model id, window, note) without building anything, and `mk_chat(spec, **kw)` turns one into a `Chat`.
+
 ## Streaming and thinking
 
 ```python

@@ -40,6 +40,27 @@ print(resp_text(r))
 - Streaming has two modes: `chat(msg, stream=True)` yields **markdown strings** (print them, or hand to `display_stream`); `chat(msg, stream='raw')` yields the underlying **chunk dicts** (`{'content': [{'type': 'text', ...}]}`, `{'channels': {'thought': ...}}`, `{'content': [{'type': 'tool_call', ...}]}`) for programmatic consumers that want structure rather than rendered text. Both run the same tool loop.
 - `ToolCall(name, arguments, id=None, server=False)` builds a canonical tool call. It is a `dict` subclass, so indexing still works, with `.name`, `.arguments` and `.server` accessors. A call with `server=True` is one the *provider* runs, and the tool loop records it and never executes it locally. `mk_tool_res_msg(tc, result)` and `mk_tool_res_msgs(tcs, results)` build the `role='tool'` reply messages, if you're driving a loop by hand.
 
+## Options: one name per setting
+
+Everything backend-agnostic lives in [urai](https://github.com/vedicreader/urai), which rishi depends on and re-exports, so `from rishi.core import *` reaches it all. The part that matters when writing code against rishi is that a setting has one name whichever backend runs it:
+
+```python
+Chat('qwen3-4b.gguf', ctx=32_000, temp=0.2, max_output_tokens=512)   # llama.cpp
+Chat('gpt-5.1',       ctx=32_000, temp=0.2, effort='high')           # a hosted API
+```
+
+`ctx` is the context window on every runtime; each backend translates it to whatever its engine calls it (`n_ctx`, `num_ctx`, `eng_kw['max_num_tokens']`, `ctx_limit`). The full portable set is `urai.ChatOpts`: `sp`, `tools`, `messages`, `approve`, `max_steps`, `tool_max_len`, `parallel_tools`, `max_parallel_tools`, `final_prompt`, `cbs`, `default_cbs`, `ctx`, `max_output_tokens`, `temp`, `top_k`, `top_p`, `seed`, `think`, `effort`, `tool_mode`, `api_key`, `api_key_env`, `base_url`. Backend-specific knobs stay named on that backend's constructor (`quant`, `mmproj`, `keep_alive`, `conv_kw`, `comp_kw`, ...), and anything else passes through untouched.
+
+Generation settings also work for a single turn, so nothing has to be mutated to make one turn think harder:
+
+```python
+chat('a hard question', effort='high', temp=0.9, max_output_tokens=2048)
+```
+
+An option a backend cannot honour is dropped with a warning rather than in silence. The older spellings still work everywhere: `reasoning_effort`, `temperature`, `max_tokens`, `ctx_limit`, `n_ctx` and `system` alias onto their portable names.
+
+`resolve(name)` returns a `ModelSpec` (runtime, model id, window, note) without building anything, and `mk_chat(spec, **kw)` turns one into a `Chat`.
+
 ## Streaming and thinking
 
 ```python
@@ -258,13 +279,15 @@ chat = Chat('claude/claude-sonnet-5', sp='You are concise.')   # or ClaudeChat(s
 
 - Tools never travel as MCP. Claude Code declares a caller's tools as an in-process MCP server, and an organisation-managed configuration forbids every dynamic MCP server there is, which would leave the model with no tools at all. rishi opens none, and the schemas go out as `<tool_call>` tags in the system prompt, which `parse_tool_tags` reads back. `chat.tool_channel` is `'tags'`. Never claim `strict_mcp_config=True` either: a managed machine refuses that flag outright.
 - The conversation travels as a session transcript. `anth_msgs` turns `hist` into Anthropic messages, `llmsurgery` writes them as records under `CLAUDE_WORK_DIR` (`~/.rishi-claude`), and the turn resumes that id. So the model reads real messages: an `image` block for a picture, `document` for a PDF, and a `tool_use` answered by the `tool_result` that carries its id. `transcript=False`, or no `llmsurgery`, falls back to one flattened prompt, which carries no media.
+- A chat owns the transcripts it files, and `cleanup=True` (default) removes them: the one it replaces as it files the next, and the rest when it closes. A session id hashes the messages together with a nonce the chat was born with, so refiling a conversation is idempotent while two chats holding the same history never share a file. `prune_sessions(cwd=CLAUDE_WORK_DIR, keep=0, age=None)` sweeps a backlog left by a crash or by `cleanup=False`, and touches only records whose `entrypoint` is `'sdk-py'`. Records carry the installed binary's version, read once from `claude --version`.
 - `stateful=True` (default) keeps one Claude Code session per chat: one subprocess for the whole conversation, and a mid-turn tool result goes up as text, since a live session takes user turns. `stateful=False` files every turn as records instead, at one subprocess each. Fast against faithful.
 - `workspace=` names the directory Claude Code works in, and is where its transcripts are then filed. Unset means `CLAUDE_WORK_DIR`, to keep synthesized records out of a real project's history; `workspace='.'` opts back in.
-- Claude Code's own tools are off. `claude_disallowed` is `('Bash', 'Write', 'Edit', 'NotebookEdit')` and `tools=[]` goes out whenever this chat carries tools of its own. `claude_tools=` allowlists some back. `claude_server_tools=CLAUDE_SERVER_TOOLS` is the exception worth having: `WebSearch` and `WebFetch` run on Claude Code's side, so they need no schema and never reach rishi's tool loop.
+- Claude Code's own tools go off when yours come on. `tools=[]` goes out whenever this chat carries tools of its own, so rishi's are the only ones there are, and `claude_disallowed` (`('Bash', 'Write', 'Edit', 'NotebookEdit')`) is refused either way. A chat carrying no tools names none, so Claude Code keeps its own default set less those four: `Read`, `Grep`, `Glob` and `Task` are live, and `Read` is not confined to `workspace`. That is deliberate. The point of the backend is rishi's tools running inside Claude Code, not Claude Code reduced to a completion endpoint; ask for the endpoint with `claude_tools=[]`, and allowlist some back with `claude_tools=['Read']`. `claude_server_tools=CLAUDE_SERVER_TOOLS` is the exception worth having: `WebSearch` and `WebFetch` run on Claude Code's side, so they need no schema and never reach rishi's tool loop.
 - An ambient `ANTHROPIC_API_KEY` is blanked for the subprocess: it would silently turn a subscription session into a metered API one. `api_key=True` allows it.
 - `chat.use.cost` is what Claude Code itself reported for the turn, not a price table, and `cached_tokens`/`cache_creation_tokens` come straight off its usage block. Claude Code's own system prompt adds 48k to 53k prompt tokens per turn, most of it a cache read.
 - A failed turn raises `ClaudeError`, a `RuntimeError` carrying `.status` (429, 529, ...) and the raw `.raw` result, so a caller can tell a rate limit from a bad prompt. A cancelled turn is not a failure: whatever arrived first is the reply.
-- `ClaudeChat(model=None, *, sp='', messages=None, tools=None, permission_mode='auto', claude_tools=None, claude_disallowed=CLAUDE_DISALLOWED, claude_server_tools=(), workspace=None, effort=None, bare=True, stateful=True, transcript=True, api_key=False, max_buffer=MAX_BUFFER, bin='claude', timeout=600, settings=None, **kw)`, plus the usual `Chat` arguments. Model ids are `opus5`, `opus48`, `sonnet5`, `sonnet46`, `haiku45`, `fable5`, and `CLAUDE_MODELS` holds them all.
+- A model name resolves three ways: a `CLAUDE_MODELS` key (`'opus5'`), a pinned id (`'claude-opus-5'`), or one of Claude Code's own tier aliases (`CLAUDE_ALIASES`: `'opus'`, `'sonnet'`, `'haiku'`, `'fable'`), which each name the latest model of that tier on your plan and so outlive a model refresh. `claude_model` does the resolving and passes anything else through untouched. `fallback='sonnet,haiku'` is Claude Code's own `--fallback-model`: an overloaded or retired primary moves down the chain instead of ending the turn. `chat.set_model('haiku45')` switches mid-conversation, telling a live session directly rather than tearing it down; `set_model(None)` hands the choice back to Claude Code.
+- `ClaudeChat(model=None, *, sp='', messages=None, tools=None, permission_mode='auto', claude_tools=None, claude_disallowed=CLAUDE_DISALLOWED, claude_server_tools=(), workspace=None, effort=None, fallback=None, cleanup=True, bare=True, stateful=True, transcript=True, api_key=False, max_buffer=MAX_BUFFER, bin='claude', timeout=600, settings=None, **kw)`, plus the usual `Chat` arguments. Model ids are `opus5`, `opus48`, `sonnet5`, `sonnet46`, `haiku45`, `fable5`, and `CLAUDE_MODELS` holds them all.
 - Prefix only. `Chat('claude/claude-sonnet-5')` or `ClaudeChat(...)`, because a bare `claude-...` id still means the hosted API through `remote`.
 - `bare=True` answers as a model rather than as your IDE agent: no `CLAUDE.md`, skills, plugins or hooks. Tool calls depend on the model emitting the tags correctly, so use a Sonnet-tier or stronger model for tool-using turns.
 
