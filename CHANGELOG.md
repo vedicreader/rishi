@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.31
+discard special builds for litert
+
 ## 0.1.30
 litert fixes for speculative decoding
 
