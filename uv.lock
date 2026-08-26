@@ -4036,7 +4036,7 @@ wheels = [
 [[package]]
 name = "urai"
 version = "0.0.1"
-source = { git = "https://github.com/vedicreader/urai?branch=claude%2Framabana-branching-review-uqj6v2#69133508fdf5758ca53d1c282ed98adb4dbc4857" }
+source = { git = "https://github.com/vedicreader/urai?branch=claude%2Framabana-branching-review-uqj6v2#6344a40381889528566dc7f19a7e7e519a749240" }
 dependencies = [
     { name = "aidialog" },
     { name = "fastcore" },

@@ -24,7 +24,8 @@ __all__ = ['BACKENDS', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs', 'browser_a
            'ToolLoopMixin', 'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'qa_sp_', 'extract_fence',
            'matches_', 'mk_obj', 'extract_code', 'mk_result_fence', 'run_coro', 'task_complete', 'output_matches',
            'PyFenceCallback', 'sync_iter', 'killed_on_exit', 'CHAT_CACHE', 'KEY_VERSION', 'RECORD_ENV', 'is_transient',
-           'RecordCache', 'canon_msg', 'CachedChat', 'RecordedChat', 'MAX_FRAME', 'ChatBroker', 'BrokerChat']
+           'RecordCache', 'replaying', 'canon_msg', 'CachedChat', 'RecordedChat', 'MAX_FRAME', 'ChatBroker',
+           'BrokerChat']
 
 # %% ../nbs/00_core.ipynb #d122bb29
 import ast, asyncio, inspect, warnings
@@ -66,7 +67,8 @@ _all_ = ['system_certs', 'tool_reminder_', 'use_system_certs', 'UsageStats', 'Ch
          'msg_groups', 'evict_middle', 'SlidingWindowCallback', 'qa_sp_', 'extract_fence',
          'matches_', 'mk_obj', 'extract_code', 'mk_result_fence', 'run_coro', 'task_complete',
          'output_matches', 'PyFenceCallback', 'sync_iter', 'killed_on_exit', 'CHAT_CACHE',
-         'KEY_VERSION', 'RECORD_ENV', 'is_transient', 'RecordCache', 'canon_msg', 'CachedChat',
+         'KEY_VERSION', 'RECORD_ENV', 'is_transient', 'RecordCache', 'replaying', 'canon_msg',
+         'CachedChat',
          'RecordedChat', 'MAX_FRAME',
          'ChatBroker', 'BrokerChat']
 
