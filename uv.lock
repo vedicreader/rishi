@@ -3496,7 +3496,7 @@ requires-dist = [
     { name = "soundfile", marker = "extra == 'dev'", specifier = ">=0.14.0" },
     { name = "soundfile", marker = "extra == 'llama'", specifier = ">=0.14.0" },
     { name = "truststore", specifier = ">=0.10" },
-    { name = "urai", git = "https://github.com/vedicreader/urai?branch=claude%2Frishi-simplification-api-zqmjcq" },
+    { name = "urai", git = "https://github.com/vedicreader/urai?branch=claude%2Framabana-branching-review-uqj6v2" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'all'", specifier = ">=0.22" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'dev'", specifier = ">=0.22" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'ollama'", specifier = ">=0.22" },
@@ -4036,7 +4036,7 @@ wheels = [
 [[package]]
 name = "urai"
 version = "0.0.1"
-source = { git = "https://github.com/vedicreader/urai?branch=claude%2Frishi-simplification-api-zqmjcq#6f5c745c34e5b109da5242dbab7be7a45f0cbfe5" }
+source = { git = "https://github.com/vedicreader/urai?branch=claude%2Framabana-branching-review-uqj6v2#9b9d1597985e79162098f56909f34dde7fa3aa67" }
 dependencies = [
     { name = "aidialog" },
     { name = "fastcore" },

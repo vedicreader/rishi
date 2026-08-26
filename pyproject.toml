@@ -79,7 +79,7 @@ explicit = true
 
 [tool.uv.sources]
 # until urai is on PyPI. Drop this line once it is released.
-urai = { git = "https://github.com/vedicreader/urai", branch = "claude/rishi-simplification-api-zqmjcq" }
+urai = { git = "https://github.com/vedicreader/urai", branch = "claude/ramabana-branching-review-uqj6v2" }
 llama-cpp-python = [
     { index = "llama-metal", marker = "sys_platform == 'darwin' and platform_machine == 'arm64'" },
     { index = "llama-cpu", marker = "sys_platform != 'darwin' or platform_machine != 'arm64'" },
