@@ -193,9 +193,15 @@ gemma4_12b='litert-community/gemma-4-12B-it-litert-lm'
 # %% ../nbs/02_litert.ipynb #335a97782120c273
 #: `RISHI_LITERT_GPU=0` forces CPU when GPU/NPU init fails.
 LITERT_GPU = str2bool(os.getenv('RISHI_LITERT_GPU', '1').lower())
+#: Builds tied to one accelerator: `-gpu`, `-web`, and the `_Vendor_Chip` NPU exports.
+_special_build = re.compile(r'(-(gpu|web|npu)|_)[^/]*\.litertlm$')
+def _portable(p):
+    "Whether `p` is a build every backend can run: a `-gpu` build carries its text decoder and nothing else, and a vendor build wants that vendor's NPU."
+    return bool(p) and not _special_build.search(str(p))
+
 def _litertlm(fs):
-    "First native `.litertlm` path in `fs` (skips `-web`/other builds)."
-    return first(fs, lambda p: p.endswith('.litertlm') and 'web' not in p)
+    "Best native `.litertlm` path in `fs`: `-web` builds are skipped, and a portable build beats one tied to an accelerator."
+    return first(sorted([p for p in fs if p.endswith('.litertlm') and 'web' not in p], key=lambda p: not _portable(p)))
 
 def _cached_model(model_id):
     "Local `.litertlm` path from the HF cache without hitting the network, else None."
@@ -204,15 +210,33 @@ def _cached_model(model_id):
     return _litertlm(str(f.file_path) for r in repo.revisions for f in r.files) if repo else None
 
 def _get_model(model_id, model_path=None):
-    "Return a local `.litertlm` path: `model_path`, else HF cache, else download."
+    "Return a local `.litertlm` path: `model_path`, else the cache, else a download. A `-gpu`-only cache is a miss while a portable build can still be fetched."
     if model_path and Path(model_path).exists(): return model_path
-    if (hit := _cached_model(model_id)): return hit
-    if not (fn := _litertlm(list_repo_files(model_id))): raise FileNotFoundError(f"No .litertlm file found for {model_id}")
-    return hf_hub_download(model_id, fn)
+    hit = _cached_model(model_id)
+    if _portable(hit): return hit
+    try: fn = _litertlm(list_repo_files(model_id))
+    except Exception:
+        if hit: return hit
+        raise
+    if not fn and not hit: raise FileNotFoundError(f"No .litertlm file found for {model_id}")
+    return hf_hub_download(model_id, fn) if _portable(fn) or not hit else hit
 
 def _is_gpu(be):
     "Whether `be` is litert's GPU backend, as an instance or as the class."
     return isinstance(be, Backend.GPU) or (isinstance(be, type) and issubclass(be, Backend.GPU))
+
+#: Header names of the encoders a multimodal engine can be given a backend for.
+_encoders = {'vision_backend': b'tf_lite_vision_encoder', 'audio_backend': b'tf_lite_audio_encoder'}
+def _mm_kw(mod, vbe, abe):
+    "Vision/audio backends to build `mod` with, dropping any encoder its header does not name: asking for a missing one fails when the conversation opens, not here."
+    try:
+        with open(mod, 'rb') as f: head = f.read(1<<16)
+    except OSError: head = b''.join(_encoders.values())
+    out = {}
+    for k, v in (('vision_backend', vbe), ('audio_backend', abe)):
+        if _encoders[k] in head: out[k] = ifnone(v, Backend.CPU())
+        elif v is not None: warnings.warn(f"{Path(mod).name} carries no {k.split('_')[0]} encoder; building without one.")
+    return out
 
 def _gpu_act(be, kw):
     "Activation dtype to build a GPU engine with: litert's float16 default drops and repeats tokens once a prompt passes 2048."
@@ -250,10 +274,10 @@ class LitertChat(core.Chat):
         if cache_dir: Path(cache_dir).mkdir(parents=True, exist_ok=True)
         mod = _get_model(model_id, model_path)
         def _mk(b):
-            mm = dict(vision_backend=ifnone(vbe, Backend.CPU()), audio_backend=ifnone(abe, Backend.CPU()))
+            mm = _mm_kw(mod, vbe, abe) if multimodal else {}
             return Engine(mod, backend=b, cache_dir=cache_dir or '',
                           enable_speculative_decoding=enable_speculative_decoding,
-                          **_gpu_act(b, kw), **(mm if multimodal else {}), **kw)
+                          **_gpu_act(b, kw), **mm, **kw)
         if be is not None: return _mk(be)
         if LITERT_GPU:
             try: return _mk(Backend.GPU())
