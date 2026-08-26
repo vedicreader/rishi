@@ -194,8 +194,14 @@ gemma4_12b='litert-community/gemma-4-12B-it-litert-lm'
 #: `RISHI_LITERT_GPU=0` forces CPU when GPU/NPU init fails.
 LITERT_GPU = str2bool(os.getenv('RISHI_LITERT_GPU', '1').lower())
 def _litertlm(fs):
-    "First native `.litertlm` path in `fs` (skips `-web`/other builds)."
-    return first(fs, lambda p: p.endswith('.litertlm') and 'web' not in p)
+    """Best native `.litertlm` path in `fs`: skips `-web` builds, and prefers the portable one.
+
+    A `-gpu` build carries no CPU executor -- asked for one it fails deep in the loader with
+    `TF_LITE_PREFILL_DECODE not found in the model` -- and which file to fetch is settled before
+    anyone knows whether the GPU will start. The plain build runs either way, so when a repo
+    publishes both (`litert-community/gemma-4-E4B-it-litert-lm` does) it is the one to take."""
+    ps = [p for p in fs if p.endswith('.litertlm') and 'web' not in p]
+    return first(sorted(ps, key=lambda p: p.endswith('-gpu.litertlm')))
 
 def _cached_model(model_id):
     "Local `.litertlm` path from the HF cache without hitting the network, else None."
