@@ -6,9 +6,7 @@ Docs: https://vedicreader.github.io/rishi/remote.html.md"""
 
 # %% auto #0
 __all__ = ['NO_THINK_EFFORT', 'dflt_remote', 'DFLT_MAX_TOKENS', 'to_msg', 'to_hist', 'norm_usage', 'gen_media', 'norm_completion',
-           'RemoteChat', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
-           'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall',
-           'mk_tool_res_msg']
+           'RemoteChat']
 
 # %% ../nbs/04_remote.ipynb #rm_imports
 import json
@@ -18,8 +16,10 @@ from fastllm.types import Completion
 from aidialog.msg_parts import (Msg, Part, PartType, Text, Thinking, ToolUse, ToolResult,
                                 InputImage, InputAudio, data_url)
 from fastcore.all import store_attr, ifnone, listify
-from . import core
-from .core import *
+import rishi.core
+from urai import (Chat, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolCall, ToolLoopMixin, ToolReminderCallback,
+                  UsageCallback, UsageStats, display_stream, extract_fence, mk_content, mk_msg, mk_msgs, mk_toolspec, parse_tool_tags, resp_text, run_coro, split_runtime,
+                  sum_usage, sync_iter, thought, tag_tools_sp, to_media_part)
 
 # %% ../nbs/04_remote.ipynb #httpx2fix
 def _client_httpx():
@@ -43,11 +43,6 @@ def _fix_client_timeout():
         except Exception: pass
 
 _fix_client_timeout()
-
-# %% ../nbs/04_remote.ipynb #rm_reexport
-_all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
-         'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec',
-         'ToolCall', 'mk_tool_res_msg']
 
 # %% ../nbs/04_remote.ipynb #rm_msgs
 def _parts(content):
@@ -212,7 +207,7 @@ class RemoteChat(ToolLoopMixin, Chat):
                  comp_kw=None,       # passed to `acomplete` verbatim
                  **kw):              # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(opts, **kw)
-        self.model_id = core.split_runtime(model)[1] or dflt_remote
+        self.model_id = split_runtime(model)[1] or dflt_remote
         self.tool_mode = o.tool_mode or 'native'
         self.api_key, self.base_url = o.key, o.base_url or None
         self.reasoning_effort, self.temp = o.effort or None, o.temp

@@ -18,8 +18,10 @@ from litert_lm._messages import Text, ImageBytes, ImageFile, AudioBytes, AudioFi
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
 from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, img_bytes, AttrDict, in_, str2bool
 from safepyrun import RunPython
-from . import core
-from .core import *
+import rishi.core
+from urai import (BrokerChat, Chat, ChatBroker, ChatCallback, ChatOpts, ContextWindowExceededError, Resp, SlidingWindowCallback,
+                  StreamFormatter, UsageStats, budget_msg_, evict_middle, extract_fence, is_ctx_error, is_path,
+                  get_runtime, resp_text, run_cbs, split_runtime, thought, tool_reminder_)
 
 
 # %% ../nbs/02_litert.ipynb #6e295c9a
@@ -225,7 +227,7 @@ def _merge_chunks(chunks):
 
 _dflt_cbs = [_HistoryCallback, _UsageCallback, _ToolReminderCallback, SlidingWindowCallback]
 
-class LitertChat(core.Chat):
+class LitertChat(Chat):
     "Sync chat over a local litert_lm engine."
     _runtime = 'litert'
     _dflt_cbs = _dflt_cbs
@@ -278,7 +280,7 @@ class LitertChat(core.Chat):
         if o.parallel_tools: raise NotImplementedError(
             "litert runs its tool loop inside the engine, so it can't dispatch calls in parallel; "
             "use runtime='llama' (or 'mlx') for parallel_tools=True.")
-        model = core.split_runtime(model)[1]
+        model = split_runtime(model)[1]
         model_id = None if model is None or is_path(model) else model
         model_path = model_path or (model if model and is_path(model) else None)
         self._stack, self._conv_stack = ExitStack(), ExitStack()

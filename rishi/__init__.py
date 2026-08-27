@@ -1,7 +1,7 @@
 __version__ = "0.1.29"
 
+from urai import *
 from .core import *
-from .core import Chat, AsyncChat
 
 # Hosted remote/claude/copilot dependencies are baseline, but backend modules remain lazy.
 # Local litert/llama/mlx/ollama dependencies are optional extras.

@@ -6,10 +6,7 @@ Docs: https://vedicreader.github.io/rishi/llama.html.md"""
 
 # %% auto #0
 __all__ = ['DFLT_N_CTX', 'qwen3_06b', 'qwen3_17b', 'qwen3_4b', 'gemma3_1b', 'gemma3_4b', 'qwen3_6_fusion', 'ornith_9b',
-           'ornith_31b', 'get_mmproj', 'gpu_offload_supported', 'read_audio', 'LlamaChat', 'LlamaBroker', 'UsageStats',
-           'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream',
-           'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'split_think',
-           'parse_tool_tags', 'norm_resp', 'StreamSplit']
+           'ornith_31b', 'get_mmproj', 'gpu_offload_supported', 'read_audio', 'LlamaChat', 'LlamaBroker']
 
 # %% ../nbs/01_llama.ipynb #10a30d78
 import json, re, os, io, uuid, ctypes, asyncio
@@ -21,18 +18,13 @@ from llama_cpp import Llama
 from fastcore.funccall import get_schema, mk_ns
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
 from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, AttrDict
-from . import core
-from .core import *
+import rishi.core
+from urai import (Chat, ChatBroker, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolLoopMixin,
+                  ToolReminderCallback, UsageCallback, acc_tc, is_media, is_path, mk_content, mk_msg, mk_msgs,
+                  get_runtime, mk_tag_tc, norm_resp, parse_args, resp_text, split_runtime, strip_media, sum_usage, to_oai_msg)
 
 # %% ../nbs/01_llama.ipynb #3dcb0e40
-# names that used to live here and now come from `rishi.core`; re-exported so `from rishi.llama import *`
-# (and any code that imported them from here) keeps working unchanged
-_all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
-         'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence',
-         'mk_toolspec', 'split_think', 'parse_tool_tags', 'norm_resp', 'StreamSplit']
-
-# private aliases: the shared helpers kept their old llama-side names so existing call sites still resolve
-_mk_content, _mk_msg, _mk_msgs = mk_oai_content, mk_oai_msg, mk_oai_msgs
+_mk_content, _mk_msg, _mk_msgs = mk_content, mk_msg, mk_msgs
 _oai_msg, _sum_usage, _strip_media, _is_media = to_oai_msg, sum_usage, strip_media, is_media
 _parse_args, _mk_tag_tc, _acc_tc = parse_args, mk_tag_tc, acc_tc
 _UsageCallback, _ToolReminderCallback = UsageCallback, ToolReminderCallback
@@ -206,7 +198,7 @@ class LlamaChat(ToolLoopMixin, Chat):
                  comp_kw=None,            # passed to `create_chat_completion` verbatim
                  **kw):                   # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(opts, **kw)
-        model = core.split_runtime(model)[1]
+        model = split_runtime(model)[1]
         model_id = None if model is None or is_path(model) else model
         model_path = model_path or (model if model and is_path(model) else None)
         self._own_engine = engine is None

@@ -7,9 +7,7 @@ Docs: https://vedicreader.github.io/rishi/mlx.html.md"""
 # %% auto #0
 __all__ = ['qwen3_06b', 'qwen3_17b', 'DFLT_MAX_TOKENS', 'qwen3_4b', 'qwen3_8b', 'qwen3_30b', 'gemma3_4b', 'llama32_3b',
            'qwen3vl_4b', 'gemma4_e4b', 'qwen3omni_30b', 'read_config', 'is_vlm', 'ctx_len', 'cached_models',
-           'MlxEngine', 'MlxChat', 'MlxVlmChat', 'MlxBroker', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text',
-           'thought', 'Resp', 'StreamFormatter', 'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy',
-           'extract_fence', 'mk_toolspec', 'split_think', 'parse_tool_tags', 'StreamSplit']
+           'MlxEngine', 'MlxChat', 'MlxVlmChat', 'MlxBroker']
 
 # %% ../nbs/03_mlx.ipynb #cf11fc103db8abae
 import json, os
@@ -23,14 +21,10 @@ from mlx_lm.models.cache import (make_prompt_cache, trim_prompt_cache, can_trim_
 from huggingface_hub import hf_hub_download, scan_cache_dir
 from fastcore.funccall import get_schema, mk_ns
 from fastcore.all import Path, store_attr, patch, L, ifnone, first, listify
-from . import core
-from .core import *
-
-# %% ../nbs/03_mlx.ipynb #4acf570e3a78c822
-# re-exported so `from rishi.mlx import *` gives the same vocabulary as the other backends
-_all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
-         'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence',
-         'mk_toolspec', 'split_think', 'parse_tool_tags', 'StreamSplit']
+import rishi.core
+from urai import (Chat, ChatBroker, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolLoopMixin,
+                  ToolReminderCallback, UsageCallback, common_prefix_len, display_stream, get_runtime, extract_fence, is_media, is_path,
+                  mk_content, mk_msg, mk_msgs, resolve_runtime, resp_text, split_runtime, split_think, thought, truncated, strip_media, to_oai_msg)
 
 # %% ../nbs/03_mlx.ipynb #70712d3bc7721d7c
 #: Common mlx-community repo ids.
@@ -96,19 +90,19 @@ class MlxChat(ToolLoopMixin, Chat):
     _media_ok = False    # text-only; `MlxVlmChat` flips this
     _media_note = ("this MLX model is text-only. Install `pip install 'rishi[mlx-vlm]'` and use a vision "
                    "model (e.g. rishi.mlx.qwen3vl_4b) for image or audio input, or pass vlm=True.")
-    mk_content, mk_msg, mk_msgs = staticmethod(mk_oai_content), staticmethod(mk_oai_msg), staticmethod(mk_oai_msgs)
+    mk_content, mk_msg, mk_msgs = staticmethod(mk_content), staticmethod(mk_msg), staticmethod(mk_msgs)
 
     def __new__(cls, model=None, *, runtime=None, model_path=None, vlm=None, **kw):
         "Send a vision or audio repo to `MlxVlmChat`. `vlm=True` or `vlm=False` overrides the config sniff."
         if cls is MlxChat:
-            tgt = model_path or core.split_runtime(model)[1] or ''
+            tgt = model_path or split_runtime(model)[1] or ''
             if vlm if vlm is not None else (bool(tgt) and is_vlm(tgt)): return object.__new__(MlxVlmChat)
         return object.__new__(cls)
 
     @staticmethod
     def fmt2hist(msgs):
         "Normalize MLX messages to rishi history dicts."
-        return mk_oai_msgs(msgs)
+        return mk_msgs(msgs)
     @staticmethod
     def hist2fmt(msgs):
         "Canonical rishi history dicts -> OpenAI-style messages for the chat template (past-turn media -> placeholder)."
@@ -140,7 +134,7 @@ class MlxChat(ToolLoopMixin, Chat):
                  gen_kw=None,            # passed to `stream_generate` verbatim
                  **kw):                  # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(opts, **kw)
-        model = core.split_runtime(model)[1]
+        model = split_runtime(model)[1]
         model_id = None if model is None or is_path(model) else model
         model_path = model_path or (model if model and is_path(model) else None)
         if o.seed is not None: mx.random.seed(o.seed)

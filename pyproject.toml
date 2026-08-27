@@ -16,7 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "urai>=0.0.1",
+    "uraiyadal>=0.0.1",
     "fastcore>=2.0.0",
     "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",
@@ -26,28 +26,23 @@ dependencies = [
     "aidialog>=0.0.10",
     "claude-agent-sdk>=0.2",
     "llmsurgery>=0.0.13",
-    "httpx",
+    "httpx"
 ]
 
 [project.optional-dependencies]
 litert = ["litert-lm-api>=0.14.0"]
 remote = []
+claude = []
+copilot = []
 mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
-mlx-vlm = [
-    "mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'",
-]
+mlx-vlm = ["mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 llama = [
     "llama-cpp-python==0.3.30",  # pinned: abetlen's 0.3.33/0.3.34 metal wheels are corrupt upstream (bad internal CRCs)
     "soundfile>=0.14.0",
     "numpy",
 ]
-ollama = [
-    "zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'",
-]
-copilot = []
-claude = []
-record = ["diskcache>=5.6.3",]
-all = ["rishi[litert,mlx,mlx-vlm,llama,ollama,record]"]
+ollama = ["zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'"]
+all = ["rishi[litert,mlx,mlx-vlm,llama,ollama]"]
 dev = ["rishi[all]",]
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"
@@ -78,8 +73,6 @@ url = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
 explicit = true
 
 [tool.uv.sources]
-# until urai is on PyPI. Drop this line once it is released.
-urai = { git = "https://github.com/vedicreader/urai", branch = "claude/ramabana-branching-review-uqj6v2" }
 llama-cpp-python = [
     { index = "llama-metal", marker = "sys_platform == 'darwin' and platform_machine == 'arm64'" },
     { index = "llama-cpu", marker = "sys_platform != 'darwin' or platform_machine != 'arm64'" },

@@ -1,4 +1,4 @@
-"""Claude Code's models through the Agent SDK. An agent with its own harness, not a completion endpoint.
+"""Claude Code models through the Agent SDK.
 
 Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 
@@ -10,9 +10,7 @@ __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'f
            'INTERRUPT_WAIT', 'CONT_PROMPT', 'EMPTY_RESULT', 'claude_bin', 'claude_model', 'claude_fallback',
            'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError', 'claude_status',
            'claude_tool_use', 'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat',
-           'anth_blocks', 'tu_id', 'anth_msgs', 'claude_prompt', 'UsageStats', 'ChatCallback', 'run_cbs', 'resp_text',
-           'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy', 'extract_fence',
-           'mk_toolspec', 'ToolCall']
+           'anth_blocks', 'tu_id', 'anth_msgs', 'claude_prompt']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import asyncio, atexit, json, os, re, shutil, subprocess, sys, time, uuid, weakref
@@ -21,14 +19,12 @@ from llmsurgery import ant
 from base64 import b64encode
 from pathlib import Path
 from contextlib import contextmanager
-from fastcore.all import store_attr, patch, ifnone, listify
+from fastcore.all import store_attr, patch, ifnone, listify, detect_mime
 from fastcore.aio import run_sync, iter_sync
-from . import core
-from .core import *
-
-# %% ../nbs/06_claude.ipynb #cl_reexport
-_all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
-         'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
+import rishi.core
+from urai import (Chat, ChatOpts, ROLE_NAMES, Resp, SlidingWindowCallback, StreamSplit, ToolLoopMixin, ToolReminderCallback,
+                  UsageCallback, est_tokens, is_media, mk_content, parse_args, parse_tool_tags, render_prompt, resp_text, split_runtime,
+                  split_think, sync_iter, tag_tools_sp, tc_name, to_media_part)
 
 # %% ../nbs/06_claude.ipynb #cl_wire
 CLAUDE_BIN = 'claude'   #: the binary the SDK spawns, overridden per chat with `bin=`
@@ -173,23 +169,18 @@ CONT_PROMPT = 'The tool results are in. Continue your answer.'
 
 # %% ../nbs/06_claude.ipynb #0b45f039
 def mk_claude_content(o):
-    """`mk_oai_content`, plus the documents Claude Code takes and OpenAI content has no part for.
-
-    A PDF rides in the same `image_url` envelope the other media use. That envelope is rishi's
-    internal shape for "a data URL in the history"; the mime inside it is what `_to_parts` reads to
-    choose between an Anthropic `image` block and a `document` one.
-    """
-    if isinstance(o, (dict, str)): return mk_oai_content(o)
+    """`mk_content`, plus the documents Claude Code accepts."""
+    if isinstance(o, (dict, str)): return mk_content(o)
     b = Path(o).read_bytes() if isinstance(o, os.PathLike) else o
     if isinstance(b, bytes):
-        mime = core.detect_mime(b) or ''
+        mime = detect_mime(b) or ''
         if not mime.startswith(('image/', 'audio/')):
             return {'type': 'image_url',
                     'image_url': {'url': f'data:{mime or "application/octet-stream"};base64,{b64encode(b).decode()}'}}
-    return mk_oai_content(o)
+    return mk_content(o)
 
 def mk_claude_msg(content, role='user'):
-    "`mk_oai_msg` built out of `mk_claude_content`."
+    "`mk_msg` built out of `mk_claude_content`."
     if content is None or isinstance(content, dict): return content
     parts = [mk_claude_content(o) for o in content] if isinstance(content, list) else [mk_claude_content(content)]
     if all(p.get('type') == 'text' for p in parts): return {'role': role, 'content': '\n'.join(p['text'] for p in parts)}
@@ -200,7 +191,7 @@ def mk_claude_msgs(msgs): return [mk_claude_msg(m) for m in listify(msgs)] if ms
 
 # %% ../nbs/06_claude.ipynb #cl_chat
 class ClaudeChat(ToolLoopMixin, Chat):
-    "Chat against a Claude Code model, with the same `rishi.core.Chat` API over the Agent SDK."
+    "Chat against Claude Code through Urai's `Chat` API."
     _runtime = 'claude'
     _media_note = ("this Claude Code chat cannot carry a picture or a document: it is stateless and has "
                    "no transcript to file, so the conversation goes as one text prompt, which has nowhere "
@@ -234,7 +225,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
                  bin=CLAUDE_BIN, timeout=600, settings=None,
                  **kw):                     # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(opts, **kw)
-        self.model_id = claude_model(core.split_runtime(model)[1])
+        self.model_id = claude_model(split_runtime(model)[1])
         self._set_tools(o.tools)
         self.effort = o.effort or None      # 'low'/'medium'/'high'/'xhigh'/'max'
         store_attr('permission_mode,claude_tools,claude_disallowed,claude_server_tools,workspace,'

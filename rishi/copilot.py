@@ -9,21 +9,16 @@ __all__ = ['COPILOT_API', 'COPILOT_TOKEN_URL', 'COPILOT_CLIENT_ID', 'EDITOR_VERS
            'INTEGRATION_ID', 'API_VERSION', 'COPILOT_ENVS', 'GITHUB_ENVS', 'OAUTH_ENVS', 'DEVICE_CODE_URL',
            'ACCESS_TOKEN_URL', 'copilot_default', 'copilot_hdrs', 'oauth_paths', 'find_oauth', 'read_oauth',
            'copilot_oauth', 'CopilotToken', 'copilot_exchange', 'CopilotAuth', 'copilot_catalog', 'copilot_models',
-           'copilot_ctx', 'save_oauth', 'copilot_login', 'CopilotChat', 'UsageStats', 'ChatCallback', 'run_cbs',
-           'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream', 'truncated', 'hitl_policy',
-           'extract_fence', 'mk_toolspec', 'ToolCall']
+           'copilot_ctx', 'save_oauth', 'copilot_login', 'CopilotChat']
 
 # %% ../nbs/07_copilot.ipynb #cp_imports
 import json, os, time
 import httpx
 from dataclasses import dataclass, replace
 from fastcore.all import L, Path, store_attr, first
-from .core import *
+import rishi.core
+from urai import Chat, ChatOpts, ToolCall, display_stream, get_runtime, resolve_runtime, resp_text
 from .remote import RemoteChat
-
-# %% ../nbs/07_copilot.ipynb #cp_reexport
-_all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
-         'display_stream', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall']
 
 # %% ../nbs/07_copilot.ipynb #cp_wire
 #: Where Copilot listens when the token exchange names no endpoint of its own.

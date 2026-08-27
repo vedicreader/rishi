@@ -60,11 +60,11 @@ through `Chat`.
 
 ### Running a real model with no API key
 - The other keyless path is ollama, which needs nothing installed beforehand:
-  `from rishi.core import Chat, resp_text; chat = Chat('ollama/qwen3:0.6b'); print(resp_text(chat('hi')))`.
+  `from rishi import Chat, resp_text; chat = Chat('ollama/qwen3:0.6b'); print(resp_text(chat('hi')))`.
   That installs Ollama, starts the daemon, pulls about 500MB of weights, and stops the daemon at
   exit. `stop_ollama()` ends it sooner.
 - The keyless, self-contained path is the llama.cpp backend with a small GGUF:
-  `from rishi.core import Chat, resp_text; chat = Chat('Qwen/Qwen3-0.6B-GGUF', n_ctx=2048); print(resp_text(chat('hi')))`.
+  `from rishi import Chat, resp_text; chat = Chat('Qwen/Qwen3-0.6B-GGUF', n_ctx=2048); print(resp_text(chat('hi')))`.
   The weights download once from the HF Hub, with no token needed, and are cached. Inference runs on
   CPU.
 - The `remote` backend needs provider keys such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or

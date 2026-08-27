@@ -9,10 +9,7 @@ __all__ = ['OLLAMA_HOST', 'LOCAL_HOSTS', 'qwen3_06b', 'qwen3_17b', 'qwen3_4b', '
            'dflt_model', 'HF_HOSTS', 'OLLAMA_DIR', 'SERVE_ENV', 'CAP_INPUT', 'ollama_url', 'is_local', 'ollama_model',
            'OllamaError', 'OllamaClient', 'fmt_bytes', 'pull_progress', 'install_url', 'ollama_bin', 'extract_archive',
            'download', 'install_ollama', 'OllamaServer', 'ensure_ollama', 'stop_ollama', 'to_ollama_msg',
-           'to_ollama_msgs', 'ollama_usage', 'norm_ochat', 'dflt_ctx', 'OllamaChat', 'ollama_caps', 'UsageStats',
-           'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter', 'display_stream',
-           'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec', 'ToolCall', 'mk_tool_res_msg',
-           'Caps']
+           'to_ollama_msgs', 'ollama_usage', 'norm_ochat', 'dflt_ctx', 'OllamaChat', 'ollama_caps']
 
 # %% ../nbs/08_ollama.ipynb #ol_imports
 import json, os, time, atexit, platform, shutil, subprocess, tarfile, zipfile
@@ -20,14 +17,10 @@ import httpx2 as httpx
 from urllib.parse import urlsplit
 from fastcore.funccall import get_schema
 from fastcore.all import Path, store_attr, L, ifnone, first, listify
-from . import core
-from .core import *
-
-# %% ../nbs/08_ollama.ipynb #ol_reexport
-# shared names re-exported, so `from rishi.ollama import *` gives what the other backends give
-_all_ = ['UsageStats', 'ChatCallback', 'run_cbs', 'resp_text', 'thought', 'Resp', 'StreamFormatter',
-         'display_stream', 'mk_tr_details', 'truncated', 'hitl_policy', 'extract_fence', 'mk_toolspec',
-         'ToolCall', 'mk_tool_res_msg', 'Caps']
+import rishi.core
+from urai import (Caps, Chat, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolCall, ToolLoopMixin,
+                  ToolReminderCallback, UsageCallback, est_tokens, is_path, mk_content, mk_msg, mk_msgs, parse_args, parse_tool_tags, render_prompt,
+                  model_caps, resp_text, split_runtime, split_think, thought, truncated, tc_name)
 
 # %% ../nbs/08_ollama.ipynb #ol_addr
 #: Where Ollama listens unless `$OLLAMA_HOST` says otherwise.
@@ -416,15 +409,15 @@ def dflt_ctx():
     except ValueError: return 4096
 
 class OllamaChat(ToolLoopMixin, Chat):
-    "Sync chat against a model on an Ollama daemon: the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
+    "Sync chat against an Ollama daemon through Urai's tool loop."
     _runtime = 'ollama'
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
-    mk_content, mk_msg, mk_msgs = staticmethod(mk_oai_content), staticmethod(mk_oai_msg), staticmethod(mk_oai_msgs)
+    mk_content, mk_msg, mk_msgs = staticmethod(mk_content), staticmethod(mk_msg), staticmethod(mk_msgs)
 
     @staticmethod
     def fmt2hist(msgs):
         "Normalize incoming messages to canonical rishi history dicts."
-        return mk_oai_msgs(msgs)
+        return mk_msgs(msgs)
     @staticmethod
     def hist2fmt(msgs):
         "Canonical rishi history dicts -> Ollama messages."
@@ -444,7 +437,7 @@ class OllamaChat(ToolLoopMixin, Chat):
                  comp_kw=None,             # merged into the request body verbatim
                  **kw):                    # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(opts, **kw)
-        model = core.split_runtime(model)[1]
+        model = split_runtime(model)[1]
         self.model_id = ollama_model(model or model_path, quant)
         self._own_client = client is None
         self.client = client or ensure_ollama(host, install=install, serve=serve, srv_kw=srv_kw,
@@ -572,7 +565,7 @@ class OllamaChat(ToolLoopMixin, Chat):
             raise ValueError(f'model returned no JSON for the schema; reply: {txt[:200]!r}') from None
 
 # %% ../nbs/08_ollama.ipynb #ol_caps
-#: `/api/show` capability -> what `rishi.core.Caps` calls that input modality.
+#: `/api/show` capability -> Urai input modality.
 CAP_INPUT = {'vision': 'image'}
 
 def ollama_caps(model=None, client=None, quant='Q4_K_M'):
