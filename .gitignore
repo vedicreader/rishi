@@ -160,4 +160,8 @@ checklink/cookies.txt
 .claude/
 # Local agent and tool scaffolding, not part of the package
 .gheasy/
-docs/superpowers/
+.agents/
+.cache/
+.kosha/
+docs/
+leela_sessions/
