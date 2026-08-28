@@ -47,7 +47,6 @@ def _mk_msgs(msgs):
     return [normalize_message(m if isinstance(m, (Message, dict)) else _mk_msg(m)) for m in listify(msgs)]
 
 # %% ../nbs/02_litert.ipynb #e2f22e05c7e09016
-#: Short unique id for litert tool-call messages.
 def _call_id(): return f"call_{uuid.uuid4().hex[:8]}"
 
 _ph = {'image': '[image]', 'audio': '[audio]'}
@@ -194,15 +193,14 @@ gemma4_12b='litert-community/gemma-4-12B-it-litert-lm'
 
 # %% ../nbs/02_litert.ipynb #335a97782120c273
 #: `RISHI_LITERT_GPU=0` forces CPU when GPU/NPU init fails.
-LITERT_GPU = str2bool(os.getenv('RISHI_LITERT_GPU', '1').lower())
-#: Builds tied to one accelerator: `-gpu`, `-web`, and the `_Vendor_Chip` NPU exports.
 _special_build = re.compile(r'(-(gpu|web|npu)|_)[^/]*\.litertlm$')
 def _portable(p):
-    "Whether `p` is a build every backend can run: a `-gpu` build carries its text decoder and nothing else, and a vendor build wants that vendor's NPU."
+    "Whether `p` is portable across LiteRT backends."
     return bool(p) and not _special_build.search(str(p))
 
+LITERT_GPU = str2bool(os.getenv('RISHI_LITERT_GPU', '1').lower())
 def _litertlm(fs):
-    "Best native `.litertlm` path in `fs`: `-web` builds are skipped, and a portable build beats one tied to an accelerator."
+    "Select a portable `.litertlm`, excluding web builds."
     return first(sorted([p for p in fs if p.endswith('.litertlm') and 'web' not in p], key=lambda p: not _portable(p)))
 
 def _cached_model(model_id):
@@ -212,7 +210,7 @@ def _cached_model(model_id):
     return _litertlm(str(f.file_path) for r in repo.revisions for f in r.files) if repo else None
 
 def _get_model(model_id, model_path=None):
-    "Return a local `.litertlm` path: `model_path`, else the cache, else a download. A `-gpu`-only cache is a miss while a portable build can still be fetched."
+    "Return a local `.litertlm` path: `model_path`, else HF cache, else download."
     if model_path and Path(model_path).exists(): return model_path
     hit = _cached_model(model_id)
     if _portable(hit): return hit
@@ -230,7 +228,7 @@ def _is_gpu(be):
 #: Header names of the encoders a multimodal engine can be given a backend for.
 _encoders = {'vision_backend': b'tf_lite_vision_encoder', 'audio_backend': b'tf_lite_audio_encoder'}
 def _mm_kw(mod, vbe, abe):
-    "Vision/audio backends to build `mod` with, dropping any encoder its header does not name: asking for a missing one fails when the conversation opens, not here."
+    "Return backends for encoders present in `mod`."
     try:
         with open(mod, 'rb') as f: head = f.read(1<<16)
     except OSError: head = b''.join(_encoders.values())
@@ -241,7 +239,7 @@ def _mm_kw(mod, vbe, abe):
     return out
 
 def _gpu_act(be, kw):
-    "Activation dtype to build a GPU engine with: litert's float16 default drops and repeats tokens once a prompt passes 2048."
+    "Use float32 GPU activations unless the caller chose a dtype."
     return {} if 'activation_data_type' in kw or not _is_gpu(be) else {'activation_data_type': ActivationDataType.FLOAT32}
 
 def _merge_chunks(chunks):
@@ -278,8 +276,7 @@ class LitertChat(Chat):
         def _mk(b):
             mm = _mm_kw(mod, vbe, abe) if multimodal else {}
             return Engine(mod, backend=b, cache_dir=cache_dir or '',
-                          enable_speculative_decoding=enable_speculative_decoding,
-                          **_gpu_act(b, kw), **mm, **kw)
+                          enable_speculative_decoding=enable_speculative_decoding, **_gpu_act(b, kw), **mm, **kw)
         if be is not None: return _mk(be)
         if LITERT_GPU:
             try: return _mk(Backend.GPU())

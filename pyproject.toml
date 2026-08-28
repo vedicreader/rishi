@@ -26,24 +26,17 @@ dependencies = [
     "aidialog>=0.0.10",
     "claude-agent-sdk>=0.2",
     "llmsurgery>=0.0.13",
-    "httpx"
+    "httpx",
+    "litert-lm-api>=0.14.0"
 ]
 
 [project.optional-dependencies]
-litert = ["litert-lm-api>=0.14.0"]
-remote = []
-claude = []
-copilot = []
 mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 mlx-vlm = ["mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'"]
-llama = [
-    "llama-cpp-python==0.3.30",  # pinned: abetlen's 0.3.33/0.3.34 metal wheels are corrupt upstream (bad internal CRCs)
-    "soundfile>=0.14.0",
-    "numpy",
-]
+llama = ["llama-cpp-python==0.3.30", "soundfile>=0.14.0", "numpy"]
 ollama = ["zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'"]
-all = ["rishi[litert,mlx,mlx-vlm,llama,ollama]"]
-dev = ["rishi[all]",]
+all = ["rishi[mlx,mlx-vlm,llama,ollama]"]
+
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"
 Documentation = "https://vedicreader.github.io/rishi/"

@@ -183,7 +183,7 @@ class MlxChat(ToolLoopMixin, Chat):
         if self._cache is not None: self._reset_cache()
 
     def _trim(self, n):
-        "Drop the last `n` tokens from the KV cache. On a cache that cannot be trimmed, reset it and return False."
+        "Trim `n` cached tokens, or reset an untrimmable cache."
         if can_trim_prompt_cache(self._cache) and trim_prompt_cache(self._cache, n) == n:
             self._cache_ids = self._cache_ids[:len(self._cache_ids) - n]
             return True
@@ -268,7 +268,7 @@ class MlxChat(ToolLoopMixin, Chat):
         return self._step_res
 
     def _cache_metadata(self):
-        "Identity/settings that must match before a persisted KV cache can safely be reused."
+        "Compatibility metadata for a persisted KV cache."
         cfg = dict(model_id=self.engine.model_id, draft_model_id=self.engine.draft_model_id,
                    max_kv_size=self.max_kv_size, kv_bits=self.kv_bits,
                    kv_group_size=self.kv_group_size, quantized_kv_start=self.quantized_kv_start)
@@ -304,7 +304,7 @@ class MlxChat(ToolLoopMixin, Chat):
         return split_think(self._raw(msgs, max_output_tokens=max_tokens, think=think))[0]
 
     def _structured_call(self, prompt, schema, sp):
-        "JSON reply for `schema`, parsed out of the model's text. mlx-lm has no grammar constraint built in, so this asks and then parses."
+        "Parse a JSON reply for `schema`."
         p = f"{prompt}\n\nReply with only a JSON object matching this schema:\n{json.dumps(get_schema(schema)['input_schema'])}"
         txt = self._oneshot(p, sp, think=False)
         try: return json.loads(extract_fence(txt, 'json'))
@@ -330,7 +330,7 @@ def _media_bytes(p):
     return b64decode(p['input_audio']['data'])
 
 class MlxVlmChat(MlxChat):
-    "MLX chat for vision and audio models, via `mlx-vlm`. Same API as `MlxChat`, and media in the live turn reaches the model."
+    "MLX chat for vision and audio models through `mlx-vlm`."
     _media_ok = True
 
     @classmethod

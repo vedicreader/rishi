@@ -137,7 +137,7 @@ def get_image_urls(self:MTMDChatHandler, messages):
 
 @patch
 def _get_template_messages(self:MTMDChatHandler, messages, media_marker):
-    "Swap media parts for the marker, then collapse an all-text content list to a string. Templates that render `content` directly, Llama and Voxtral style, would otherwise emit the list's Python repr."
+    "Replace media with `media_marker` and collapse text parts to a string."
     def _conv(m):
         c = m.get('content')
         if not isinstance(c, list): return dict(m)
@@ -232,17 +232,12 @@ class LlamaChat(ToolLoopMixin, Chat):
 
     @property
     def cached_tokens(self):
-        """Prompt tokens llama.cpp's KV cache can reuse on the next call.
-
-        llama.cpp does this itself: `Llama.generate` compares the incoming prompt against the tokens
-        already in the context and evaluates only the divergent tail, so an appended turn reuses the
-        whole conversation. What it cannot tell us is *how much* it reused, so rishi tracks the one
-        thing it knows, which is whether it invalidated the prefix itself."""
+        "Prompt tokens available for reuse on the next call."
         owner = getattr(self.engine, '_rishi_cache_owner', None)
         return 0 if self._cache_dirty or owner is not self else getattr(self.engine, 'n_tokens', 0) or 0
 
     def _recreate_conv(self):
-        "llama re-sends the whole message list, so there is no conversation to rebuild. A rewritten history, after eviction or context recovery, no longer matches the cached prefix."
+        "Invalidate the cached prefix after history changes."
         self._cache_dirty = True
         if getattr(self.engine, '_rishi_cache_owner', None) is self: self.engine._rishi_cache_owner = None
 
@@ -258,11 +253,7 @@ class LlamaChat(ToolLoopMixin, Chat):
         return usage
 
     def _isolated(self, f):
-        """Run `f` on the shared engine, optionally without losing the conversation's KV cache.
-
-        A `Llama` has one context, so any completion overwrites it. A `classify`, `structured` or `check`
-        call costs the next real turn a full re-prefill. `preserve_cache=True` saves and restores the
-        whole llama state around it instead. That is a large copy, so it only pays off on big contexts."""
+        "Run `f`, preserving the KV cache when configured."
         if not self.preserve_cache:
             self._cache_dirty = True
             if getattr(self.engine, '_rishi_cache_owner', None) is self: self.engine._rishi_cache_owner = None

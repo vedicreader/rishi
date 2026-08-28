@@ -57,11 +57,7 @@ def claude_bin(bin=CLAUDE_BIN):
         f'`{bin} /login`. rishi drives it as a subprocess and never reads your credentials.')
 
 def claude_model(model=None, dflt=opus5):
-    """A name Claude Code takes: a `CLAUDE_MODELS` key resolved to its id, anything else as it is.
-
-    So `'opus5'`, `'claude-opus-5'` and the CLI's own `'opus'` all reach `--model`, and an id rishi
-    has never heard of is passed through rather than second-guessed here.
-    """
+    "Resolve a `CLAUDE_MODELS` key; pass other names through."
     m = (model or '').strip()
     return CLAUDE_MODELS.get(m, m) if m else dflt
 
@@ -81,12 +77,7 @@ def claude_version(bin=CLAUDE_BIN):
     return _cc_version[bin]
 
 def sess_entrypoint(p, mx=50):
-    """What a transcript says wrote it, or None.
-
-    Claude Code writes its own bookkeeping first: `queue-operation` and `mode` records sit ahead of
-    the session header, so the first line does not carry `entrypoint` and reading only that line
-    read every transcript as somebody else's.
-    """
+    "Return a transcript's `entrypoint`, if present in its first `mx` records."
     try:
         with p.open() as f:
             for i, l in enumerate(f):
@@ -137,12 +128,7 @@ def claude_status(d):
     return int(m.group(1)) if m else None
 
 def claude_tool_use(b, sdk):
-    """A `ToolUseBlock` as a plain record, or None for any other block.
-
-    Claude Code runs its own tools and any MCP server's on its side, so these are a report of what
-    already happened rather than a call rishi has to make. An MCP tool is named
-    `mcp__<server>__<tool>`, which is how a caller tells one apart from Claude Code's own.
-    """
+    "Convert a `ToolUseBlock` to a plain record, else return `None`."
     if not isinstance(b, getattr(sdk, 'ToolUseBlock', ())): return None
     name = getattr(b, 'name', '') or ''
     server = name.split('__')[1] if name.startswith('mcp__') and name.count('__') >= 2 else ''
@@ -255,12 +241,7 @@ class ClaudeChat(ToolLoopMixin, Chat):
 
     @property
     def _cwd(self):
-        """The directory Claude Code runs in, which is also where a filed transcript lives.
-
-        `workspace` when you named one, so a chat pointed at a project keeps its records with it.
-        Otherwise `CLAUDE_WORK_DIR`, to keep synthesized transcripts out of a real project's
-        history; pass `workspace='.'` to opt back into the current directory.
-        """
+        "The working directory and transcript location."
         d = Path(self.workspace).expanduser() if self.workspace else CLAUDE_WORK_DIR
         return d.resolve()
 
@@ -430,13 +411,10 @@ def anth_msgs(hist, ant):
     out, called = [], set()
     for m in hist:
         role = m.get('role')
-        if role == 'system': continue                  # the briefing has a channel of its own
+        if role == 'system': continue
         if role == 'tool':
             tid, txt = tu_id(m.get('tool_call_id'), ant), str(ifnone(m.get('content'), ''))
-            # a tool that found nothing answers with nothing, and an empty block is a 400:
-            # "messages: text content blocks must be non-empty". Say it ran and said nothing.
             if not txt.strip(): txt = EMPTY_RESULT
-            # a `tool_result` answering no `tool_use` is a 400, and a hand-built history can hold one
             blocks = ([{'type': 'tool_result', 'tool_use_id': tid, 'content': txt}] if tid in called
                       else [{'type': 'text', 'text': f"Tool result ({m.get('name', '?')})\n{txt}"}])
             role = 'user'
@@ -476,8 +454,6 @@ def _file_sess(self:ClaudeChat, hist=None):
                          version=claude_version(self.bin))
     for r in recs:
         c = r['message']['content']
-        # An assistant record's content must be a list: Claude Code calls `.some()` on it. The `ant`
-        # rishi depends on already writes one; this stands so a change there cannot break a resume.
         if r['type'] == 'assistant' and isinstance(c, str): r['message']['content'] = [{'type': 'text', 'text': c}]
     ant.save_sess(recs, sid, cwd)
     self._note_filed(ant.sess_file(sid, cwd))
@@ -487,8 +463,8 @@ def _file_sess(self:ClaudeChat, hist=None):
 def _note_filed(self:ClaudeChat, p):
     "Remember a transcript this chat wrote, and with `cleanup` drop the one it replaces."
     p = Path(p)
-    if p in self._filed: return p             # refiled, not replaced: the same history, the same file
-    if self.cleanup: self._sweep(keep=p)      # one chat, one transcript on disk
+    if p in self._filed: return p
+    if self.cleanup: self._sweep(keep=p)
     self._filed.append(p)
     return p
 
@@ -532,11 +508,7 @@ def _close_sessions():
 
 @patch
 def _connect(self:ClaudeChat):
-    """The live session, opened on first use. `_sp()` is fixed here: the SDK has no way to change it later.
-
-    The past is filed and resumed rather than replayed as prose, so the session opens already holding
-    the conversation as records. `fork_session` keeps its own turns out of that file.
-    """
+    "Open or return the live Claude Code session."
     if self.client is not None: return self.client
     past, _ = self._split_turn()
     sid = self._file_sess(past)
@@ -549,7 +521,7 @@ def _connect(self:ClaudeChat):
 
 @patch
 def _disconnect(self:ClaudeChat):
-    "End the session if there is one, and sweep what it filed. The loop outlives it, ready for the next."
+    "End the session and remove its filed transcripts."
     c = getattr(self, 'client', None)
     self.client, self._sent, self._last_res, self._stale = None, 0, None, False
     self._ctx_live = 0
@@ -566,8 +538,9 @@ def _delta(self:ClaudeChat):
     if self._sent < len(self.hist) and self.hist[self._sent] is self._last_res:
         self._sent += 1             # the session wrote this one; sending it back would echo it
     new = self.hist[self._sent:]
+    out = self._as_turn(new)
     self._sent = len(self.hist)
-    return self._as_turn(new)
+    return f'{out}\n\n{CONT_PROMPT}' if new and new[-1].get('role') == 'tool' else out
 
 # %% ../nbs/06_claude.ipynb #d3ad2ce7
 @patch
@@ -582,16 +555,7 @@ def cancel(self:ClaudeChat):
 
 @patch
 def set_model(self:ClaudeChat, model=None):
-    """Switch this chat's model, mid-conversation when a session is live, and return the new id.
-
-    A live session was opened with the old id and the SDK cannot rebuild its options, so Claude Code
-    is told directly rather than the chat being torn down and refiled. `None` hands the choice back
-    to its own default, which is also what a record filed afterwards then says. Names resolve as
-    `claude_model` does, so an alias works here too.
-
-    This raises where `cancel` swallows: a switch that silently did not happen would bill the wrong
-    model for the rest of the conversation.
-    """
+    "Switch the model and return its resolved id."
     self.model_id = claude_model(model, dflt=None)
     if self.in_session:
         if not hasattr(self.client, 'set_model'): raise TypeError(
