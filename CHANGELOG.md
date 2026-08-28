@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.32
+rishi rewrite with uraiyadal dependencies.
+
 ## 0.1.31
 discard special builds for litert
 

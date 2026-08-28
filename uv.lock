@@ -1672,7 +1672,7 @@ wheels = [
 
 [[package]]
 name = "koshas"
-version = "0.1.4"
+version = "0.1.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "ast-grep-py" },
@@ -1682,9 +1682,9 @@ dependencies = [
     { name = "pyskills" },
     { name = "watchfiles" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/68/d5/a34a83d315663c115b1360925a2a175742f5e11991cc2a7ed233c74cdbc8/koshas-0.1.4.tar.gz", hash = "sha256:a4f719b32fb93ed07ffb08cd852881ff0b437ceb0ccd6a4530e0047d892d775d", size = 54847, upload-time = "2026-08-27T01:52:22.213Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/a9/024f824c22bf2a0d9faa3ec919fa56e4831d1c5e3cc97e2a1a7934433660/koshas-0.1.5.tar.gz", hash = "sha256:2efaf2ad36124f8d0c808a48a6a3e040b47c3eea9103f6a5ef6d302677a187a9", size = 54779, upload-time = "2026-08-28T00:38:33.936Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c3/b6/347f987f86abe2556c1df30c53e9bc05839f792318e48a721326ad34bcb2/koshas-0.1.4-py3-none-any.whl", hash = "sha256:acf5d522384ebfeba7e2d3da543c035257bc60f89493530183b8b3e3b1b25add", size = 59194, upload-time = "2026-08-27T01:52:20.898Z" },
+    { url = "https://files.pythonhosted.org/packages/69/31/e1afa7a09145cfb5995cabb677c5cb8b1e8b0c1f13fa4001350d3449c5d1/koshas-0.1.5-py3-none-any.whl", hash = "sha256:63421095196b8cd0ebab04597414a46ead60e3820a31aa3bc6149c6b4f979f8f", size = 59109, upload-time = "2026-08-28T00:38:32.639Z" },
 ]
 
 [[package]]
@@ -3873,7 +3873,7 @@ wheels = [
 
 [[package]]
 name = "uraiyadal"
-version = "0.0.2"
+version = "0.0.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aidialog" },
@@ -3884,9 +3884,9 @@ dependencies = [
     { name = "safepyrun" },
     { name = "truststore" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b0/aa/178ed7a3602a175a6b8bd609ddc1673f050037cd090aea0ad6e99c8e23a0/uraiyadal-0.0.2.tar.gz", hash = "sha256:746acdbb03cef211e23e350979ddb20c72163faa129bbe30aafdda47d7f157f9", size = 41063, upload-time = "2026-08-26T10:34:09.582Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/95/2eb26f5a56000b331c9c5c6ec8c3f200f53dd55707f5b0e81107bc25214f/uraiyadal-0.0.4.tar.gz", hash = "sha256:1dbef3b7bb2a85cfbbde5c42e912b1275badc21e57bbaaa73b66b8800317a358", size = 41076, upload-time = "2026-08-28T00:43:59.164Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e3/57/9ec68c80647369da73eb5fec55d0b0e46744ed670bd3238445f704cae8b1/uraiyadal-0.0.2-py3-none-any.whl", hash = "sha256:7f79bbb50ceabf2e1418671903398e8157e3a9a956521b85702f1f1b5470b609", size = 47896, upload-time = "2026-08-26T10:34:08.254Z" },
+    { url = "https://files.pythonhosted.org/packages/c5/ea/ad10487fe17e996491721da6a1afa30e223d2894e2f9f4529edbc970a909/uraiyadal-0.0.4-py3-none-any.whl", hash = "sha256:4574e8db906667c6499330af112841dcd0f76d5b4b957dc5c71e87e882cc47b7", size = 47899, upload-time = "2026-08-28T00:43:57.992Z" },
 ]
 
 [[package]]
