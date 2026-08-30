@@ -355,6 +355,8 @@ class LlamaChat(ToolLoopMixin, Chat):
         res = {'role': 'assistant', 'content': split.text}
         if split.thought: res['channels'] = {'thought': split.thought}
         if tcs: res['tool_calls'] = tcs
+        elif split.failed: res['tool_parse_failed'] = True   # a call was emitted that nothing could read
+        if split.raw is not None: res['raw'] = split.raw     # only when a capture is running
         if fin == 'length': res['truncated'] = True
         out = self.count_tokens(split.text + split.thought) if (split.text or split.thought) else 0
         n = self.engine.n_tokens

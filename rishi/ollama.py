@@ -545,6 +545,8 @@ class OllamaChat(ToolLoopMixin, Chat):
         res = {'role': 'assistant', 'content': split.text}
         if (th := '\n'.join(x for x in (native_th, split.thought) if x)): res['channels'] = {'thought': th}
         if (calls := _tcs(tcs) + _tag_tcs(split.tool_calls)): res['tool_calls'] = calls
+        elif split.failed: res['tool_parse_failed'] = True   # a call was emitted that nothing could read
+        if split.raw is not None: res['raw'] = split.raw     # only when a capture is running
         if last.get('done_reason') == 'length': res['truncated'] = True
         res['usage'] = ollama_usage(last, self.model_id)
         self._step_res = self._note_usage(Resp(res))

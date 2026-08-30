@@ -10,7 +10,7 @@ __all__ = ['qwen3_06b', 'qwen3_17b', 'DFLT_MAX_TOKENS', 'qwen3_4b', 'qwen3_8b', 
            'MlxEngine', 'MlxChat', 'MlxVlmChat', 'MlxBroker']
 
 # %% ../nbs/03_mlx.ipynb #cf11fc103db8abae
-import json, os
+import hashlib, json, os
 from base64 import b64decode
 from tempfile import TemporaryDirectory
 import mlx.core as mx
@@ -22,6 +22,7 @@ from huggingface_hub import hf_hub_download, scan_cache_dir
 from fastcore.funccall import get_schema, mk_ns
 from fastcore.all import Path, store_attr, patch, L, ifnone, first, listify
 import rishi.core
+from .core import PrefixCache
 from urai import (Chat, ChatBroker, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolLoopMixin,
                   ToolReminderCallback, UsageCallback, common_prefix_len, display_stream, get_runtime, extract_fence, is_media, is_path,
                   mk_content, mk_msg, mk_msgs, resolve_runtime, resp_text, split_runtime, split_think, thought, truncated, strip_media, to_oai_msg)
@@ -128,7 +129,10 @@ class MlxChat(ToolLoopMixin, Chat):
                  draft_model=None,       # a smaller model, for speculative decoding
                  eng_kw=None,            # passed to `create_engine` verbatim
                  min_p=None,
-                 prompt_cache=True, max_kv_size=None, kv_bits=None, kv_group_size=64,
+                 prompt_cache=True,      # keep this chat's own KV cache across turns
+                 prefix_cache=None,      # a directory: reuse prefixes across chats and across restarts
+                 cache_store_every=2048, # how many new tokens a turn must add before the prefix is saved
+                 max_kv_size=None, kv_bits=None, kv_group_size=64,
                  quantized_kv_start=0,
                  tmpl_kw=None,           # passed to `apply_chat_template`
                  gen_kw=None,            # passed to `stream_generate` verbatim
@@ -154,7 +158,41 @@ class MlxChat(ToolLoopMixin, Chat):
         self.ctx_limit, self._ctx_tokens = o.ctx or engine.ctx_limit, 0
         self._cache, self._cache_ids = None, []
         if prompt_cache: self._reset_cache()
+        self.cache_store_every, self._stored = cache_store_every, 0
+        self.shared_cache = self._mk_shared(prefix_cache) if prompt_cache and prefix_cache else None
         self._setup(model, o)
+
+    def _fingerprint(self):
+        "Identity of everything a saved cache has to agree with before it can be restored."
+        return hashlib.sha256(self._cache_metadata()['rishi_mlx_cache'].encode()).hexdigest()[:16]
+
+    def _mk_shared(self, spec):
+        "A `PrefixCache` over `spec`, which is a directory, or one already built."
+        if self._cache is None: return None      # nothing to share: mlx-vlm keeps its own cache
+        if isinstance(spec, PrefixCache): return spec
+        return PrefixCache(spec, save=self._save_state, load=load_prompt_cache,
+                           fingerprint=self._fingerprint())
+
+    def _save_state(self, state, path): save_prompt_cache(path, state, self._cache_metadata())
+
+    def _try_shared(self, ids):
+        "Adopt a prefix from the shared cache when it beats what this chat already holds."
+        if self.shared_cache is None: return False
+        if self.shared_cache.lookup(ids)[1] <= common_prefix_len(ids, self._cache_ids): return False
+        state, cached = self.shared_cache.restore(ids)
+        if state is None: return False
+        # the restored ids are what the FILE covers; `_feed_ids` trims to what actually matches, so
+        # the cache offset can never outrun the prefix this prompt really shares with it
+        self._cache, self._cache_ids, self._stored = state, cached, len(cached)
+        return True
+
+    def _store_shared(self):
+        "Publish this chat's prefix once it has grown enough to be worth the write."
+        if self.shared_cache is None or self._cache is None: return False
+        if len(self._cache_ids) - self._stored < self.cache_store_every: return False
+        if not self.shared_cache.store(self._cache_ids, self._cache): return False
+        self._stored = len(self._cache_ids)
+        return True
 
     @property
     def tokenizer(self): return self.engine.tokenizer
@@ -174,6 +212,7 @@ class MlxChat(ToolLoopMixin, Chat):
 
     def _reset_cache(self):
         "Start fresh main and draft KV caches. The next step re-prefills the whole conversation."
+        self._stored = 0
         self._cache = make_prompt_cache(self.engine.model, self.max_kv_size)
         if self.engine.draft_model is not None:
             self._cache += make_prompt_cache(self.engine.draft_model, self.max_kv_size)
@@ -205,6 +244,7 @@ class MlxChat(ToolLoopMixin, Chat):
         "`(all_ids, ids_still_to_prefill, n_cached)`, reusing however much of the prompt the KV cache covers."
         ids = self._prompt_ids()
         if self._cache is None: return ids, ids, 0
+        self._try_shared(ids)
         n = common_prefix_len(ids, self._cache_ids)
         if (drop := len(self._cache_ids) - n) and not self._trim(drop): n = 0
         if n and n == len(ids):                 # nothing left to feed; give back one token to generate from
@@ -250,6 +290,7 @@ class MlxChat(ToolLoopMixin, Chat):
             # `_cache_ids` short of what the cache holds and the next turn trims the wrong amount
             if self._cache is not None: self._cache_ids = ids + gen
         yield from split.finish()
+        self._store_shared()
         self._step_res = self._mk_resp(split, fin, cached, pt, gt)
 
     def _mk_resp(self, split, fin, cached, pt, gt):
@@ -257,6 +298,8 @@ class MlxChat(ToolLoopMixin, Chat):
         res = {'role': 'assistant', 'content': split.text}
         if split.thought: res['channels'] = {'thought': split.thought}
         if split.tool_calls: res['tool_calls'] = split.tool_calls
+        elif split.failed: res['tool_parse_failed'] = True   # a call was emitted that nothing could read
+        if split.raw is not None: res['raw'] = split.raw     # only when a capture is running
         if fin == 'length': res['truncated'] = True
         res['usage'] = {'prompt_tokens': cached + pt, 'completion_tokens': gt,
                         'total_tokens': cached + pt + gt, 'cached_tokens': cached}

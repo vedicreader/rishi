@@ -6,12 +6,12 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['BACKENDS', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs', 'browser_approval', 'runtimes', 'litert_caps',
-           'ollama_caps_', 'use_system_certs_', 'repo_root', 'mv_skill_md']
+           'ollama_caps_', 'use_system_certs_', 'PrefixCache', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #d122bb29
-import ast, asyncio, inspect, warnings
+import ast, asyncio, inspect, json, os, time, uuid, warnings
 from fastcore.all import Path, first
-from urai import (Caps, Runtime, RUNTIMES, register_runtime, infer_runtime, resolve_runtime, resolve,
+from urai import (Caps, Runtime, RUNTIMES, common_prefix_len, register_runtime, infer_runtime, resolve_runtime, resolve,
                   model_caps, cfg_caps, mmproj_caps, hosted_caps, is_path, use_system_certs,
                   mk_content, mk_msg, mk_msgs, http_approval)
 
@@ -88,6 +88,87 @@ _is_path = is_path
 def use_system_certs_(force=False):
     "Deprecated alias for `urai.use_system_certs`."
     return use_system_certs(force)
+
+# %% ../nbs/00_core.ipynb #7f3c08c2
+class PrefixCache:
+    """Longest-prefix KV reuse across conversations and across restarts.
+
+    Backend-agnostic: `save(state, path)` and `load(path)` are the only things that touch a real
+    cache object, and the tokens a file covers are the whole index. Bounded by entry count and by
+    total bytes on disk, evicting least-recently-used first."""
+    def __init__(self, dir, save=None, load=None, fingerprint='', max_entries=8, max_bytes=8*10**9,
+                 min_match=256):
+        self.dir, self.save, self.load = Path(dir), save, load
+        self.fingerprint, self.max_entries, self.max_bytes, self.min_match = (
+            fingerprint, max_entries, max_bytes, min_match)
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.entries = self._read_index()
+
+    @property
+    def index_path(self): return self.dir/'index.json'
+
+    def _read_index(self):
+        "Entries this fingerprint owns, dropping any whose file no longer exists."
+        try: rows = json.loads(self.index_path.read_text())
+        except (OSError, json.JSONDecodeError): return []
+        return [r for r in rows if r.get('fingerprint') == self.fingerprint
+                and (self.dir/r['file']).exists()]
+
+    def _write_index(self):
+        "Rewrite the index, merging back the rows other fingerprints own."
+        try: rows = [r for r in json.loads(self.index_path.read_text())
+                     if r.get('fingerprint') != self.fingerprint]
+        except (OSError, json.JSONDecodeError): rows = []
+        tmp = self.dir/f'.index.{os.getpid()}.tmp'
+        tmp.write_text(json.dumps(rows + self.entries))
+        tmp.replace(self.index_path)          # a reader never sees a half-written index
+
+    def lookup(self, ids):
+        "The longest cached prefix of `ids`, as `(entry, n_matched)`, or `(None, 0)`."
+        best, n = None, 0
+        for e in self.entries:
+            if (m := common_prefix_len(ids, e['ids'])) > n: best, n = e, m
+        return (best, n) if n >= self.min_match else (None, 0)
+
+    def restore(self, ids):
+        "Load the best cached prefix of `ids`. Returns `(state, cached_ids)`, or `(None, [])`."
+        e, n = self.lookup(ids)
+        if e is None or self.load is None: return None, []
+        try: state = self.load(str(self.dir/e['file']))
+        except Exception: self._drop(e); return None, []
+        e['used'] = time.time(); self._write_index()
+        # the caller trims to its own match, so the offset can never outrun what actually matched
+        return state, list(e['ids'])
+
+    def store(self, ids, state):
+        "Persist `state` as the cache for `ids`, replacing any entry this one already covers."
+        if self.save is None or len(ids) < self.min_match: return False
+        self.entries = [e for e in self.entries if common_prefix_len(ids, e['ids']) < len(e['ids'])]
+        f = f'{self.fingerprint or "kv"}-{uuid.uuid4().hex[:12]}.safetensors'
+        try: self.save(state, str(self.dir/f))
+        except Exception: return False
+        self.entries.append({'fingerprint': self.fingerprint, 'file': f, 'ids': list(ids),
+                             'bytes': (self.dir/f).stat().st_size, 'used': time.time()})
+        self._evict(); self._write_index()
+        return True
+
+    def _drop(self, e):
+        "Forget one entry and delete the file behind it."
+        if e in self.entries: self.entries.remove(e)
+        try: (self.dir/e['file']).unlink()
+        except OSError: pass
+
+    def _evict(self):
+        "Evict least-recently-used entries until both bounds hold."
+        self.entries.sort(key=lambda e: e['used'])
+        while self.entries and (len(self.entries) > self.max_entries
+                                or sum(e['bytes'] for e in self.entries) > self.max_bytes):
+            self._drop(self.entries[0])
+
+    def clear(self):
+        "Drop every entry this fingerprint owns."
+        for e in list(self.entries): self._drop(e)
+        self._write_index()
 
 # %% ../nbs/00_core.ipynb #1086ffd6
 def repo_root() -> Path:
