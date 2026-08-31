@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.33
+litert models should error out loudly
+
 ## 0.1.32
 rishi rewrite with uraiyadal dependencies.
 

@@ -398,6 +398,11 @@ class LitertChat(Chat):
     def count_tokens(self, text):
         "Number of tokens in `text` per the engine tokenizer."
         return len(self.engine.tokenize(text))
+    def _ck_fits(self, prompt, sp=''):
+        "Refuse a prompt that cannot fit in `ctx_limit`, with both figures, before litert returns null."
+        if not self.ctx_limit: return
+        n = self.count_tokens(sp + prompt)
+        if n > self.ctx_limit: raise ContextWindowExceededError(f"prompt is {n} tokens, over the {self.ctx_limit}-token context window")
     def render(self, msg):
         "The exact templated string litert will send for `msg`."
         return self.conv.render_message_to_string(_mk_msg(msg))
@@ -435,6 +440,7 @@ class LitertChat(Chat):
         finally: self._streaming = prev; self.remove_cbs(added)
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
         """Stateless one-shot completion text via a throwaway conversation."""
+        self._ck_fits(prompt, sp)
         kw = {'extra_context': {'enable_thinking': True}} if think else {}
         if max_tokens is not None: kw['max_output_tokens'] = int(max_tokens)
         pre = [{'role': 'system', 'content': sp}] if sp else None
