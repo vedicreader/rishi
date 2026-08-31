@@ -28,8 +28,7 @@ async def _rishi_run_python(code, g=None, ok_dests=None):
     saved = {k: g[k] for k in protect if k in g}; had = set(saved)
     g.update(inject)
     async def run(src, is_exec=True):
-        comp = compile(src, _spc.srcfn(src), 'exec' if is_exec else 'eval',
-                       flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
+        comp = compile(src, _spc.srcfn(src), 'exec' if is_exec else 'eval', flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
         r = eval(comp, g)                          # one namespace: defs see top-level imports
         return (await r) if inspect.isawaitable(r) else r
     tree = ast.parse(code)

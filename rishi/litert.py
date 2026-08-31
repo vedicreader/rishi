@@ -448,6 +448,7 @@ class LitertChat(Chat):
             return resp_text(conv.send_message(prompt))
     def _structured_call(self, prompt, schema, sp):
         "Forced tool call, falling back to parsing a JSON reply when the model answers in prose."
+        self._ck_fits(prompt, sp)
         pre = [{'role': 'system', 'content': sp}] if sp else None
         with self.engine.create_conversation(messages=pre, tools=[schema], automatic_tool_calling=False) as conv:
             r = conv.send_message(prompt)
