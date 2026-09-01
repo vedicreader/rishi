@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.35
+codex needs streaming for all models
+
 ## 0.1.34
 structured calls also check context fit in litert
 
