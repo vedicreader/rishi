@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.36
+fastspec update
+
 ## 0.1.35
 codex needs streaming for all models
 

@@ -22,7 +22,7 @@ dependencies = [
     "safepyrun>=0.2.3",
     "truststore>=0.10",
     "liteparse<2.13",
-    "python-fastllm==0.0.41",
+    "python-fastllm>=0.0.45",
     "aidialog>=0.0.10",
     "claude-agent-sdk>=0.2",
     "llmsurgery>=0.0.13",
