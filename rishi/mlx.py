@@ -19,7 +19,7 @@ from mlx_lm.sample_utils import make_sampler
 from mlx_lm.models.cache import (make_prompt_cache, trim_prompt_cache, can_trim_prompt_cache,
                                  save_prompt_cache, load_prompt_cache)
 from huggingface_hub import hf_hub_download, scan_cache_dir
-from fastcore.funccall import get_schema, mk_ns
+from fastcore.funccall import get_schema
 from fastcore.all import Path, store_attr, patch, L, ifnone, first, listify
 import rishi.core
 from urai import (Chat, ChatBroker, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolLoopMixin,

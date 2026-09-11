@@ -16,7 +16,7 @@ import json, os, time, atexit, platform, shutil, subprocess, tarfile, zipfile
 import httpx2 as httpx
 from urllib.parse import urlsplit
 from fastcore.funccall import get_schema
-from fastcore.all import Path, store_attr, L, ifnone, first, listify
+from fastcore.all import Path, store_attr, ifnone, first, listify
 import rishi.core
 from urai import (Caps, Chat, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolCall, ToolLoopMixin,
                   ToolReminderCallback, UsageCallback, est_tokens, is_path, mk_content, mk_msg, mk_msgs, parse_args, parse_tool_tags, render_prompt,

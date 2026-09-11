@@ -8,18 +8,16 @@ Docs: https://vedicreader.github.io/rishi/litert.html.md"""
 __all__ = ['gemma4_e4b', 'gemma4_e2b', 'gemma4_12b', 'LITERT_GPU', 'ChatToolHandler', 'LitertChat', 'bench', 'LitertBroker']
 
 # %% ../nbs/02_litert.ipynb #acd92ae986b06129
-import json, re, os, asyncio, io, base64, uuid, warnings
-from html import escape
+import json, re, os, base64, uuid, warnings
 from mimetypes import guess_type
-from contextlib import ExitStack, redirect_stdout
-from litert_lm import (ActivationDataType, Engine, Backend, ConstrainedDecodingConfig, Conversation, Session, Message, Contents, Content, Role, ToolCall,
+from contextlib import ExitStack
+from litert_lm import (ActivationDataType, Engine, Backend, ConstrainedDecodingConfig, Conversation, Message, Contents, Content, Role, ToolCall,
                        ToolEventHandler, SamplerConfig, Benchmark, set_min_log_severity)
 from litert_lm._messages import Text, ImageBytes, ImageFile, AudioBytes, AudioFile, ToolResponse, normalize_message
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
-from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, img_bytes, AttrDict, in_, str2bool
-from safepyrun import RunPython
+from fastcore.all import Path, store_attr, patch, L, ifnone, detect_mime, first, listify, img_bytes, str2bool
 import rishi.core
-from urai import (BrokerChat, Chat, ChatBroker, ChatCallback, ChatOpts, ContextWindowExceededError, Resp, SlidingWindowCallback,
+from urai import (Chat, ChatBroker, ChatCallback, ChatOpts, ContextWindowExceededError, Resp, SlidingWindowCallback,
                   StreamFormatter, UsageStats, budget_msg_, evict_middle, extract_fence, is_ctx_error, is_path,
                   get_runtime, resp_text, run_cbs, split_runtime, thought, tool_reminder_)
 
@@ -380,7 +378,7 @@ class LitertChat(Chat):
         self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in prior])
         self._tc0 = self.conv.token_count            # the rebuilt cache is a new baseline for usage
         try: return self.conv.send_message(self.turn_msg, **self._turn_kw(turn))
-        except RuntimeError as e:
+        except RuntimeError:
             raise ContextWindowExceededError(
                 f"could not recover after evicting {len(dropped)} messages: {err}") from err
 

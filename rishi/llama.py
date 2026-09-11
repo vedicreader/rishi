@@ -9,15 +9,12 @@ __all__ = ['DFLT_N_CTX', 'qwen3_06b', 'qwen3_17b', 'qwen3_4b', 'gemma3_1b', 'gem
            'ornith_31b', 'get_mmproj', 'gpu_offload_supported', 'read_audio', 'LlamaChat', 'LlamaBroker']
 
 # %% ../nbs/01_llama.ipynb #10a30d78
-import json, re, os, io, uuid, ctypes, asyncio
+import json, re, os, io, ctypes
 import numpy as np
-from base64 import b64encode
-from dataclasses import is_dataclass, dataclass, fields
-from typing import get_type_hints
 from llama_cpp import Llama
-from fastcore.funccall import get_schema, mk_ns
+from fastcore.funccall import get_schema
 from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
-from fastcore.all import Path, store_attr, patch, L, GetAttr, ifnone, detect_mime, first, listify, AttrDict
+from fastcore.all import Path, patch, L, ifnone, detect_mime, first, listify
 import rishi.core
 from urai import (Chat, ChatBroker, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolLoopMixin,
                   ToolReminderCallback, UsageCallback, acc_tc, is_media, is_path, mk_content, mk_msg, mk_msgs,

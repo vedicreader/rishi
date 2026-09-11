@@ -9,10 +9,10 @@ __all__ = ['BACKENDS', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs', 'browser_a
            'ollama_caps_', 'use_system_certs_', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #d122bb29
-import ast, asyncio, inspect, warnings
+import ast, inspect, warnings
 from fastcore.all import Path, first
 from urai import (Caps, Runtime, RUNTIMES, register_runtime, infer_runtime, resolve_runtime, resolve,
-                  model_caps, cfg_caps, mmproj_caps, hosted_caps, is_path, use_system_certs,
+                  model_caps, cfg_caps, mmproj_caps, is_path, use_system_certs,
                   mk_content, mk_msg, mk_msgs, http_approval)
 
 # %% ../nbs/00_core.ipynb #ed11fe02

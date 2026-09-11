@@ -356,7 +356,7 @@ def _sdk_events(self:ClaudeChat, prompt, sp, resume=None):
 @patch
 def _to_parts(self:ClaudeChat, msgs):
     "rishi's OpenAI-shaped messages as aidialog `Part`s, media included."
-    from aidialog.msg_parts import Text, InputImage, InputAudio, InputFile
+    from aidialog.msg_parts import Text, InputImage, InputFile
     out = []
     for m in msgs:
         who = ROLE_NAMES.get(m.get('role'), m.get('role', '?'))

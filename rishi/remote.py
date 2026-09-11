@@ -13,9 +13,8 @@ import json
 from base64 import b64decode
 from fastllm.acomplete import acomplete, split_vendor
 from fastllm.types import Completion
-from aidialog.msg_parts import (Msg, Part, PartType, Text, Thinking, ToolUse, ToolResult,
-                                InputImage, InputAudio, data_url)
-from fastcore.all import store_attr, ifnone, listify
+from aidialog.msg_parts import (Msg, Part, PartType, Text, Thinking, ToolUse, ToolResult, data_url)
+from fastcore.all import store_attr, listify
 import rishi.core
 from urai import (Chat, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolCall, ToolLoopMixin, ToolReminderCallback,
                   UsageCallback, UsageStats, display_stream, extract_fence, mk_content, mk_msg, mk_msgs, mk_toolspec, parse_tool_tags, resp_text, run_coro, split_runtime,
