@@ -18,9 +18,10 @@ from urllib.parse import urlsplit
 from fastcore.funccall import get_schema
 from fastcore.all import Path, store_attr, ifnone, first, listify
 import rishi.core
-from urai import (Caps, Chat, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolCall, ToolLoopMixin,
-                  ToolReminderCallback, UsageCallback, est_tokens, is_path, mk_content, mk_msg, mk_msgs, parse_args, parse_tool_tags, render_prompt,
-                  model_caps, resp_text, split_runtime, split_think, thought, truncated, tc_name)
+from .core import RishiToolLoop
+from urai import (Caps, Chat, ChatOpts, Resp, StreamSplit, ToolCall,
+                  est_tokens, is_path, mk_content, mk_msg, mk_msgs, parse_args, parse_tool_tags, render_prompt,
+                  model_caps, resp_text, split_runtime, split_think, stream_resp, thought, truncated, tc_name)
 
 # %% ../nbs/08_ollama.ipynb #ol_addr
 #: Where Ollama listens unless `$OLLAMA_HOST` says otherwise.
@@ -408,10 +409,9 @@ def dflt_ctx():
     try: return int(os.getenv('OLLAMA_CONTEXT_LENGTH') or 4096)
     except ValueError: return 4096
 
-class OllamaChat(ToolLoopMixin, Chat):
+class OllamaChat(RishiToolLoop, Chat):
     "Sync chat against an Ollama daemon through Urai's tool loop."
     _runtime = 'ollama'
-    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(mk_content), staticmethod(mk_msg), staticmethod(mk_msgs)
 
     @staticmethod
@@ -542,12 +542,10 @@ class OllamaChat(ToolLoopMixin, Chat):
             tcs += msg.get('tool_calls') or []
             if d.get('done'): last = d
         yield from split.finish()
-        res = {'role': 'assistant', 'content': split.text}
-        if (th := '\n'.join(x for x in (native_th, split.thought) if x)): res['channels'] = {'thought': th}
-        if (calls := _tcs(tcs) + _tag_tcs(split.tool_calls)): res['tool_calls'] = calls
-        if last.get('done_reason') == 'length': res['truncated'] = True
-        res['usage'] = ollama_usage(last, self.model_id)
-        self._step_res = self._note_usage(Resp(res))
+        self._step_res = self._note_usage(stream_resp(split,
+            thought='\n'.join(x for x in (native_th, split.thought) if x),
+            tool_calls=_tcs(tcs) + _tag_tcs(split.tool_calls),
+            truncated=last.get('done_reason') == 'length', usage=ollama_usage(last, self.model_id)))
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
         "Stateless completion text: no history, no tools. It shares the daemon, which caches per conversation."

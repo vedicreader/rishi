@@ -13,12 +13,14 @@ import json, re, os, io, ctypes
 import numpy as np
 from llama_cpp import Llama
 from fastcore.funccall import get_schema
-from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
+from huggingface_hub import hf_hub_download, list_repo_files
 from fastcore.all import Path, patch, L, ifnone, detect_mime, first, listify
 import rishi.core
-from urai import (Chat, ChatBroker, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolLoopMixin,
+from .core import RishiToolLoop
+from urai.caps import hub_files
+from urai import (Chat, ChatBroker, ChatOpts, Resp, StreamSplit,
                   ToolReminderCallback, UsageCallback, acc_tc, is_media, is_path, mk_content, mk_msg, mk_msgs,
-                  get_runtime, mk_tag_tc, norm_resp, parse_args, resp_text, split_runtime, strip_media, sum_usage, to_oai_msg)
+                  get_runtime, mk_tag_tc, norm_resp, parse_args, resp_text, split_runtime, strip_media, sum_usage, stream_resp, to_oai_msg)
 
 # %% ../nbs/01_llama.ipynb #3dcb0e40
 _mk_content, _mk_msg, _mk_msgs = mk_content, mk_msg, mk_msgs
@@ -45,9 +47,7 @@ def _gguf(fs, quant='Q4_K_M'):
 
 def _cached_model(model_id, quant='Q4_K_M'):
     "Local `.gguf` path from the HF cache without hitting the network, else None."
-    try: repo = first(scan_cache_dir().repos, lambda r: r.repo_id == model_id)
-    except Exception: return None
-    return _gguf([str(f.file_path) for r in repo.revisions for f in r.files], quant) if repo else None
+    return _gguf(hub_files(model_id), quant)
 
 def _get_model(model_id, model_path=None, quant='Q4_K_M'):
     "Return a local `.gguf` path: `model_path`, else HF cache, else download."
@@ -62,9 +62,7 @@ def _mmproj(fs):
 
 def _cached_mmproj(model_id):
     "Local `mmproj` path from the HF cache without hitting the network, else None."
-    try: repo = first(scan_cache_dir().repos, lambda r: r.repo_id == model_id)
-    except Exception: return None
-    return _mmproj([str(f.file_path) for r in repo.revisions for f in r.files]) if repo else None
+    return _mmproj(hub_files(model_id))
 
 def get_mmproj(model_id, mmproj_path=None):
     "Return a local `mmproj` projector path: `mmproj_path`, else HF cache, else download."
@@ -155,10 +153,9 @@ def _create_bitmap_from_bytes(self:MTMDChatHandler, image_bytes):
     return bm
 
 # %% ../nbs/01_llama.ipynb #62bf39bf
-class LlamaChat(ToolLoopMixin, Chat):
+class LlamaChat(RishiToolLoop, Chat):
     "Sync chat over a local llama.cpp model: the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
     _runtime = 'llama'
-    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(_mk_content), staticmethod(_mk_msg), staticmethod(_mk_msgs)
 
     @staticmethod
@@ -349,15 +346,11 @@ class LlamaChat(ToolLoopMixin, Chat):
         tcs = [{'id': tc['id'] or f'call_{i}', 'type': 'function',
                 'function': {'name': tc['function']['name'], 'arguments': _parse_args(tc['function']['arguments'])}}
                for i, tc in enumerate(tcs)] + split.tool_calls
-        res = {'role': 'assistant', 'content': split.text}
-        if split.thought: res['channels'] = {'thought': split.thought}
-        if tcs: res['tool_calls'] = tcs
-        if fin == 'length': res['truncated'] = True
         out = self.count_tokens(split.text + split.thought) if (split.text or split.thought) else 0
         n = self.engine.n_tokens
-        res['usage'] = self._note_cache({'prompt_tokens': max(n - out, 0), 'completion_tokens': out,
-                                         'total_tokens': n}, cached)
-        self._step_res = Resp(res)
+        self._step_res = stream_resp(split, tool_calls=tcs, truncated=(fin == 'length'),
+            usage=self._note_cache({'prompt_tokens': max(n - out, 0), 'completion_tokens': out,
+                                    'total_tokens': n}, cached))
 
 # %% ../nbs/01_llama.ipynb #e31eee10
 class LlamaBroker(ChatBroker):

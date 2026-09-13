@@ -22,9 +22,10 @@ from huggingface_hub import hf_hub_download, scan_cache_dir
 from fastcore.funccall import get_schema
 from fastcore.all import Path, store_attr, patch, L, ifnone, first, listify
 import rishi.core
-from urai import (Chat, ChatBroker, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolLoopMixin,
-                  ToolReminderCallback, UsageCallback, common_prefix_len, display_stream, get_runtime, extract_fence, is_media, is_path,
-                  mk_content, mk_msg, mk_msgs, resolve_runtime, resp_text, split_runtime, split_think, thought, truncated, strip_media, to_oai_msg)
+from .core import RishiToolLoop
+from urai import (Chat, ChatBroker, ChatOpts, Resp, StreamSplit,
+                  common_prefix_len, display_stream, get_runtime, extract_fence, is_media, is_path,
+                  mk_content, mk_msg, mk_msgs, resolve_runtime, resp_text, split_runtime, split_think, stream_resp, thought, truncated, strip_media, to_oai_msg)
 
 # %% ../nbs/03_mlx.ipynb #70712d3bc7721d7c
 #: Common mlx-community repo ids.
@@ -83,10 +84,9 @@ class MlxEngine:
         self.model = self.draft_model = None
 
 # %% ../nbs/03_mlx.ipynb #c9878e3a40848985
-class MlxChat(ToolLoopMixin, Chat):
+class MlxChat(RishiToolLoop, Chat):
     "Sync chat over a local MLX model: the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
     _runtime = 'mlx'
-    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     _media_ok = False    # text-only; `MlxVlmChat` flips this
     _media_note = ("this MLX model is text-only. Install `pip install 'rishi[mlx-vlm]'` and use a vision "
                    "model (e.g. rishi.mlx.qwen3vl_4b) for image or audio input, or pass vlm=True.")
@@ -254,13 +254,9 @@ class MlxChat(ToolLoopMixin, Chat):
 
     def _mk_resp(self, split, fin, cached, pt, gt):
         "Assemble one step's `Resp` from the parsed stream plus mlx-lm's token counts."
-        res = {'role': 'assistant', 'content': split.text}
-        if split.thought: res['channels'] = {'thought': split.thought}
-        if split.tool_calls: res['tool_calls'] = split.tool_calls
-        if fin == 'length': res['truncated'] = True
-        res['usage'] = {'prompt_tokens': cached + pt, 'completion_tokens': gt,
-                        'total_tokens': cached + pt + gt, 'cached_tokens': cached}
-        return Resp(res)
+        return stream_resp(split, truncated=(fin == 'length'),
+                           usage={'prompt_tokens': cached + pt, 'completion_tokens': gt,
+                                  'total_tokens': cached + pt + gt, 'cached_tokens': cached})
 
     def _model_step(self, **kw):
         "One completion, normalized to a `Resp`. MLX generates by streaming, so this drains `_stream_step`."

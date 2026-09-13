@@ -16,8 +16,9 @@ from fastllm.types import Completion
 from aidialog.msg_parts import (Msg, Part, PartType, Text, Thinking, ToolUse, ToolResult, data_url)
 from fastcore.all import store_attr, listify
 import rishi.core
-from urai import (Chat, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolCall, ToolLoopMixin, ToolReminderCallback,
-                  UsageCallback, UsageStats, display_stream, extract_fence, mk_content, mk_msg, mk_msgs, mk_toolspec, parse_tool_tags, resp_text, run_coro, split_runtime,
+from .core import RishiToolLoop
+from urai import (Chat, ChatOpts, Resp, StreamSplit, ToolCall,
+                  UsageStats, display_stream, extract_fence, mk_content, mk_msg, mk_msgs, mk_toolspec, parse_tool_tags, resp_text, run_coro, split_runtime,
                   sum_usage, sync_iter, thought, tag_tools_sp, to_media_part)
 
 # %% ../nbs/04_remote.ipynb #httpx2fix
@@ -178,10 +179,9 @@ DFLT_MAX_TOKENS = 4096
 #: Vendors whose transport answers a streamed request and refuses every other one.
 STREAM_ONLY = {'codex'}
 
-class RemoteChat(ToolLoopMixin, Chat):
+class RemoteChat(RishiToolLoop, Chat):
     "Chat against a hosted model through fastllm, with the same `Chat` API as the local backends."
     _runtime = 'remote'
-    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     #: what this transport calls each portable option
     _opt_map = {'ctx': 'ctx_limit', 'temp': 'temperature', 'effort': 'reasoning_effort',
                 'max_output_tokens': 'max_tokens'}

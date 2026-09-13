@@ -20,10 +20,11 @@ from base64 import b64encode
 from pathlib import Path
 from contextlib import contextmanager
 from fastcore.all import store_attr, patch, ifnone, listify, detect_mime
-from fastcore.aio import run_sync, iter_sync
+from fastcore.aio import run_sync
 import rishi.core
-from urai import (Chat, ChatOpts, ROLE_NAMES, Resp, SlidingWindowCallback, StreamSplit, ToolLoopMixin, ToolReminderCallback,
-                  UsageCallback, est_tokens, is_media, mk_content, parse_args, parse_tool_tags, render_prompt, resp_text, split_runtime,
+from .core import RishiToolLoop
+from urai import (Chat, ChatOpts, ROLE_NAMES, Resp, StreamSplit,
+                  est_tokens, is_media, mk_content, parse_args, parse_tool_tags, render_prompt, resp_text, split_runtime,
                   split_think, sync_iter, tag_tools_sp, tc_name, to_media_part)
 
 # %% ../nbs/06_claude.ipynb #cl_wire
@@ -176,14 +177,13 @@ def mk_claude_msgs(msgs): return [mk_claude_msg(m) for m in listify(msgs)] if ms
 
 
 # %% ../nbs/06_claude.ipynb #cl_chat
-class ClaudeChat(ToolLoopMixin, Chat):
+class ClaudeChat(RishiToolLoop, Chat):
     "Chat against Claude Code through Urai's `Chat` API."
     _runtime = 'claude'
     _media_note = ("this Claude Code chat cannot carry a picture or a document: it is stateless and has "
                    "no transcript to file, so the conversation goes as one text prompt, which has nowhere "
                    "to put one. Keep the default `stateful=True`, leave `transcript=True`, or use "
                    "`rishi.remote`/`rishi.litert`.")
-    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(mk_claude_content), staticmethod(mk_claude_msg), staticmethod(mk_claude_msgs)
     local, _ctx_live = False, 0
 
@@ -330,26 +330,31 @@ def _result(self:ClaudeChat, res, text, server_tools=()):
             'api_error_status': getattr(res, 'api_error_status', None)}
 
 @patch
+async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended without a result'):
+    "Drive one Agent SDK message stream to `(kind, value)` pairs, then a final `result`."
+    sdk = claude_agent_sdk
+    text, res, ran = [], None, []
+    while True:
+        if self._cancel.is_set(): break
+        try: m = await asyncio.wait_for(ait.__anext__(), self.timeout)
+        except StopAsyncIteration: break
+        except asyncio.TimeoutError:
+            raise TimeoutError(f'Claude Code sent nothing for {self.timeout}s') from None
+        if isinstance(m, sdk.AssistantMessage):
+            for b in m.content:
+                if isinstance(b, sdk.ThinkingBlock) and b.thinking: yield 'thought', b.thinking
+                elif isinstance(b, sdk.TextBlock) and b.text: text.append(b.text); yield 'text', b.text
+                elif (u := claude_tool_use(b, sdk)): ran.append(u); yield 'tool_use', u
+        elif isinstance(m, sdk.ResultMessage): res = m
+    if res is None: raise RuntimeError(err)
+    if after is not None: await after()
+    yield 'result', self._result(res, text, ran)
+
+@patch
 def _sdk_events(self:ClaudeChat, prompt, sp, resume=None):
     "One `query` as `(kind, value)` pairs: `thought`, `text`, and one final `result` dict."
-    sdk = claude_agent_sdk
-    async def _agen():
-        text, res, ran = [], None, []
-        ait = sdk.query(prompt=claude_prompt(prompt), options=self._opts(sp, resume=resume)).__aiter__()
-        while True:
-            try: m = await asyncio.wait_for(ait.__anext__(), self.timeout)
-            except StopAsyncIteration: break
-            except asyncio.TimeoutError:
-                raise TimeoutError(f'Claude Code sent nothing for {self.timeout}s') from None
-            if isinstance(m, sdk.AssistantMessage):
-                for b in m.content:
-                    if isinstance(b, sdk.ThinkingBlock) and b.thinking: yield 'thought', b.thinking
-                    elif isinstance(b, sdk.TextBlock) and b.text: text.append(b.text); yield 'text', b.text
-                    elif (u := claude_tool_use(b, sdk)): ran.append(u); yield 'tool_use', u
-            elif isinstance(m, sdk.ResultMessage): res = m
-        if res is None: raise RuntimeError('the Agent SDK ended without a result')
-        yield 'result', self._result(res, text, ran)
-    return sync_iter(_agen, stop=self._cancel)
+    ait = claude_agent_sdk.query(prompt=claude_prompt(prompt), options=self._opts(sp, resume=resume)).__aiter__()
+    return sync_iter(lambda: self._drain(ait), stop=self._cancel)
 
 
 # %% ../nbs/06_claude.ipynb #da4e0a44
@@ -574,30 +579,15 @@ def _ctx_usage(self:ClaudeChat):
 @patch
 def _session_turn(self:ClaudeChat, prompt):
     "One turn on the live session, in `_sdk_events`' `(kind, value)` shape."
-    sdk = claude_agent_sdk
     client = self._connect()
     async def _agen():
-        text, res, ran = [], None, []
         await client.query(claude_prompt(prompt))
-        ait = client.receive_response().__aiter__()
-        while True:
-            if self._cancel.is_set(): break
-            try: m = await asyncio.wait_for(ait.__anext__(), self.timeout)
-            except StopAsyncIteration: break
-            except asyncio.TimeoutError:
-                raise TimeoutError(f'Claude Code sent nothing for {self.timeout}s') from None
-            if isinstance(m, sdk.AssistantMessage):
-                for b in m.content:
-                    if isinstance(b, sdk.ThinkingBlock) and b.thinking: yield 'thought', b.thinking
-                    elif isinstance(b, sdk.TextBlock) and b.text: text.append(b.text); yield 'text', b.text
-                    elif (u := claude_tool_use(b, sdk)): ran.append(u); yield 'tool_use', u
-            elif isinstance(m, sdk.ResultMessage): res = m
-        if res is None: raise RuntimeError('the Claude Code session ended without a result')
-        # already on the loop, so this is a local await rather than a cross-thread wait
-        try: self._ctx_live = (await client.get_context_usage() or {}).get('totalTokens') or self._ctx_live
-        except Exception: pass
-        yield 'result', self._result(res, text, ran)
-    return iter_sync(_agen())
+        async def _ctx():   # already on the loop: a local await, not a cross-thread wait
+            try: self._ctx_live = (await client.get_context_usage() or {}).get('totalTokens') or self._ctx_live
+            except Exception: pass
+        async for o in self._drain(client.receive_response().__aiter__(), after=_ctx,
+                                   err='the Claude Code session ended without a result'): yield o
+    return sync_iter(lambda: _agen())
 
 @patch
 def _events(self:ClaudeChat):

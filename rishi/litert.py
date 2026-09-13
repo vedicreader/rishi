@@ -14,9 +14,10 @@ from contextlib import ExitStack
 from litert_lm import (ActivationDataType, Engine, Backend, ConstrainedDecodingConfig, Conversation, Message, Contents, Content, Role, ToolCall,
                        ToolEventHandler, SamplerConfig, Benchmark, set_min_log_severity)
 from litert_lm._messages import Text, ImageBytes, ImageFile, AudioBytes, AudioFile, ToolResponse, normalize_message
-from huggingface_hub import hf_hub_download, list_repo_files, scan_cache_dir
+from huggingface_hub import hf_hub_download, list_repo_files
 from fastcore.all import Path, store_attr, patch, L, ifnone, detect_mime, first, listify, img_bytes, str2bool
 import rishi.core
+from urai.caps import hub_files
 from urai import (Chat, ChatBroker, ChatCallback, ChatOpts, ContextWindowExceededError, Resp, SlidingWindowCallback,
                   StreamFormatter, UsageStats, budget_msg_, evict_middle, extract_fence, is_ctx_error, is_path,
                   get_runtime, resp_text, run_cbs, split_runtime, thought, tool_reminder_)
@@ -203,9 +204,7 @@ def _litertlm(fs):
 
 def _cached_model(model_id):
     "Local `.litertlm` path from the HF cache without hitting the network, else None."
-    try: repo = first(scan_cache_dir().repos, lambda r: r.repo_id == model_id)
-    except Exception: return None
-    return _litertlm(str(f.file_path) for r in repo.revisions for f in r.files) if repo else None
+    return _litertlm(hub_files(model_id))
 
 def _get_model(model_id, model_path=None):
     "Return a local `.litertlm` path: `model_path`, else HF cache, else download."
