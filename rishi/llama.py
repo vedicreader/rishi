@@ -192,9 +192,7 @@ class LlamaChat(RishiToolLoop, Chat):
                  comp_kw=None,            # passed to `create_chat_completion` verbatim
                  **kw):                   # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(opts, **kw)
-        model = split_runtime(model)[1]
-        model_id = None if model is None or is_path(model) else model
-        model_path = model_path or (model if model and is_path(model) else None)
+        model_id, model_path = rishi.core.split_model_path(model, model_path)
         self._own_engine = engine is None
         if engine is None:
             engine = self.create_engine(model_id or qwen3_17b, model_path, quant,

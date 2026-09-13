@@ -6,19 +6,26 @@ Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
 # %% auto #0
 __all__ = ['BACKENDS', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs', 'browser_approval', 'runtimes', 'RishiToolLoop',
-           'litert_caps', 'ollama_caps_', 'use_system_certs_', 'repo_root', 'mv_skill_md']
+           'split_model_path', 'litert_caps', 'ollama_caps_', 'use_system_certs_', 'repo_root', 'mv_skill_md']
 
 # %% ../nbs/00_core.ipynb #d122bb29
 import ast, inspect, warnings
 from fastcore.all import Path, first
 from urai import (Caps, Runtime, RUNTIMES, register_runtime, infer_runtime, resolve_runtime, resolve,
-                  model_caps, cfg_caps, mmproj_caps, is_path, use_system_certs,
+                  model_caps, cfg_caps, mmproj_caps, is_path, split_runtime, use_system_certs,
                   mk_content, mk_msg, mk_msgs, http_approval,
                   ToolLoopMixin, SlidingWindowCallback, ToolReminderCallback, UsageCallback)
 
 class RishiToolLoop(ToolLoopMixin):
     "`ToolLoopMixin` with rishi's default callbacks; the shared base for rishi's tool-loop backends."
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
+
+def split_model_path(model, model_path=None):
+    "Strip any runtime prefix, then split `model` into a hub `(model_id, model_path)`."
+    model = split_runtime(model)[1]
+    model_id = None if model is None or is_path(model) else model
+    model_path = model_path or (model if model and is_path(model) else None)
+    return model_id, model_path
 
 # %% ../nbs/00_core.ipynb #ed11fe02
 _all_ = ['BACKENDS', 'litert_caps', 'ollama_caps_', 'use_system_certs_', 'repo_root', 'mv_skill_md']

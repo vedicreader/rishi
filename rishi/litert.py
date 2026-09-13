@@ -20,7 +20,7 @@ import rishi.core
 from urai.caps import hub_files
 from urai import (Chat, ChatBroker, ChatCallback, ChatOpts, ContextWindowExceededError, Resp, SlidingWindowCallback,
                   StreamFormatter, UsageStats, budget_msg_, evict_middle, extract_fence, is_ctx_error, is_path,
-                  get_runtime, resp_text, run_cbs, split_runtime, thought, tool_reminder_)
+                  get_runtime, resp_text, run_cbs, split_runtime, tc_name, thought, tool_reminder_)
 
 
 # %% ../nbs/02_litert.ipynb #6e295c9a
@@ -151,9 +151,6 @@ class _UsageCallback(ChatCallback):
 
 
 # %% ../nbs/02_litert.ipynb #1d26406d13cefa08
-#: Tool name from an OpenAI-shaped tool-call dict.
-def _tc_name(tc): return tc.get('function', {}).get('name', '')
-
 class ChatToolHandler(ToolEventHandler):
     "Bridge litert's in-engine tool loop to Chat callbacks, HITL approval, the tool-call budget, and history."
     def __init__(self, chat): self.chat = chat
@@ -178,7 +175,7 @@ class ChatToolHandler(ToolEventHandler):
             tool_response = tool_response[:mx] + ' …[truncated]'
         self.chat.turn_tool_result = tool_response
         self.chat.hist.append({'role': 'tool', 'tool_call_id': getattr(self, '_tcid', None),
-                               'name': _tc_name(self.chat.turn_tc), 'content': str(tool_response)})
+                               'name': tc_name(self.chat.turn_tc), 'content': str(tool_response)})
         for _ in run_cbs(self.chat, 'after_tool_calls'): pass
         return tool_response
 
@@ -301,9 +298,7 @@ class LitertChat(Chat):
         if o.parallel_tools: raise NotImplementedError(
             "litert runs its tool loop inside the engine, so it can't dispatch calls in parallel; "
             "use runtime='llama' (or 'mlx') for parallel_tools=True.")
-        model = split_runtime(model)[1]
-        model_id = None if model is None or is_path(model) else model
-        model_path = model_path or (model if model and is_path(model) else None)
+        model_id, model_path = rishi.core.split_model_path(model, model_path)
         self._stack, self._conv_stack = ExitStack(), ExitStack()
         ekw = dict(eng_kw or {})
         if o.ctx: ekw.setdefault('max_num_tokens', o.ctx)

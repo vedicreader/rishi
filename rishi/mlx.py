@@ -11,6 +11,7 @@ __all__ = ['qwen3_06b', 'qwen3_17b', 'DFLT_MAX_TOKENS', 'qwen3_4b', 'qwen3_8b', 
 
 # %% ../nbs/03_mlx.ipynb #cf11fc103db8abae
 import json, os
+from functools import lru_cache
 from base64 import b64decode
 from tempfile import TemporaryDirectory
 import mlx.core as mx
@@ -41,6 +42,7 @@ qwen3vl_4b = 'mlx-community/Qwen3-VL-4B-Instruct-4bit'   # vision + text, needs 
 gemma4_e4b = 'mlx-community/gemma-4-e4b-it-4bit'         # vision + audio, needs `rishi[mlx-vlm]`
 qwen3omni_30b = 'mlx-community/Qwen3-Omni-30B-A3B-Instruct-4bit'   # audio in, needs `rishi[mlx-vlm]`
 
+@lru_cache
 def read_config(model):
     "A model's `config.json` as a dict, from a local directory or the hub, or `{}` if it cannot be read."
     try:
@@ -134,9 +136,7 @@ class MlxChat(RishiToolLoop, Chat):
                  gen_kw=None,            # passed to `stream_generate` verbatim
                  **kw):                  # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(opts, **kw)
-        model = split_runtime(model)[1]
-        model_id = None if model is None or is_path(model) else model
-        model_path = model_path or (model if model and is_path(model) else None)
+        model_id, model_path = rishi.core.split_model_path(model, model_path)
         if o.seed is not None: mx.random.seed(o.seed)
         self._own_engine = engine is None
         if engine is None:

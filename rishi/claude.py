@@ -19,6 +19,7 @@ from llmsurgery import ant
 from base64 import b64encode
 from pathlib import Path
 from contextlib import contextmanager
+from functools import lru_cache
 from fastcore.all import store_attr, patch, ifnone, listify, detect_mime
 from fastcore.aio import run_sync
 import rishi.core
@@ -67,15 +68,13 @@ def claude_fallback(models):
     ms = models.split(',') if isinstance(models, str) else listify(models)
     return ','.join(x for m in ms if (x := claude_model(m, dflt='')))
 
-_cc_version = {}
+@lru_cache
 def claude_version(bin=CLAUDE_BIN):
     "The installed Claude Code's version, cached per binary, for the `version` a record carries."
-    if bin not in _cc_version:
-        try: out = subprocess.run([claude_bin(bin), '--version'], capture_output=True, text=True, timeout=30).stdout
-        except Exception: out = ''
-        m = re.search(r'\d+\.\d+\.\d+', out)
-        _cc_version[bin] = m.group(0) if m else ant.CC_VERSION
-    return _cc_version[bin]
+    try: out = subprocess.run([claude_bin(bin), '--version'], capture_output=True, text=True, timeout=30).stdout
+    except Exception: out = ''
+    m = re.search(r'\d+\.\d+\.\d+', out)
+    return m.group(0) if m else ant.CC_VERSION
 
 def sess_entrypoint(p, mx=50):
     "Return a transcript's `entrypoint`, if present in its first `mx` records."
