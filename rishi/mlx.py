@@ -11,6 +11,7 @@ __all__ = ['qwen3_06b', 'qwen3_17b', 'DFLT_MAX_TOKENS', 'qwen3_4b', 'qwen3_8b', 
 
 # %% ../nbs/03_mlx.ipynb #cf11fc103db8abae
 import json, os
+from functools import lru_cache
 from base64 import b64decode
 from tempfile import TemporaryDirectory
 import mlx.core as mx
@@ -19,12 +20,13 @@ from mlx_lm.sample_utils import make_sampler
 from mlx_lm.models.cache import (make_prompt_cache, trim_prompt_cache, can_trim_prompt_cache,
                                  save_prompt_cache, load_prompt_cache)
 from huggingface_hub import hf_hub_download, scan_cache_dir
-from fastcore.funccall import get_schema, mk_ns
+from fastcore.funccall import get_schema
 from fastcore.all import Path, store_attr, patch, L, ifnone, first, listify
 import rishi.core
-from urai import (Chat, ChatBroker, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolLoopMixin,
-                  ToolReminderCallback, UsageCallback, common_prefix_len, display_stream, get_runtime, extract_fence, is_media, is_path,
-                  mk_content, mk_msg, mk_msgs, resolve_runtime, resp_text, split_runtime, split_think, thought, truncated, strip_media, to_oai_msg)
+from .core import RishiToolLoop
+from urai import (Chat, ChatBroker, ChatOpts, Resp, StreamSplit,
+                  common_prefix_len, display_stream, get_runtime, extract_fence, is_media, is_path,
+                  mk_content, mk_msg, mk_msgs, resolve_runtime, resp_text, split_runtime, split_think, stream_resp, thought, truncated, strip_media, to_oai_msg)
 
 # %% ../nbs/03_mlx.ipynb #70712d3bc7721d7c
 #: Common mlx-community repo ids.
@@ -40,6 +42,7 @@ qwen3vl_4b = 'mlx-community/Qwen3-VL-4B-Instruct-4bit'   # vision + text, needs 
 gemma4_e4b = 'mlx-community/gemma-4-e4b-it-4bit'         # vision + audio, needs `rishi[mlx-vlm]`
 qwen3omni_30b = 'mlx-community/Qwen3-Omni-30B-A3B-Instruct-4bit'   # audio in, needs `rishi[mlx-vlm]`
 
+@lru_cache
 def read_config(model):
     "A model's `config.json` as a dict, from a local directory or the hub, or `{}` if it cannot be read."
     try:
@@ -83,10 +86,9 @@ class MlxEngine:
         self.model = self.draft_model = None
 
 # %% ../nbs/03_mlx.ipynb #c9878e3a40848985
-class MlxChat(ToolLoopMixin, Chat):
+class MlxChat(RishiToolLoop, Chat):
     "Sync chat over a local MLX model: the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
     _runtime = 'mlx'
-    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     _media_ok = False    # text-only; `MlxVlmChat` flips this
     _media_note = ("this MLX model is text-only. Install `pip install 'rishi[mlx-vlm]'` and use a vision "
                    "model (e.g. rishi.mlx.qwen3vl_4b) for image or audio input, or pass vlm=True.")
@@ -134,9 +136,7 @@ class MlxChat(ToolLoopMixin, Chat):
                  gen_kw=None,            # passed to `stream_generate` verbatim
                  **kw):                  # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(opts, **kw)
-        model = split_runtime(model)[1]
-        model_id = None if model is None or is_path(model) else model
-        model_path = model_path or (model if model and is_path(model) else None)
+        model_id, model_path = rishi.core.split_model_path(model, model_path)
         if o.seed is not None: mx.random.seed(o.seed)
         self._own_engine = engine is None
         if engine is None:
@@ -254,13 +254,9 @@ class MlxChat(ToolLoopMixin, Chat):
 
     def _mk_resp(self, split, fin, cached, pt, gt):
         "Assemble one step's `Resp` from the parsed stream plus mlx-lm's token counts."
-        res = {'role': 'assistant', 'content': split.text}
-        if split.thought: res['channels'] = {'thought': split.thought}
-        if split.tool_calls: res['tool_calls'] = split.tool_calls
-        if fin == 'length': res['truncated'] = True
-        res['usage'] = {'prompt_tokens': cached + pt, 'completion_tokens': gt,
-                        'total_tokens': cached + pt + gt, 'cached_tokens': cached}
-        return Resp(res)
+        return stream_resp(split, truncated=(fin == 'length'),
+                           usage={'prompt_tokens': cached + pt, 'completion_tokens': gt,
+                                  'total_tokens': cached + pt + gt, 'cached_tokens': cached})
 
     def _model_step(self, **kw):
         "One completion, normalized to a `Resp`. MLX generates by streaming, so this drains `_stream_step`."

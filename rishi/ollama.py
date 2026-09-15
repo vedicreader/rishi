@@ -16,11 +16,12 @@ import json, os, time, atexit, platform, shutil, subprocess, tarfile, zipfile
 import httpx2 as httpx
 from urllib.parse import urlsplit
 from fastcore.funccall import get_schema
-from fastcore.all import Path, store_attr, L, ifnone, first, listify
+from fastcore.all import Path, store_attr, ifnone, first, listify
 import rishi.core
-from urai import (Caps, Chat, ChatOpts, Resp, SlidingWindowCallback, StreamSplit, ToolCall, ToolLoopMixin,
-                  ToolReminderCallback, UsageCallback, est_tokens, is_path, mk_content, mk_msg, mk_msgs, parse_args, parse_tool_tags, render_prompt,
-                  model_caps, resp_text, split_runtime, split_think, thought, truncated, tc_name)
+from .core import RishiToolLoop
+from urai import (Caps, Chat, ChatOpts, Resp, StreamSplit, ToolCall,
+                  est_tokens, is_path, mk_content, mk_msg, mk_msgs, parse_args, parse_tool_tags, render_prompt,
+                  model_caps, resp_text, split_runtime, split_think, stream_resp, thought, truncated, tc_name)
 
 # %% ../nbs/08_ollama.ipynb #ol_addr
 #: Where Ollama listens unless `$OLLAMA_HOST` says otherwise.
@@ -408,10 +409,9 @@ def dflt_ctx():
     try: return int(os.getenv('OLLAMA_CONTEXT_LENGTH') or 4096)
     except ValueError: return 4096
 
-class OllamaChat(ToolLoopMixin, Chat):
+class OllamaChat(RishiToolLoop, Chat):
     "Sync chat against an Ollama daemon through Urai's tool loop."
     _runtime = 'ollama'
-    _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
     mk_content, mk_msg, mk_msgs = staticmethod(mk_content), staticmethod(mk_msg), staticmethod(mk_msgs)
 
     @staticmethod
@@ -449,7 +449,7 @@ class OllamaChat(ToolLoopMixin, Chat):
         self.think, self.keep_alive = o.think, keep_alive
         self.max_output_tokens = o.max_output_tokens or None
         # a model with no thinking refuses `think`; this goes false on the first refusal
-        self._think_ok, self.comp_kw, self._ctx_tokens = o.think is not None, comp_kw or {}, 0
+        self._think_ok, self.comp_kw = o.think is not None, comp_kw or {}
         self._set_tools(o.tools)
         if pull and not self.client.have(self.model_id):
             self.client.pull(self.model_id, ifnone(on_progress, pull_progress()))
@@ -460,12 +460,6 @@ class OllamaChat(ToolLoopMixin, Chat):
         "Release this chat's HTTP client. The daemon is shared, so it stays up; `stop_ollama()` ends one rishi started."
         if self._own_client and getattr(self, 'client', None) is not None: self.client.close()
         self.client = None
-
-    def _note_usage(self, res):
-        "Keep the last turn's counts. Reported for cost, never for occupancy: see `token_count`."
-        n = ((res or {}).get('usage') or {}).get('total_tokens') or 0
-        if n: self._ctx_tokens = int(n)
-        return res
 
     @property
     def token_count(self):
@@ -528,7 +522,7 @@ class OllamaChat(ToolLoopMixin, Chat):
 
     def _model_step(self, **kw):
         "One completion, normalized to a `Resp`. The single wire call `ToolLoopMixin` drives."
-        return self._note_usage(norm_ochat(self._ask(self._payload(**kw)), self.model_id))
+        return norm_ochat(self._ask(self._payload(**kw)), self.model_id)
 
     def _stream_step(self, **kw):
         "Stream one completion, yielding chunk dicts and leaving the merged `Resp` on `self._step_res`."
@@ -542,12 +536,10 @@ class OllamaChat(ToolLoopMixin, Chat):
             tcs += msg.get('tool_calls') or []
             if d.get('done'): last = d
         yield from split.finish()
-        res = {'role': 'assistant', 'content': split.text}
-        if (th := '\n'.join(x for x in (native_th, split.thought) if x)): res['channels'] = {'thought': th}
-        if (calls := _tcs(tcs) + _tag_tcs(split.tool_calls)): res['tool_calls'] = calls
-        if last.get('done_reason') == 'length': res['truncated'] = True
-        res['usage'] = ollama_usage(last, self.model_id)
-        self._step_res = self._note_usage(Resp(res))
+        self._step_res = stream_resp(split,
+            thought='\n'.join(x for x in (native_th, split.thought) if x),
+            tool_calls=_tcs(tcs) + _tag_tcs(split.tool_calls),
+            truncated=last.get('done_reason') == 'length', usage=ollama_usage(last, self.model_id))
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
         "Stateless completion text: no history, no tools. It shares the daemon, which caches per conversation."
