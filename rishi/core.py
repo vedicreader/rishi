@@ -10,7 +10,7 @@ __all__ = ['BACKENDS', 'mk_oai_content', 'mk_oai_msg', 'mk_oai_msgs', 'browser_a
 
 # %% ../nbs/00_core.ipynb #d122bb29
 import ast, inspect, warnings
-from fastcore.all import Path, first
+from fastcore.all import Path, first, find_file_parents
 from urai import (Caps, Runtime, RUNTIMES, register_runtime, infer_runtime, resolve_runtime, resolve,
                   model_caps, cfg_caps, mmproj_caps, is_path, split_runtime, use_system_certs,
                   mk_content, mk_msg, mk_msgs, http_approval,
@@ -103,7 +103,7 @@ def use_system_certs_(force=False):
 # %% ../nbs/00_core.ipynb #1086ffd6
 def repo_root() -> Path:
     "Root of the current git repository, or None if not in one."
-    return first((Path.cwd(), *Path.cwd().parents), lambda p: (p/'.git').exists())
+    return find_file_parents('.git')
 
 def mv_skill_md(dry_run=True, dir=None):
     "Copy the bundled `skill.md` into the `.claude` and `.agents` skill directories."

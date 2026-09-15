@@ -17,7 +17,7 @@ import httpx
 from dataclasses import dataclass, replace
 from fastcore.all import L, Path, store_attr, first
 import rishi.core
-from urai import Chat, ChatOpts, ToolCall, display_stream, get_runtime, resolve_runtime, resp_text
+from urai import Chat, ChatOpts, ToolCall, display_stream, get_runtime, resolve_runtime, resp_text, is_media
 from .remote import RemoteChat
 
 # %% ../nbs/07_copilot.ipynb #cp_wire
@@ -204,8 +204,7 @@ class CopilotChat(RemoteChat):
 
     def _has_media(self):
         "Does the history carry an image or audio part? Copilot gates those behind a header."
-        return any(isinstance(p, dict) and p.get('type') in ('image_url', 'input_audio')
-                   for m in self.hist for p in L(m.get('content')))
+        return any(is_media(p) for m in self.hist for p in L(m.get('content')))
 
     def _initiator(self):
         "`user` for a turn a person opened, `agent` once the model is round-tripping its own tool calls."

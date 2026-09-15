@@ -88,7 +88,7 @@ from rishi.core import hitl_policy
 chat = Chat(tools=[add, danger], approve=hitl_policy({'add': 'approved', 'danger': 'dont_run'}))
 ```
 
-Modes are `approved` (run), `dont_run` (block), `check` (ask on the console). In a Leela web IDE kernel, `hitl_policy(modes, browser=True)` sends checked calls to Leela's browser approval card instead of calling `input()`. Use `browser='http://host:port'` or set `LEELA_URL` when needed. `browser_approval(url=None, timeout=300)` is also available as a standalone callback. A blocked call is recorded as "Denied by human operator" and reported to the model. For custom logic, pass your own function. `ChatToolHandler` routes calls through `approve` and writes calls and results into `hist`.
+Modes are `approved` (run), `dont_run` (block), `check` (ask on the console). In a Leela web IDE kernel, `hitl_policy(modes, http=True)` sends checked calls to Leela's browser approval card instead of calling `input()`. Use `http='http://host:port'` or set `URAI_APPROVAL_URL` when needed. `browser_approval(url=None, timeout=300)` is also available as a standalone callback. A blocked call is recorded as "Denied by human operator" and reported to the model. For custom logic, pass your own function. `ChatToolHandler` routes calls through `approve` and writes calls and results into `hist`.
 
 ## Running python from replies
 
