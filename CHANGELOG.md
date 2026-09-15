@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.38
+claude: refile tool calls as `<tool_call>` text on the tags channel, so a resumed session keeps using tools
+
 ## 0.1.36
 fastspec update
 

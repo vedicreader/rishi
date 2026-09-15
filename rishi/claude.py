@@ -10,7 +10,7 @@ __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'f
            'INTERRUPT_WAIT', 'CONT_PROMPT', 'EMPTY_RESULT', 'claude_bin', 'claude_model', 'claude_fallback',
            'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError', 'claude_status',
            'claude_tool_use', 'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat',
-           'anth_blocks', 'tu_id', 'anth_msgs', 'claude_prompt']
+           'anth_blocks', 'tu_id', 'tag_calls', 'anth_msgs', 'claude_prompt']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import asyncio, atexit, json, os, re, shutil, subprocess, sys, time, uuid, weakref
@@ -410,8 +410,12 @@ def tu_id(tid, ant):
 
 EMPTY_RESULT = '(no output)'   #: what a tool that returned nothing says. See `anth_msgs`.
 
-def anth_msgs(hist, ant):
-    "rishi's history as Anthropic messages, with tool calls answered in place as real blocks."
+def tag_calls(tcs):
+    "Tool calls as `<tool_call>` text, spelled as `render_prompt` spells them."
+    return '\n'.join(f"<tool_call>\n{json.dumps({'name': tc_name(tc), 'arguments': (tc.get('function') or {}).get('arguments') or {}})}\n</tool_call>" for tc in tcs)
+
+def anth_msgs(hist, ant, tags=False):
+    "rishi's history as Anthropic messages; tool calls as blocks, or as `<tool_call>` text when `tags`."
     out, called = [], set()
     for m in hist:
         role = m.get('role')
@@ -424,12 +428,13 @@ def anth_msgs(hist, ant):
             role = 'user'
         else:
             blocks = anth_blocks(m.get('content'))
-            if role == 'assistant':
-                tus = [{'type': 'tool_use', 'id': tu_id(tc.get('id'), ant), 'name': tc_name(tc),
-                        'input': parse_args((tc.get('function') or {}).get('arguments'))}
-                       for tc in (m.get('tool_calls') or [])]
-                called |= {b['id'] for b in tus}
-                blocks += tus
+            if role == 'assistant' and (tcs := m.get('tool_calls')):
+                if tags: blocks.append({'type': 'text', 'text': tag_calls(tcs)})   # so results file as prose too
+                else:
+                    tus = [{'type': 'tool_use', 'id': tu_id(tc.get('id'), ant), 'name': tc_name(tc),
+                            'input': parse_args((tc.get('function') or {}).get('arguments'))} for tc in tcs]
+                    called |= {b['id'] for b in tus}
+                    blocks += tus
         if not blocks: continue                        # an empty turn is not a message
         role = 'assistant' if role == 'assistant' else 'user'
         if out and out[-1]['role'] == role: out[-1]['content'] += blocks   # a transcript reads these as one turn
@@ -449,7 +454,7 @@ def claude_prompt(prompt):
 def _file_sess(self:ClaudeChat, hist=None):
     "File `hist` as a resumable Claude Code transcript, returning its session id, or None if empty."
     if not self.transcript: return None
-    msgs = anth_msgs(ifnone(hist, self.hist), ant)
+    msgs = anth_msgs(ifnone(hist, self.hist), ant, tags=self.tool_channel == 'tags')
     if not msgs: return None
     cwd = self._cwd
     cwd.mkdir(parents=True, exist_ok=True)
