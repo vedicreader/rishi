@@ -3,8 +3,11 @@
 <!-- do not remove -->
 
 ## 0.1.38
-claude: refile tool calls as `<tool_call>` text on the tags channel, so a resumed session keeps using tools
-llama, mlx and ollama drain through urai's `stream_resp`; `split_model_path` and `RishiToolLoop` are public. `skill.md` names the approval API that exists: `hitl_policy(modes, http=True)` and `URAI_APPROVAL_URL`. Needs uraiyadal 0.0.7.
+- claude: refile transcript tool calls as `<tool_call>` text, so a resumed session keeps using tools
+- llama, mlx, ollama: drain responses through uraiyadal `stream_resp`
+- `split_model_path` and `RishiToolLoop` are public
+- skill.md: name the approval API as it exists, `hitl_policy(modes, http=True)` and `URAI_APPROVAL_URL`
+- requires uraiyadal>=0.0.7
 
 ## 0.1.36
 fastspec update
