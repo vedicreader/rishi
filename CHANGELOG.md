@@ -2,6 +2,12 @@
 
 <!-- do not remove -->
 
+## 0.1.39
+- litert: chats sharing one engine take turns on it (`engine_lock`), letting go while a tool runs. Two
+  concurrent sends on one GPU engine returned an empty turn, raised WebGPU validation errors, and slowed
+  every decode step past constrained decoding's fixed 10 s logits-buffer lock (`DEADLINE_EXCEEDED ...
+  Failed to lock custom tensor buffer`), which showed up first on gemma-12b
+
 ## 0.1.38
 - claude: refile transcript tool calls as `<tool_call>` text, so a resumed session keeps using tools
 - llama, mlx, ollama: drain responses through uraiyadal `stream_resp`
