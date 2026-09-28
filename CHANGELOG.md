@@ -6,7 +6,8 @@
 - litert: chats sharing one engine take turns on it (`engine_lock`), letting go while a tool runs. Two
   concurrent sends on one GPU engine returned an empty turn, raised WebGPU validation errors, and slowed
   every decode step past constrained decoding's fixed 10 s logits-buffer lock (`DEADLINE_EXCEEDED ...
-  Failed to lock custom tensor buffer`), which showed up first on gemma-12b
+  Failed to lock custom tensor buffer`), which showed up first on gemma-12b. A second chat stepping onto
+  the engine from the thread that already holds it raises `EngineBusy` rather than hanging that thread
 
 ## 0.1.38
 - claude: refile transcript tool calls as `<tool_call>` text, so a resumed session keeps using tools
