@@ -304,6 +304,7 @@ def _opts(self:ClaudeChat, sp, resume=None, fork=False):
               include_partial_messages=True,                 # token deltas
               max_buffer_size=self.max_buffer,               # the SDK's own 1MB cap loses a long reply
               env={} if self.api_key else {'ANTHROPIC_API_KEY': ''},   # a subscription session, not a metered one
+              cli_path=shutil.which(self.bin),               # None: the SDK's bundled copy
               disallowed_tools=list(self.claude_disallowed or ()))
     if native is not None: kw['allowed_tools'] = native + srv
     elif srv: kw['allowed_tools'] = srv
