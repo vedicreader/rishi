@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.40
+- claude: run the `claude` on `$PATH` (`cli_path=shutil.which(bin)`), not the Agent SDK's bundled copy. The bundled copy lags Claude Code releases and refuses newer models (`Claude Code 2.1.248 does not support this model`). Without a `claude` on `$PATH` the SDK uses its bundled copy
+
 ## 0.1.39
 - litert: chats sharing one engine take turns on it (`engine_lock`), letting go while a tool runs. Two
   concurrent sends on one GPU engine returned an empty turn, raised WebGPU validation errors, and slowed
