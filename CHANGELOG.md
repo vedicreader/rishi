@@ -2,6 +2,11 @@
 
 <!-- do not remove -->
 
+## 0.1.41
+
+- A Claude reply holding a `<tool_call>` nothing could read is marked `tool_parse_failed`, so the loop asks for the call again. `norm_claude` used to drop the flag, and the turn ended on the prose before the call.
+- Requires uraiyadal 0.0.12, which reads Claude's `<invoke name=...>` dialect.
+
 ## 0.1.40
 - claude: run the `claude` on `$PATH` (`cli_path=shutil.which(bin)`), not the Agent SDK's bundled copy. The bundled copy lags Claude Code releases and refuses newer models (`Claude Code 2.1.248 does not support this model`). Without a `claude` on `$PATH` the SDK uses its bundled copy
 

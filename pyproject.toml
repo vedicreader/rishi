@@ -16,7 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "uraiyadal>=0.0.7",
+    "uraiyadal>=0.0.12",   # reads Claude's invoke dialect
     "fastcore>=2.0.0",
     "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",

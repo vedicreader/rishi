@@ -25,7 +25,7 @@ from fastcore.aio import run_sync
 import rishi.core
 from .core import RishiToolLoop
 from urai import (Chat, ChatOpts, ROLE_NAMES, Resp, StreamSplit,
-                  est_tokens, is_media, mk_content, parse_args, parse_tool_tags, render_prompt, resp_text, split_runtime,
+                  est_tokens, is_media, mk_content, parse_args, parse_tool_tags_ex, render_prompt, resp_text, split_runtime,
                   split_think, sync_iter, tag_tools_sp, tc_name, to_media_part)
 
 # %% ../nbs/06_claude.ipynb #cl_wire
@@ -141,8 +141,9 @@ def norm_claude(d, model=None):
         raise ClaudeError(f"claude failed: {d.get('result') or d.get('subtype')}",
                           status=claude_status(d), raw=d)
     text, th = split_think(d.get('result') or '')
-    text, tcs = parse_tool_tags(text)
+    text, tcs, failed = parse_tool_tags_ex(text)
     res = {'role': 'assistant', 'content': text}
+    if failed: res['tool_parse_failed'] = True   # the loop asks for the call again instead of ending on the prose
     if th: res['channels'] = {'thought': th}
     # tools Claude Code ran itself. Not `tool_calls`: nothing here is waiting on rishi to answer it.
     if (ran := d.get('server_tools')): res.setdefault('channels', {})['server_tools'] = ran
