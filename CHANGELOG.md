@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.42
+
+- claude: a Claude Code result `The model's tool call could not be parsed` is marked `tool_parse_failed`, so the loop asks for the call again, once per turn. It raised `ClaudeError` and ended the turn. A second such result in the same turn raises `ClaudeError` ending `(no resend left)`. `norm_claude(d, model, asked)` takes whether the resend was already asked. `TOOL_PARSE_ERR` holds the matched text.
+
 ## 0.1.41
 
 - A Claude reply holding a `<tool_call>` nothing could read is marked `tool_parse_failed`, so the loop asks for the call again. `norm_claude` used to drop the flag, and the turn ended on the prose before the call.

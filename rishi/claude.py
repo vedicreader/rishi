@@ -7,10 +7,10 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_ALIASES',
            'CLAUDE_ENTRYPOINT', 'CLAUDE_DISALLOWED', 'CLAUDE_SERVER_TOOLS', 'CLAUDE_WORK_DIR', 'MAX_BUFFER', 'ABORTED',
-           'INTERRUPT_WAIT', 'CONT_PROMPT', 'EMPTY_RESULT', 'claude_bin', 'claude_model', 'claude_fallback',
-           'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError', 'claude_status',
-           'claude_tool_use', 'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat',
-           'anth_blocks', 'tu_id', 'tag_calls', 'anth_msgs', 'claude_prompt']
+           'TOOL_PARSE_ERR', 'INTERRUPT_WAIT', 'CONT_PROMPT', 'EMPTY_RESULT', 'claude_bin', 'claude_model',
+           'claude_fallback', 'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError',
+           'claude_status', 'claude_tool_use', 'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs',
+           'ClaudeChat', 'anth_blocks', 'tu_id', 'tag_calls', 'anth_msgs', 'claude_prompt']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import asyncio, atexit, json, os, re, shutil, subprocess, sys, time, uuid, weakref
@@ -111,6 +111,7 @@ def norm_claude_usage(u, model=None, cost=None):
             'cache_creation_tokens': made, 'cost': cost or 0.0, 'model': model}
 
 ABORTED = ('aborted_streaming', 'aborted')
+TOOL_PARSE_ERR = "The model's tool call could not be parsed"   #: Claude Code's error result when it cannot read a call, even after its own retry
 _status_re = re.compile(r'\b(\d{3})\b')
 
 class ClaudeError(RuntimeError):
@@ -135,10 +136,13 @@ def claude_tool_use(b, sdk):
     return {'id': getattr(b, 'id', '') or '', 'name': name, 'server': server,
             'input': getattr(b, 'input', None) or {}}
 
-def norm_claude(d, model=None):
-    "A Claude Code result -> a rishi `Resp`, with `<tool_call>` tags read out of the text."
+def norm_claude(d, model=None, asked=False):
+    "A Claude Code result -> a rishi `Resp`, with `<tool_call>` tags read out of the text. An unreadable call is flagged for one resend unless `asked`."
     if d.get('is_error') and d.get('terminal_reason') not in ABORTED:
-        raise ClaudeError(f"claude failed: {d.get('result') or d.get('subtype')}",
+        bad = TOOL_PARSE_ERR in (d.get('result') or '')
+        if bad and not asked: return Resp({'role': 'assistant', 'content': d['result'], 'tool_parse_failed': True,
+                                           'usage': norm_claude_usage(d.get('usage'), model, d.get('cost'))})
+        raise ClaudeError(f"claude failed: {d.get('result') or d.get('subtype')}{' (no resend left)' if bad else ''}",
                           status=claude_status(d), raw=d)
     text, th = split_think(d.get('result') or '')
     text, tcs, failed = parse_tool_tags_ex(text)
@@ -633,7 +637,7 @@ def _model_step(self:ClaudeChat, **kw):
     "One wire call."
     with self._turn_opts(kw):
         out = next(v for k, v in self._events() if k == 'result')
-    self._last_res = res = self._note_usage(norm_claude(out, self.model_id))
+    self._last_res = res = self._note_usage(norm_claude(out, self.model_id, self._reparse_asked))
     return res
 
 @patch
@@ -648,12 +652,12 @@ def _stream_step(self:ClaudeChat, **kw):
             elif kind == 'result': out = v
     yield from split.finish()
     if out is None: raise RuntimeError('the turn ended without a result')
-    self._step_res = self._last_res = self._note_usage(norm_claude(out, self.model_id))
+    self._step_res = self._last_res = self._note_usage(norm_claude(out, self.model_id, self._reparse_asked))
 
 
 @patch
 def _oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None):
     "Stateless one-shot text: no history to file and no session to keep."
     out = next(v for k, v in self._sdk_events(prompt, sp) if k == 'result')
-    return resp_text(norm_claude(out, self.model_id))
+    return resp_text(norm_claude(out, self.model_id, True))
 

@@ -3291,7 +3291,7 @@ requires-dist = [
     { name = "soundfile", marker = "extra == 'all'", specifier = ">=0.14.0" },
     { name = "soundfile", marker = "extra == 'llama'", specifier = ">=0.14.0" },
     { name = "truststore", specifier = ">=0.10" },
-    { name = "uraiyadal", specifier = ">=0.0.7" },
+    { name = "uraiyadal", specifier = ">=0.0.12" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'all'", specifier = ">=0.22" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'ollama'", specifier = ">=0.22" },
 ]
@@ -3813,7 +3813,7 @@ wheels = [
 
 [[package]]
 name = "uraiyadal"
-version = "0.0.7"
+version = "0.0.12"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aidialog" },
@@ -3824,9 +3824,9 @@ dependencies = [
     { name = "safepyrun" },
     { name = "truststore" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7b/97/4ad4298030901a113e4d3a9ecb0ab080914020bb0164ee858a07e8e34c30/uraiyadal-0.0.7.tar.gz", hash = "sha256:621f5d7af9c16d2fd34d064e8d1efa03f88d4e653a279d4ef7f0b2058e915297", size = 46657, upload-time = "2026-09-21T10:09:30.32Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/1a/bc/1538734591a717e2a2a2ed563a43ed424f4babfb98ae7649b831609a2372/uraiyadal-0.0.12.tar.gz", hash = "sha256:abd478b90107d1bfa1a984c6d2835c0abbea600100c1b9ab75851dacea1ba672", size = 48331, upload-time = "2026-10-09T02:35:08.974Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/36/d792bc4237e6b3732bb6df29a5dc1efc73436e2db700714d10ece665d7c4/uraiyadal-0.0.7-py3-none-any.whl", hash = "sha256:d7ccf6c719f5f7c4423d94e16ac77a8783bb6648b3f28d941297007576af8c54", size = 53420, upload-time = "2026-09-21T10:09:29.195Z" },
+    { url = "https://files.pythonhosted.org/packages/1f/8a/5a08be1f8fe99f62b2ac1f56a215f45cacda7bf23e12ad84b08d371457a7/uraiyadal-0.0.12-py3-none-any.whl", hash = "sha256:323a1cda426a6e4a74608bff814db61a081158a9dad2be37d7dbf3675ff140cd", size = 55165, upload-time = "2026-10-09T02:35:07.651Z" },
 ]
 
 [[package]]
