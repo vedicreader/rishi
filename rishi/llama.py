@@ -6,7 +6,8 @@ Docs: https://vedicreader.github.io/rishi/llama.html.md"""
 
 # %% auto #0
 __all__ = ['DFLT_N_CTX', 'qwen3_06b', 'qwen3_17b', 'qwen3_4b', 'gemma3_1b', 'gemma3_4b', 'qwen3_6_fusion', 'ornith_9b',
-           'ornith_31b', 'get_mmproj', 'gpu_offload_supported', 'read_audio', 'LlamaChat', 'LlamaBroker']
+           'ornith_31b', 'cached_model', 'get_model', 'get_mmproj', 'gpu_offload_supported', 'read_audio', 'LlamaChat',
+           'LlamaBroker']
 
 # %% ../nbs/01_llama.ipynb #10a30d78
 import json, re, os, io, ctypes
@@ -45,16 +46,18 @@ def _gguf(fs, quant='Q4_K_M'):
     ggufs = L(fs).filter(lambda p: p.lower().endswith('.gguf') and 'mmproj' not in p.lower())
     return first(ggufs, lambda p: quant.lower() in p.lower()) or first(ggufs)
 
-def _cached_model(model_id, quant='Q4_K_M'):
-    "Local `.gguf` path from the HF cache without hitting the network, else None."
+def cached_model(model_id, quant='Q4_K_M'):
+    "Return the local `.gguf` path from the Hugging Face cache without touching the network, else None."
     return _gguf(hub_files(model_id), quant)
 
-def _get_model(model_id, model_path=None, quant='Q4_K_M'):
+def get_model(model_id, model_path=None, quant='Q4_K_M'):
     "Return a local `.gguf` path: `model_path`, else HF cache, else download."
     if model_path and Path(model_path).exists(): return str(model_path)
-    if (hit := _cached_model(model_id, quant)): return hit
+    if (hit := cached_model(model_id, quant)): return hit
     if not (fn := _gguf(list_repo_files(model_id), quant)): raise FileNotFoundError(f"No .gguf file found for {model_id}")
     return hf_hub_download(model_id, fn)
+
+_cached_model, _get_model = cached_model, get_model
 
 def _mmproj(fs):
     "First `mmproj` projector `.gguf` path in `fs` (the image encoder that sits beside the model)."
@@ -175,7 +178,7 @@ class LlamaChat(RishiToolLoop, Chat):
         if mmproj:
             from llama_cpp.llama_chat_format import MTMDChatHandler
             ch = MTMDChatHandler(get_mmproj(model_id, None if mmproj is True else mmproj), verbose=verbose)
-        return Llama(_get_model(model_id, model_path, quant), n_ctx=n_ctx, n_gpu_layers=n_gpu_layers,
+        return Llama(get_model(model_id, model_path, quant), n_ctx=n_ctx, n_gpu_layers=n_gpu_layers,
                      chat_handler=ch, verbose=verbose, **kw)
 
     #: what llama.cpp calls each portable option
