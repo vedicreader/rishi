@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.45
+
+- Three names other packages were importing are now public. `rishi.llama.get_model` and `rishi.litert.get_model` find a model file from a `model_path`, the Hugging Face cache, or a download. `rishi.litert.cached_model` looks in the cache only and returns None on a miss. `rishi.litert.EngineHold` holds a shared LiteRT engine for one send. The old names `_get_model`, `_cached_model` and `_Hold` still work.
+
 ## 0.1.44
 
 - claude: the audio error names backends that take audio: `rishi.remote` with an audio model, `rishi.litert`, `rishi.llama` with an audio `mmproj`, or `rishi.mlx` with mlx-vlm. It used to suggest `rishi.ollama`, which refuses audio too. The message is `NO_AUDIO`.
