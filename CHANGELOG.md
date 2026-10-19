@@ -2,6 +2,11 @@
 
 <!-- do not remove -->
 
+## 0.1.43
+
+- claude: a reply stops at its first tool call. A model could write a call and keep going in the same response, as though the call had answered: more calls, then findings it never saw. Claude Code's `result` holds only the last text block, so the calls were lost and the invented findings reached the caller as the answer. `_drain` now stops at the first text block holding a call, readable or not. Nothing after it is shown or kept, and the turn's text is what came before the stop, so the call runs.
+- When text was dropped after a call, the live session is marked stale, so the next turn refiles the conversation from `hist` rather than keep the dropped text.
+
 ## 0.1.42
 
 - claude: a Claude Code result `The model's tool call could not be parsed` is marked `tool_parse_failed`, so the loop asks for the call again, once per turn. It raised `ClaudeError` and ended the turn. A second such result in the same turn raises `ClaudeError` ending `(no resend left)`. `norm_claude(d, model, asked)` takes whether the resend was already asked. `TOOL_PARSE_ERR` holds the matched text.
