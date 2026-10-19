@@ -327,18 +327,23 @@ def _opts(self:ClaudeChat, sp, resume=None, fork=False):
     return sdk.ClaudeAgentOptions(**{**kw, **self.opts_})
 
 @patch
-def _result(self:ClaudeChat, res, text, server_tools=()):
-    "A `ResultMessage` as the dict `norm_claude` reads, cost and error status included."
-    return {'result': res.result or ''.join(text), 'usage': res.usage, 'is_error': res.is_error,
+def _result(self:ClaudeChat, res, text, server_tools=(), called=False):
+    "A `ResultMessage` as the dict `norm_claude` reads, cost and error status included; `called` keeps the text up to a call over Claude Code's last block."
+    return {'result': ''.join(text) if called else res.result or ''.join(text), 'usage': res.usage, 'is_error': res.is_error,
             'subtype': res.subtype, 'terminal_reason': getattr(res, 'terminal_reason', None),
             'cost': res.total_cost_usd, 'server_tools': list(server_tools),
             'api_error_status': getattr(res, 'api_error_status', None)}
+
+def _holds_call(text):
+    "Whether `text` holds a tool call, readable or not, in any dialect `parse_tool_tags_ex` reads."
+    _, tcs, failed = parse_tool_tags_ex(text)
+    return bool(tcs or failed)
 
 @patch
 async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended without a result'):
     "Drive one Agent SDK message stream to `(kind, value)` pairs, then a final `result`."
     sdk = claude_agent_sdk
-    text, res, ran = [], None, []
+    text, res, ran, called = [], None, [], False
     while True:
         if self._cancel.is_set(): break
         try: m = await asyncio.wait_for(ait.__anext__(), self.timeout)
@@ -347,13 +352,16 @@ async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended with
             raise TimeoutError(f'Claude Code sent nothing for {self.timeout}s') from None
         if isinstance(m, sdk.AssistantMessage):
             for b in m.content:
+                if called: self._stale = True; continue   # past a call nobody answered: the model never saw what follows, and a live session must not keep it
                 if isinstance(b, sdk.ThinkingBlock) and b.thinking: yield 'thought', b.thinking
-                elif isinstance(b, sdk.TextBlock) and b.text: text.append(b.text); yield 'text', b.text
+                elif isinstance(b, sdk.TextBlock) and b.text:
+                    text.append(b.text); yield 'text', b.text
+                    called = _holds_call(b.text)
                 elif (u := claude_tool_use(b, sdk)): ran.append(u); yield 'tool_use', u
         elif isinstance(m, sdk.ResultMessage): res = m
     if res is None: raise RuntimeError(err)
     if after is not None: await after()
-    yield 'result', self._result(res, text, ran)
+    yield 'result', self._result(res, text, ran, called)
 
 @patch
 def _sdk_events(self:ClaudeChat, prompt, sp, resume=None):
