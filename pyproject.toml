@@ -36,6 +36,16 @@ mlx-vlm = ["mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'ar
 llama = ["llama-cpp-python==0.3.30", "soundfile>=0.14.0", "numpy"]
 ollama = ["zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'"]
 all = ["rishi[mlx,mlx-vlm,llama,ollama]"]
+dev = [
+    "rishi[all]",
+    "dhrishti>=0.0.5",
+    "koshas>=0.0.31",
+    "diskcache>=5.6.3",
+    "nbdev>=3.1.0",
+    "notebook>=7.6.0",
+    "pyskills>=0.0.21",
+    "ipykernel>=7.3.0",
+]
 
 [project.urls]
 Repository = "https://github.com/vedicreader/rishi"
@@ -72,13 +82,4 @@ llama-cpp-python = [
 ]
 
 [dependency-groups]
-dev = [
-    "rishi[all]",
-    "dhrishti>=0.0.5",
-    "koshas>=0.0.31",
-    "diskcache>=5.6.3",
-    "nbdev>=3.1.0",
-    "notebook>=7.6.0",
-    "pyskills>=0.0.21",
-    "ipykernel>=7.3.0",
-]
+dev = ["rishi[dev]"]

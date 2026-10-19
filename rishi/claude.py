@@ -7,7 +7,7 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_ALIASES',
            'CLAUDE_ENTRYPOINT', 'CLAUDE_DISALLOWED', 'CLAUDE_SERVER_TOOLS', 'CLAUDE_WORK_DIR', 'MAX_BUFFER', 'ABORTED',
-           'TOOL_PARSE_ERR', 'INTERRUPT_WAIT', 'CONT_PROMPT', 'EMPTY_RESULT', 'claude_bin', 'claude_model',
+           'TOOL_PARSE_ERR', 'INTERRUPT_WAIT', 'CONT_PROMPT', 'NO_AUDIO', 'EMPTY_RESULT', 'claude_bin', 'claude_model',
            'claude_fallback', 'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError',
            'claude_status', 'claude_tool_use', 'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs',
            'ClaudeChat', 'anth_blocks', 'tu_id', 'tag_calls', 'anth_msgs', 'claude_prompt']
@@ -371,6 +371,10 @@ def _sdk_events(self:ClaudeChat, prompt, sp, resume=None):
 
 
 # %% ../nbs/06_claude.ipynb #da4e0a44
+#: Ollama refuses audio too, so it is not offered.
+NO_AUDIO = ('Claude Code takes no audio input. Use `rishi.remote` with an audio model, `rishi.litert`, '
+            '`rishi.llama` with an audio `mmproj`, or `rishi.mlx` with mlx-vlm.')
+
 @patch
 def _to_parts(self:ClaudeChat, msgs):
     "rishi's OpenAI-shaped messages as aidialog `Part`s, media included."
@@ -389,8 +393,7 @@ def _to_parts(self:ClaudeChat, msgs):
             elif t == 'image_url':
                 media = to_media_part(prt)
                 out.append(InputFile(text=media.text, mime=media.mime) if media.mime == 'application/pdf' else media)
-            elif t == 'input_audio': raise TypeError(
-                'Claude Code takes no audio input. Use `rishi.remote`, `rishi.ollama` or `rishi.litert`.')
+            elif t == 'input_audio': raise TypeError(NO_AUDIO)
     return out
 
 # %% ../nbs/06_claude.ipynb #cl_sess
@@ -413,8 +416,7 @@ def anth_blocks(content):
             mime = head[5:] if head.startswith('data:') else 'application/octet-stream'
             out.append({'type': 'document' if mime == 'application/pdf' else 'image',
                         'source': {'type': 'base64', 'media_type': mime, 'data': data}})
-        elif t == 'input_audio': raise TypeError(
-            'Claude Code takes no audio input. Use `rishi.remote`, `rishi.ollama` or `rishi.litert`.')
+        elif t == 'input_audio': raise TypeError(NO_AUDIO)
     return out
 
 def tu_id(tid, ant):

@@ -3238,6 +3238,22 @@ all = [
     { name = "soundfile" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux'" },
 ]
+dev = [
+    { name = "dhrishti" },
+    { name = "diskcache" },
+    { name = "ipykernel" },
+    { name = "koshas" },
+    { name = "llama-cpp-python", version = "0.3.30", source = { registry = "https://abetlen.github.io/llama-cpp-python/whl/cpu" }, marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
+    { name = "llama-cpp-python", version = "0.3.30", source = { registry = "https://abetlen.github.io/llama-cpp-python/whl/metal" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
+    { name = "nbdev" },
+    { name = "notebook" },
+    { name = "numpy" },
+    { name = "pyskills" },
+    { name = "soundfile" },
+    { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux'" },
+]
 llama = [
     { name = "llama-cpp-python", version = "0.3.30", source = { registry = "https://abetlen.github.io/llama-cpp-python/whl/cpu" }, marker = "platform_machine != 'arm64' or sys_platform != 'darwin'" },
     { name = "llama-cpp-python", version = "0.3.30", source = { registry = "https://abetlen.github.io/llama-cpp-python/whl/metal" }, marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
@@ -3256,58 +3272,56 @@ ollama = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "dhrishti" },
-    { name = "diskcache" },
-    { name = "ipykernel" },
-    { name = "koshas" },
-    { name = "nbdev" },
-    { name = "notebook" },
-    { name = "pyskills" },
-    { name = "rishi", extra = ["all"] },
+    { name = "rishi", extra = ["dev"] },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "aidialog", specifier = ">=0.0.10" },
     { name = "claude-agent-sdk", specifier = ">=0.2" },
+    { name = "dhrishti", marker = "extra == 'dev'", specifier = ">=0.0.5" },
+    { name = "diskcache", marker = "extra == 'dev'", specifier = ">=5.6.3" },
     { name = "fastcore", specifier = ">=2.0.0" },
     { name = "httpx" },
     { name = "huggingface-hub", specifier = ">=1.23.0" },
+    { name = "ipykernel", marker = "extra == 'dev'", specifier = ">=7.3.0" },
+    { name = "koshas", marker = "extra == 'dev'", specifier = ">=0.0.31" },
     { name = "liteparse", specifier = "<2.13" },
     { name = "litert-lm-api", specifier = ">=0.14.0" },
     { name = "llama-cpp-python", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'all'", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/metal" },
+    { name = "llama-cpp-python", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'dev'", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/metal" },
     { name = "llama-cpp-python", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'llama'", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/metal" },
     { name = "llama-cpp-python", marker = "(platform_machine != 'arm64' and extra == 'all') or (sys_platform != 'darwin' and extra == 'all')", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/cpu" },
+    { name = "llama-cpp-python", marker = "(platform_machine != 'arm64' and extra == 'dev') or (sys_platform != 'darwin' and extra == 'dev')", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/cpu" },
     { name = "llama-cpp-python", marker = "(platform_machine != 'arm64' and extra == 'llama') or (sys_platform != 'darwin' and extra == 'llama')", specifier = "==0.3.30", index = "https://abetlen.github.io/llama-cpp-python/whl/cpu" },
     { name = "llmsurgery", specifier = ">=0.0.13" },
     { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'all'", specifier = ">=0.31.3" },
+    { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'dev'", specifier = ">=0.31.3" },
     { name = "mlx-lm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mlx'", specifier = ">=0.31.3" },
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'all'", specifier = ">=0.6.8" },
+    { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'dev'", specifier = ">=0.6.8" },
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin' and extra == 'mlx-vlm'", specifier = ">=0.6.8" },
+    { name = "nbdev", marker = "extra == 'dev'", specifier = ">=3.1.0" },
+    { name = "notebook", marker = "extra == 'dev'", specifier = ">=7.6.0" },
     { name = "numpy", marker = "extra == 'all'" },
+    { name = "numpy", marker = "extra == 'dev'" },
     { name = "numpy", marker = "extra == 'llama'" },
+    { name = "pyskills", marker = "extra == 'dev'", specifier = ">=0.0.21" },
     { name = "python-fastllm", specifier = ">=0.0.45" },
     { name = "safepyrun", specifier = ">=0.2.3" },
     { name = "soundfile", marker = "extra == 'all'", specifier = ">=0.14.0" },
+    { name = "soundfile", marker = "extra == 'dev'", specifier = ">=0.14.0" },
     { name = "soundfile", marker = "extra == 'llama'", specifier = ">=0.14.0" },
     { name = "truststore", specifier = ">=0.10" },
     { name = "uraiyadal", specifier = ">=0.0.12" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'all'", specifier = ">=0.22" },
+    { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'dev'", specifier = ">=0.22" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'ollama'", specifier = ">=0.22" },
 ]
-provides-extras = ["all", "llama", "mlx", "mlx-vlm", "ollama"]
+provides-extras = ["all", "dev", "llama", "mlx", "mlx-vlm", "ollama"]
 
 [package.metadata.requires-dev]
-dev = [
-    { name = "dhrishti", specifier = ">=0.0.5" },
-    { name = "diskcache", specifier = ">=5.6.3" },
-    { name = "ipykernel", specifier = ">=7.3.0" },
-    { name = "koshas", specifier = ">=0.0.31" },
-    { name = "nbdev", specifier = ">=3.1.0" },
-    { name = "notebook", specifier = ">=7.6.0" },
-    { name = "pyskills", specifier = ">=0.0.21" },
-    { name = "rishi", extras = ["all"] },
-]
+dev = [{ name = "rishi", extras = ["dev"] }]
 
 [[package]]
 name = "rpds-py"

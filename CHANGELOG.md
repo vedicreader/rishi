@@ -2,6 +2,12 @@
 
 <!-- do not remove -->
 
+## 0.1.44
+
+- claude: the audio error names backends that take audio: `rishi.remote` with an audio model, `rishi.litert`, `rishi.llama` with an audio `mmproj`, or `rishi.mlx` with mlx-vlm. It used to suggest `rishi.ollama`, which refuses audio too. The message is `NO_AUDIO`.
+- litert: works with litert-lm-api 0.18, which renamed `Role.MODEL`'s value from `'model'` to `'assistant'`. Building a message with role `'model'` failed there.
+- `rishi[dev]` is an extra, and the `dev` group points at it, so CI and the docs build install the backends and tools the notebooks need.
+
 ## 0.1.43
 
 - claude: a reply stops at its first tool call. A model could write a call and keep going in the same response, as though the call had answered: more calls, then findings it never saw. Claude Code's `result` holds only the last text block, so the calls were lost and the invented findings reached the caller as the answer. `_drain` now stops at the first text block holding a call, readable or not. Nothing after it is shown or kept, and the turn's text is what came before the stop, so the call runs.

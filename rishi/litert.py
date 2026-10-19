@@ -33,13 +33,17 @@ def _mk_content(o):
     if isinstance(o, Path): return AudioFile(str(o)) if (guess_type(str(o))[0] or '').startswith('audio/') else ImageFile(str(o))
     raise TypeError(f"Unsupported content type: {type(o)}")
 
+def _role(r):
+    "litert's `Role` for `r`; `Role.MODEL` is `'model'` before litert-lm 0.18 and `'assistant'` from it."
+    return Role.MODEL if r in ('model', 'assistant') else Role(r)
+
 def _mk_msg(content, role='user'):
     'Create a litert `Message` from str/bytes/list/dict/Message.'
     if content is None: return None
     if isinstance(content, Message): return content
-    if isinstance(content, dict): return Message(Role(content['role']), Contents.of(content['content']))
+    if isinstance(content, dict): return Message(_role(content['role']), Contents.of(content['content']))
     parts = [_mk_content(o) for o in content] if isinstance(content, list) else [_mk_content(content)]
-    return Message(Role(role), Contents(parts))
+    return Message(_role(role), Contents(parts))
 
 def _mk_msgs(msgs):
     'Normalize a list of messages to litert message dicts.'
@@ -112,7 +116,7 @@ def _hist2fmt1(m):
     if role == 'tool': return Message.tool(Contents([ToolResponse(m.get('name', ''), m.get('content', ''))]))
     tcs = [ToolCall(tc.get('function', {}).get('name', ''), tc.get('function', {}).get('arguments', {}))
            for tc in (m.get('tool_calls') or [])]
-    return Message(Role('model' if role == 'assistant' else role), _litert_contents(m.get('content')),
+    return Message(_role(role), _litert_contents(m.get('content')),
                    tool_calls=tcs, channels=(m.get('channels') or None))
 
 def _to_litert_msg(m):
