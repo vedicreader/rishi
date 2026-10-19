@@ -1,4 +1,4 @@
-"""Google's [litert_lm](https://github.com/google-ai-edge/litert-lm) backend for `.litertlm` Gemma builds: litert message helpers, GPU and NPU backends, KV-cache usage, and `bench()`.
+"""Run Google's `.litertlm` model builds, such as Gemma 4, with [LiteRT-LM](https://github.com/google-ai-edge/litert-lm), on the GPU or the CPU.
 
 Docs: https://vedicreader.github.io/rishi/litert.html.md"""
 
@@ -154,13 +154,13 @@ class _UsageCallback(ChatCallback):
 # %% ../nbs/02_litert.ipynb #1d26406d13cefa08
 _engine_locks_guard = threading.Lock()
 def engine_lock(engine):
-    "The one lock per engine: litert runs one GPU session at a time, so chats sharing an engine take turns instead of timing each other out."
+    "Return the single lock that chats sharing one LiteRT-LM engine take turns on."
     with _engine_locks_guard:   # kept on the engine itself: litert's `Engine` is not hashable
         if (lk := getattr(engine, '_rishi_lock', None)) is None: lk = engine._rishi_lock = threading.Lock()
         return lk
 
 class EngineBusy(RuntimeError):
-    "Another chat on this thread is mid-turn on the engine; finish or close its stream before sending."
+    "Raised when a chat sends on an engine that another chat on the same thread is in the middle of a turn on."
 
 class _Hold:
     """Hold a chat's engine for one send. `ChatToolHandler` lets go while a tool runs and takes it back after.
@@ -190,7 +190,7 @@ class _Hold:
         engine_lock(self.chat.engine).release()
 
 class ChatToolHandler(ToolEventHandler):
-    "Bridge litert's in-engine tool loop to Chat callbacks, HITL approval, the tool-call budget, and history."
+    "Connect LiteRT-LM's built-in tool loop to the chat's callbacks, approval function, tool-call budget and history."
     def __init__(self, chat): self.chat = chat
     def approve_tool_call(self, tool_call):
         c = self.chat
@@ -285,7 +285,7 @@ def _merge_chunks(chunks):
 _dflt_cbs = [_HistoryCallback, _UsageCallback, _ToolReminderCallback, SlidingWindowCallback]
 
 class LitertChat(Chat):
-    "Sync chat over a local litert_lm engine."
+    "A `Chat` that runs a `.litertlm` model inside this process through Google's LiteRT-LM."
     _runtime = 'litert'
     _dflt_cbs = _dflt_cbs
     mk_content, mk_msg, mk_msgs = staticmethod(_mk_content), staticmethod(_mk_msg), staticmethod(_mk_msgs)
@@ -302,7 +302,7 @@ class LitertChat(Chat):
     @classmethod
     def create_engine(cls, model_id=gemma4_e2b, model_path=None, be=None, vbe=None, abe=None,
                       multimodal=True, cache_dir=None, enable_speculative_decoding=None, **kw):
-        'Build a litert `Engine` on the GPU unless told otherwise, creating `cache_dir` if given. `@patch` to customize.'
+        'Build a LiteRT-LM `Engine`, trying the GPU first and falling back to the CPU unless a backend is given.'
         be, vbe, abe = kw.pop('backend', be), kw.pop('vision_backend', vbe), kw.pop('audio_backend', abe)
         if cache_dir: Path(cache_dir).mkdir(parents=True, exist_ok=True)
         mod = _get_model(model_id, model_path)
@@ -499,12 +499,12 @@ class LitertChat(Chat):
 
 # %% ../nbs/02_litert.ipynb #bea63711
 def bench(model_id=gemma4_e2b, model_path=None, backend=Backend.CPU(), prefill_tokens=64, decode_tokens=64, **kw):
-    "Benchmark init time, TTFT, and prefill/decode tokens-per-sec via litert's `Benchmark`."
+    "Measure a model's load time, time to first token, and prefill and decode speed with LiteRT-LM's `Benchmark`."
     return Benchmark(_get_model(model_id, model_path), backend=backend, prefill_tokens=prefill_tokens, decode_tokens=decode_tokens, **kw).run()
 
 
 # %% ../nbs/02_litert.ipynb #90e13724
 class LitertBroker(ChatBroker):
-    'Shared LiteRT engine broker. Each client gets an isolated `LitertChat` conversation.'
+    'Serve one LiteRT-LM engine to several processes over a Unix socket, each client with its own `LitertChat` conversation.'
     def __init__(self, address, engine=None, model_id=gemma4_e2b, **engine_kw):
         super().__init__(address, LitertChat, engine, model_id, **engine_kw)

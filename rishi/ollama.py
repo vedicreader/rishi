@@ -1,4 +1,4 @@
-"""`Chat` over a local [Ollama](https://ollama.com) daemon: install, model pull and `ollama serve` driven from Python, native thinking levels and schema-constrained JSON.
+"""Run models through a local [Ollama](https://ollama.com) daemon, with rishi installing Ollama, pulling models and starting `ollama serve` for you when needed.
 
 Docs: https://vedicreader.github.io/rishi/ollama.html.md"""
 
@@ -38,7 +38,7 @@ def ollama_url(host=None):
     return f"{u.scheme}://{u.hostname or '127.0.0.1'}:{u.port or (443 if u.scheme == 'https' else 11434)}"
 
 def is_local(url):
-    "Is `url` on this machine? A loopback daemon must not be sent through `$HTTPS_PROXY`."
+    "Return True when `url` points at this machine, whose daemon must be reached without any HTTP proxy."
     return (urlsplit(url).hostname or '') in LOCAL_HOSTS
 
 # %% ../nbs/08_ollama.ipynb #ol_ids
@@ -347,7 +347,7 @@ def _img_b64(p):
     return u.split(',', 1)[1] if u.startswith('data:') else u
 
 def to_ollama_msg(m):
-    "One canonical rishi history dict -> an Ollama chat message."
+    "Convert one rishi history message to an Ollama chat message."
     if (role := m.get('role', 'user')) == 'tool':
         return {'role': 'tool', 'content': str(m.get('content', '')), 'tool_name': m.get('name', '')}
     c = m.get('content')
@@ -369,13 +369,13 @@ def to_ollama_msg(m):
     return out
 
 def to_ollama_msgs(msgs, sp=''):
-    "Canonical rishi history -> Ollama messages, with `sp` as the leading system message."
+    "Convert rishi history to Ollama messages, with `sp` as the leading system message."
     sys = [{'role': 'system', 'content': sp}] if sp else []
     return sys + [to_ollama_msg(m) for m in listify(msgs) if m.get('role') != 'system']
 
 # %% ../nbs/08_ollama.ipynb #ol_resp
 def ollama_usage(r, model=None):
-    "Ollama's eval counts -> a rishi usage dict."
+    "Convert Ollama's eval counts to a rishi usage dict."
     p, c = r.get('prompt_eval_count') or 0, r.get('eval_count') or 0
     return {'prompt_tokens': p, 'completion_tokens': c, 'total_tokens': p + c,
             'model': model or r.get('model')}
@@ -391,7 +391,7 @@ def _tag_tcs(tcs):
             for tc in tcs]
 
 def norm_ochat(r, model=None):
-    "One `/api/chat` response -> a rishi `Resp`, reading `<think>` and `<tool_call>` text as well as the native fields."
+    "Convert one `/api/chat` response to a rishi `Resp`, reading `<think>` and `<tool_call>` text as well as the native fields."
     m = r.get('message') or {}
     text, th = split_think(m.get('content') or '')
     text, tag_tcs = parse_tool_tags(text)
@@ -410,7 +410,7 @@ def dflt_ctx():
     except ValueError: return 4096
 
 class OllamaChat(RishiToolLoop, Chat):
-    "Sync chat against an Ollama daemon through Urai's tool loop."
+    "A `Chat` that sends each turn to an Ollama daemon, starting the daemon and pulling the model when needed."
     _runtime = 'ollama'
     mk_content, mk_msg, mk_msgs = staticmethod(mk_content), staticmethod(mk_msg), staticmethod(mk_msgs)
 

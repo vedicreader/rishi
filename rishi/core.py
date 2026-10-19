@@ -1,4 +1,4 @@
-"""Registering Rishi's backends with Urai.
+"""How rishi registers its backends with Urai, plus the few helpers that belong to rishi itself.
 
 Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
@@ -17,11 +17,11 @@ from urai import (Caps, Runtime, RUNTIMES, register_runtime, infer_runtime, reso
                   ToolLoopMixin, SlidingWindowCallback, ToolReminderCallback, UsageCallback)
 
 class RishiToolLoop(ToolLoopMixin):
-    "`ToolLoopMixin` with rishi's default callbacks; the shared base for rishi's tool-loop backends."
+    "The base class for rishi backends that drive Urai's tool loop, with the usage, tool-reminder and sliding-window callbacks on by default."
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
 
 def split_model_path(model, model_path=None):
-    "Strip any runtime prefix, then split `model` into a hub `(model_id, model_path)`."
+    "Split a model name, minus any runtime prefix, into `(model_id, model_path)`: a Hub repo id or a local file path."
     model = split_runtime(model)[1]
     model_id = None if model is None or is_path(model) else model
     model_path = model_path or (model if model and is_path(model) else None)
@@ -60,11 +60,11 @@ setattr(_spc, '__run_python', _rishi_run_python)
 
 # %% ../nbs/00_core.ipynb #dc247d61
 def litert_caps(model=None, model_path=None):
-    "litert builds vision and audio backends whenever `multimodal` is on, so every model takes both."
+    "Report text, image and audio input for any LiteRT-LM model, since LiteRT-LM builds both encoders whenever multimodal input is on."
     return Caps(('text', 'image', 'audio'), ('text',), (), 'runtime')
 
 def ollama_caps_(model=None, model_path=None):
-    "Ollama is the one runtime that can just be asked: the daemon holds the weights."
+    "Ask the Ollama daemon what `model` accepts, or return None when the Ollama backend cannot be imported."
     try: from rishi.ollama import ollama_caps
     except ImportError: return None
     return ollama_caps(model)
@@ -106,7 +106,7 @@ def repo_root() -> Path:
     return find_file_parents('.git')
 
 def mv_skill_md(dry_run=True, dir=None):
-    "Copy the bundled `skill.md` into the `.claude` and `.agents` skill directories."
+    "Copy the bundled `skill.md` into the repository's `.agents` and `.claude` skill directories, or only print the targets while `dry_run` is True."
     base = Path(__file__).parent if '__file__' in globals() else Path.cwd()
     if not (src := first((base/'skill.md', base.parent/'skill.md'), Path.exists)): return
     root = Path(dir or repo_root() or '.')

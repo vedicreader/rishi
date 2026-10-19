@@ -1,4 +1,4 @@
-"""[mlx-lm](https://github.com/ml-explore/mlx-lm) on Apple Silicon: an explicit prompt cache, speculative decoding, quantized KV, and mlx-vlm routing for vision and audio.
+"""Run models on Apple Silicon with [mlx-lm](https://github.com/ml-explore/mlx-lm), with a prompt cache rishi manages itself, speculative decoding, a quantized KV cache, and vision and audio through mlx-vlm.
 
 Docs: https://vedicreader.github.io/rishi/mlx.html.md"""
 
@@ -55,11 +55,11 @@ def read_config(model):
 _vlm_keys = ('vision_config', 'audio_config', 'vision_tower', 'image_token_index')
 
 def is_vlm(model, cfg=None):
-    "Does `model` declare a vision/audio tower, so it needs `mlx-vlm` rather than plain `mlx-lm`?"
+    "Return True when a model's config declares a vision or audio tower, which means it needs `mlx-vlm` instead of `mlx-lm`."
     return any(k in (read_config(model) if cfg is None else cfg) for k in _vlm_keys)
 
 def ctx_len(cfg, dflt=8192):
-    "Context window from a model config (checking the nested text config VLMs use), else `dflt`."
+    "Read the context window from a model config, including the nested `text_config` vision models use, else return `dflt`."
     return cfg.get('max_position_embeddings') or (cfg.get('text_config') or {}).get('max_position_embeddings') or dflt
 
 def cached_models():
@@ -87,7 +87,7 @@ class MlxEngine:
 
 # %% ../nbs/03_mlx.ipynb #c9878e3a40848985
 class MlxChat(RishiToolLoop, Chat):
-    "Sync chat over a local MLX model: the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
+    "A `Chat` that runs an MLX model on Apple Silicon through mlx-lm, with a prompt cache it manages itself."
     _runtime = 'mlx'
     _media_ok = False    # text-only; `MlxVlmChat` flips this
     _media_note = ("this MLX model is text-only. Install `pip install 'rishi[mlx-vlm]'` and use a vision "
@@ -112,7 +112,7 @@ class MlxChat(RishiToolLoop, Chat):
 
     @classmethod
     def create_engine(cls, model_id=qwen3_4b, model_path=None, adapter_path=None, draft_model=None, **kw):
-        'Load an MLX model + tokenizer, optionally with a LoRA adapter and a draft model. Override/`@patch` to customize.'
+        'Load an MLX model and its tokenizer, optionally with a LoRA adapter and a draft model for speculative decoding.'
         src = str(model_path or model_id)
         model, tok, cfg = mlx_load(src, adapter_path=adapter_path, return_config=True, **kw)
         draft_id = str(draft_model) if isinstance(draft_model, (str, os.PathLike)) else None
@@ -331,7 +331,7 @@ class MlxVlmChat(MlxChat):
 
     @classmethod
     def create_engine(cls, model_id=qwen3vl_4b, model_path=None, adapter_path=None, draft_model=None, **kw):
-        'Load a vision or audio model with `mlx_vlm.load`. The "tokenizer" here is a HF processor.'
+        'Load a vision or audio model with `mlx_vlm.load`, whose processor takes the place of the tokenizer.'
         try: from mlx_vlm import load as vlm_load
         except ImportError as e:
             raise ImportError(f"vision/audio MLX models need mlx-vlm ({e}). "
@@ -406,6 +406,6 @@ class MlxVlmChat(MlxChat):
 
 # %% ../nbs/03_mlx.ipynb #2d1feab0
 class MlxBroker(ChatBroker):
-    'Shared MLX model broker. Each client gets an isolated `MlxChat` prompt cache.'
+    'Serve one loaded MLX model to several processes over a Unix socket, each client with its own `MlxChat` prompt cache.'
     def __init__(self, address, engine=None, model_id=qwen3_4b, **engine_kw):
         super().__init__(address, MlxChat, engine, model_id, **engine_kw)

@@ -1,4 +1,4 @@
-"""Claude Code models through the Agent SDK.
+"""Use Claude models through your own Claude Code installation and sign-in, with the Claude Agent SDK.
 
 Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 
@@ -59,18 +59,18 @@ def claude_bin(bin=CLAUDE_BIN):
         f'`{bin} /login`. rishi drives it as a subprocess and never reads your credentials.')
 
 def claude_model(model=None, dflt=opus5):
-    "Resolve a `CLAUDE_MODELS` key; pass other names through."
+    "Turn a `CLAUDE_MODELS` key such as `'opus5'` into its model id, pass other names through, and return `dflt` for an empty name."
     m = (model or '').strip()
     return CLAUDE_MODELS.get(m, m) if m else dflt
 
 def claude_fallback(models):
-    "Models for `--fallback-model`, resolved as `claude_model` does, in the order they are tried."
+    "Resolve a list or comma-separated string of models, as `claude_model` does, into the value `--fallback-model` takes."
     ms = models.split(',') if isinstance(models, str) else listify(models)
     return ','.join(x for m in ms if (x := claude_model(m, dflt='')))
 
 @lru_cache
 def claude_version(bin=CLAUDE_BIN):
-    "The installed Claude Code's version, cached per binary, for the `version` a record carries."
+    "Return the installed Claude Code version, cached per binary, or llmsurgery's pinned version when it cannot be read."
     try: out = subprocess.run([claude_bin(bin), '--version'], capture_output=True, text=True, timeout=30).stdout
     except Exception: out = ''
     m = re.search(r'\d+\.\d+\.\d+', out)
@@ -89,7 +89,7 @@ def sess_entrypoint(p, mx=50):
     return None
 
 def prune_sessions(cwd=None, keep=0, age=None, entrypoint=CLAUDE_ENTRYPOINT):
-    "Delete filed transcripts under `cwd`, sparing the newest `keep`, and return what went."
+    "Delete the transcripts rishi filed under `cwd`, sparing the newest `keep` and any younger than `age` seconds, and return the deleted paths."
     d = ant.sess_dir(cwd or CLAUDE_WORK_DIR)
     if not d.is_dir(): return []
     fs = sorted(d.glob('*.jsonl'), key=lambda p: p.stat().st_mtime, reverse=True)
@@ -103,7 +103,7 @@ def prune_sessions(cwd=None, keep=0, age=None, entrypoint=CLAUDE_ENTRYPOINT):
 
 
 def norm_claude_usage(u, model=None, cost=None):
-    "Claude Code's usage block -> rishi's, so a Claude turn adds up with a local one."
+    "Convert Claude Code's usage block to a rishi usage dict, counting cache reads and writes as prompt tokens."
     if not u: return {}
     read, made = u.get('cache_read_input_tokens') or 0, u.get('cache_creation_input_tokens') or 0
     pt, ct = (u.get('input_tokens') or 0) + read + made, u.get('output_tokens') or 0
@@ -137,7 +137,7 @@ def claude_tool_use(b, sdk):
             'input': getattr(b, 'input', None) or {}}
 
 def norm_claude(d, model=None, asked=False):
-    "A Claude Code result -> a rishi `Resp`, with `<tool_call>` tags read out of the text. An unreadable call is flagged for one resend unless `asked`."
+    "Convert a Claude Code result to a rishi `Resp`, reading `<tool_call>` tags from the text and flagging an unreadable call for one resend unless `asked`."
     if d.get('is_error') and d.get('terminal_reason') not in ABORTED:
         bad = TOOL_PARSE_ERR in (d.get('result') or '')
         if bad and not asked: return Resp({'role': 'assistant', 'content': d['result'], 'tool_parse_failed': True,
@@ -160,7 +160,7 @@ CONT_PROMPT = 'The tool results are in. Continue your answer.'
 
 # %% ../nbs/06_claude.ipynb #0b45f039
 def mk_claude_content(o):
-    """`mk_content`, plus the documents Claude Code accepts."""
+    """Build a content part as `mk_content` does, also carrying documents such as PDFs as data URLs."""
     if isinstance(o, (dict, str)): return mk_content(o)
     b = Path(o).read_bytes() if isinstance(o, os.PathLike) else o
     if isinstance(b, bytes):
@@ -171,7 +171,7 @@ def mk_claude_content(o):
     return mk_content(o)
 
 def mk_claude_msg(content, role='user'):
-    "`mk_msg` built out of `mk_claude_content`."
+    "Build a message as `mk_msg` does, using `mk_claude_content` for each part."
     if content is None or isinstance(content, dict): return content
     parts = [mk_claude_content(o) for o in content] if isinstance(content, list) else [mk_claude_content(content)]
     if all(p.get('type') == 'text' for p in parts): return {'role': role, 'content': '\n'.join(p['text'] for p in parts)}
@@ -182,7 +182,7 @@ def mk_claude_msgs(msgs): return [mk_claude_msg(m) for m in listify(msgs)] if ms
 
 # %% ../nbs/06_claude.ipynb #cl_chat
 class ClaudeChat(RishiToolLoop, Chat):
-    "Chat against Claude Code through Urai's `Chat` API."
+    "A `Chat` that drives your Claude Code installation through the Claude Agent SDK."
     _runtime = 'claude'
     _media_note = ("this Claude Code chat cannot carry a picture or a document: it is stateless and has "
                    "no transcript to file, so the conversation goes as one text prompt, which has nowhere "

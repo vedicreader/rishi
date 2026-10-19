@@ -1,4 +1,4 @@
-"""Hosted models through [fastllm](https://github.com/AnswerDotAI/fastllm). The same `Chat` API, with API keys in the environment (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, ...).
+"""Hosted models such as GPT, Claude and Gemini through [fastllm](https://github.com/AnswerDotAI/fastllm), with the same `Chat` API as the local backends.
 
 Docs: https://vedicreader.github.io/rishi/remote.html.md"""
 
@@ -58,7 +58,7 @@ def _parts(content):
     return out
 
 def to_msg(m):
-    "One canonical rishi history dict -> a fastllm `Msg`."
+    "Convert one rishi history message to a fastllm `Msg`."
     role = m.get('role', 'user')
     if role == 'tool':
         return Msg(role='tool', content=[ToolResult(id=m.get('tool_call_id'), name=m.get('name', ''),
@@ -74,7 +74,7 @@ def to_msg(m):
     return Msg(role=role, content=parts)
 
 def to_hist(m):
-    "A fastllm `Msg` -> canonical rishi history dicts (a tool `Msg` can hold several results)."
+    "Convert a fastllm `Msg` to a list of rishi history messages, since a tool `Msg` can hold several results."
     if m.role == 'tool':
         return [{'role': 'tool', 'tool_call_id': p.id, 'name': p.name or '', 'content': str(p.text)}
                 for p in m.content if p.type == PartType.tool_result]
@@ -99,7 +99,7 @@ def _media_part(p):
 
 # %% ../nbs/04_remote.ipynb #rm_resp
 def norm_usage(u, model=None):
-    "fastllm `Usage` -> a rishi usage dict, including the reasoning and cache-write counts providers bill for."
+    "Convert fastllm `Usage` to a rishi usage dict, keeping reasoning and cache-write counts when the provider reports them."
     if u is None: return {}
     out = {'prompt_tokens': u.prompt_tokens, 'completion_tokens': u.completion_tokens,
            'total_tokens': u.total_tokens or (u.prompt_tokens + u.completion_tokens),
@@ -146,7 +146,7 @@ def _walk(o, depth=0):
         if isinstance(v, (dict, list, tuple)) or hasattr(v, '__dict__'): yield from _walk(v, depth+1)
 
 def gen_media(raw):
-    "Images a model generated, dug out of `Completion.raw`. fastllm's `PartType` is input-only."
+    "Collect the images a model generated from the provider's raw response, `Completion.raw`, as `{mime, data}` dicts."
     if raw is None: return []
     seen, out = set(), []
     for node in _walk(raw):
@@ -156,7 +156,7 @@ def gen_media(raw):
     return out
 
 def norm_completion(comp):
-    "fastllm `Completion` -> rishi `Resp`, reading `<tool_call>` tags out of the text as `core.norm_resp` does."
+    "Convert a fastllm `Completion` to a rishi `Resp`, also reading tool calls written as `<tool_call>` tags in the text."
     res = to_hist(comp.message)[0]
     res.setdefault('role', 'assistant')
     tag_tcs = []
@@ -180,7 +180,7 @@ DFLT_MAX_TOKENS = 4096
 STREAM_ONLY = {'codex'}
 
 class RemoteChat(RishiToolLoop, Chat):
-    "Chat against a hosted model through fastllm, with the same `Chat` API as the local backends."
+    "A `Chat` that sends each turn to a hosted model API through fastllm."
     _runtime = 'remote'
     #: what this transport calls each portable option
     _opt_map = {'ctx': 'ctx_limit', 'temp': 'temperature', 'effort': 'reasoning_effort',

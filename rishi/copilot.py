@@ -37,7 +37,7 @@ API_VERSION    = '2025-04-01'
 
 def copilot_hdrs(auth=None, *, integration_id=INTEGRATION_ID, vision=False, initiator=None,
                  intent='conversation-panel'):
-    "Headers Copilot wants on every request. `auth` is a whole `Authorization` value."
+    "Build the headers Copilot requires on every request, with `auth` as the complete `Authorization` value when given."
     h = {'editor-version': EDITOR_VERSION, 'editor-plugin-version': PLUGIN_VERSION,
          'user-agent': USER_AGENT, 'copilot-integration-id': integration_id,
          'x-github-api-version': API_VERSION}
@@ -114,7 +114,7 @@ def copilot_exchange(oauth=None, *, url=COPILOT_TOKEN_URL, timeout=30):
     return CopilotToken(d['token'], (d.get('endpoints') or {}).get('api') or COPILOT_API, exp)
 
 class CopilotAuth:
-    "A Copilot token that re-mints itself. Share one and every chat holding it stays signed in."
+    "Hold a Copilot token and mint a new one before it expires, so chats sharing one instance stay signed in."
     def __init__(self, oauth=None, *, key=None, base_url=None, skew=300):
         store_attr()
         self.tok = CopilotToken(key, base_url or COPILOT_API) if key else None
@@ -139,7 +139,7 @@ def copilot_catalog(auth=None, timeout=30):
     return {m['id']: m for m in (r.json().get('data') or []) if m.get('id')}
 
 def copilot_models(auth=None, timeout=30, kind='chat'):
-    "Model ids this account can reach. Copilot is the authority, not a table in here. `kind=None` keeps the embedding and completion ones too."
+    "List the model ids this account can reach, as Copilot reports them, keeping embedding and completion models too when `kind=None`."
     return [i for i, m in copilot_catalog(auth, timeout).items()
             if not kind or (m.get('capabilities') or {}).get('type') == kind]
 
@@ -187,7 +187,7 @@ def copilot_login(client_id=COPILOT_CLIENT_ID, *, scope='read:user', save=True, 
 copilot_default = 'gpt-4.1'
 
 class CopilotChat(RemoteChat):
-    "Chat against a GitHub Copilot model: `RemoteChat` pointed at Copilot, with its headers and its half-hour token."
+    "A `RemoteChat` pointed at GitHub Copilot, adding Copilot's headers and its short-lived token to each request."
     _runtime = 'copilot'
     local = False   #: the subscription is yours, the machine is GitHub's
 

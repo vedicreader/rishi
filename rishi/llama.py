@@ -1,4 +1,4 @@
-"""`Chat` over [llama-cpp-python](https://github.com/abetlen/llama-cpp-python) GGUF models: prefix KV cache, GPU offload, and mtmd multimodal with image and audio through a patched `MTMDChatHandler`.
+"""Run GGUF models inside your Python process with [llama-cpp-python](https://github.com/abetlen/llama-cpp-python), including image and audio input.
 
 Docs: https://vedicreader.github.io/rishi/llama.html.md"""
 
@@ -65,7 +65,7 @@ def _cached_mmproj(model_id):
     return _mmproj(hub_files(model_id))
 
 def get_mmproj(model_id, mmproj_path=None):
-    "Return a local `mmproj` projector path: `mmproj_path`, else HF cache, else download."
+    "Return a local path to a model's `mmproj` projector: `mmproj_path` if it exists, else the Hugging Face cache, else a download."
     if mmproj_path and Path(mmproj_path).exists(): return str(mmproj_path)
     if (hit := _cached_mmproj(model_id)): return hit
     if not (fn := _mmproj(list_repo_files(model_id))): raise FileNotFoundError(f"No mmproj .gguf found for {model_id}")
@@ -118,7 +118,7 @@ def _init_mtmd_context(self:MTMDChatHandler, llama_model):
 
 @patch
 def get_image_urls(self:MTMDChatHandler, messages):
-    "Media data-URIs in document order, audio as well as images. Upstream collects images only."
+    "Return the data URIs of every image and audio part in `messages`, in document order, where upstream collects images only."
     urls = []
     for m in messages:
         for p in (m.get('content') if isinstance(m.get('content'), list) else []):
@@ -154,7 +154,7 @@ def _create_bitmap_from_bytes(self:MTMDChatHandler, image_bytes):
 
 # %% ../nbs/01_llama.ipynb #62bf39bf
 class LlamaChat(RishiToolLoop, Chat):
-    "Sync chat over a local llama.cpp model: the `rishi.core.Chat` API over `ToolLoopMixin`'s tool loop."
+    "A `Chat` that runs a GGUF model inside this process through llama-cpp-python."
     _runtime = 'llama'
     mk_content, mk_msg, mk_msgs = staticmethod(_mk_content), staticmethod(_mk_msg), staticmethod(_mk_msgs)
 
@@ -170,7 +170,7 @@ class LlamaChat(RishiToolLoop, Chat):
     @classmethod
     def create_engine(cls, model_id=qwen3_06b, model_path=None, quant='Q4_K_M', n_ctx=DFLT_N_CTX,
                       n_gpu_layers=0, mmproj=None, verbose=False, **kw):
-        'Build a `llama_cpp.Llama`. `mmproj` adds the projector that image and audio input need. `@patch` to customize.'
+        'Build the `llama_cpp.Llama` engine, with a multimodal chat handler for image and audio input when `mmproj` is set.'
         ch = None
         if mmproj:
             from llama_cpp.llama_chat_format import MTMDChatHandler
@@ -352,6 +352,6 @@ class LlamaChat(RishiToolLoop, Chat):
 
 # %% ../nbs/01_llama.ipynb #e31eee10
 class LlamaBroker(ChatBroker):
-    'Shared llama.cpp engine broker. Each client gets an isolated `LlamaChat` history.'
+    'Serve one llama.cpp engine to several processes over a Unix socket, each client with its own `LlamaChat` history.'
     def __init__(self, address, engine=None, model_id=qwen3_06b, **engine_kw):
         super().__init__(address, LlamaChat, engine, model_id, **engine_kw)
