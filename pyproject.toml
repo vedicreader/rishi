@@ -16,7 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "uraiyadal==0.0.15",   # parse_tool_tags strips <parameter> elements left outside any call
+    "uraiyadal==0.0.16",   # cut_msg_, reparse and lost on a reply, ToolCallError
     "fastcore>=2.0.0",
     "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",

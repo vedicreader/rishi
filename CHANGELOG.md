@@ -2,6 +2,16 @@
 
 <!-- do not remove -->
 
+## 0.1.54
+
+- remote: a tool call whose arguments fastllm cannot decode no longer ends the turn with a bare `JSONDecodeError`. A call cut off at the output cap goes back to the model with urai's `cut_msg_`, and the next step runs at `CUT_CAP_MULT` (4) times the cap, within the model's own maximum. Arguments that are not JSON go back naming the decoder's problem and position. A second failure in the turn raises `ToolCallError`, which says what happened, for example "openai/gpt-5.6's tool call was cut off at its 16384-token output limit". This covers sent and streamed turns on the Responses, chat-completions (Azure included) and Anthropic wires.
+- remote: a `JSONDecodeError` that fastllm did not raise while decoding tool arguments, such as one from a proxy's HTML page, is raised unchanged.
+- remote: `ask(schema=)` tries once more after a cut-off or malformed call, at the raised cap when cut off, then raises `ToolCallError`.
+- remote: a `<tool_call>` block cut off in tags mode keeps `unread`, so the loop asks for it again. It ran the tool with no arguments.
+- remote: with no `max_output_tokens` set, a `RemoteChat` asks for the model's own maximum output from fastllm's model table, and `DFLT_MAX_TOKENS` for a model the table does not know. `DFLT_MAX_TOKENS` is now 16,000; it was 4096 for every model, which a reasoning model's thinking could use up before it finished a tool call. An explicit `max_output_tokens` still wins.
+- remote: a reply cut off at the output cap while the model was still thinking, with no text and no tool call, goes back to the model once at the raised cap, from the same one resend. A second failure raises `ToolCallError`. The turn ended on an empty answer.
+- Requires uraiyadal 0.0.16.
+
 ## 0.1.53
 
 - claude: `claude_version` runs `claude --version` with `/dev/null` as stdin. Claude Code is a Node program, and one sharing the caller's terminal can leave it non-blocking, which froze a terminal UI on its next read. The Agent SDK's own spawns of `claude` already get a pipe.
