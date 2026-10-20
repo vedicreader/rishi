@@ -7,25 +7,28 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_ALIASES',
            'CLAUDE_ENTRYPOINT', 'CLAUDE_DISALLOWED', 'CLAUDE_SERVER_TOOLS', 'CLAUDE_WORK_DIR', 'MAX_BUFFER', 'ABORTED',
-           'TOOL_PARSE_ERR', 'INTERRUPT_WAIT', 'CONT_PROMPT', 'STALL_PROMPT', 'STALL_TIMEOUT', 'NO_AUDIO',
-           'EMPTY_RESULT', 'claude_bin', 'claude_model', 'claude_fallback', 'claude_version', 'sess_entrypoint',
-           'prune_sessions', 'norm_claude_usage', 'ClaudeError', 'claude_status', 'claude_tool_use', 'norm_claude',
-           'ClaudeStall', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id',
-           'tag_calls', 'anth_msgs', 'claude_prompt']
+           'TOOL_PARSE_ERR', 'INTERRUPT_WAIT', 'CONT_PROMPT', 'STALL_PROMPT', 'STALL_TIMEOUT', 'RISHI_MCP',
+           'MCP_PREFIX', 'MCP_NAME_MAX', 'NATIVE_ENV', 'NO_AUDIO', 'EMPTY_RESULT', 'claude_bin', 'claude_model',
+           'claude_fallback', 'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError',
+           'claude_status', 'claude_tool_use', 'norm_claude', 'ClaudeStall', 'ClaudeMcpRefused', 'mk_claude_content',
+           'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id', 'tag_calls', 'anth_msgs',
+           'claude_prompt']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
-import asyncio, atexit, json, os, re, shutil, subprocess, sys, time, uuid, warnings, weakref
+import asyncio, atexit, contextvars, json, os, re, shutil, subprocess, sys, time, uuid, warnings, weakref
 import claude_agent_sdk
 from llmsurgery import ant
 from base64 import b64encode
 from pathlib import Path
-from contextlib import contextmanager
-from functools import lru_cache
+from contextlib import contextmanager, suppress
+from functools import lru_cache, partial
+from aidialog.msg_parts import data_url
 from fastcore.all import store_attr, patch, ifnone, listify, detect_mime
 from fastcore.aio import run_sync
 import rishi.core
 from .core import RishiToolLoop
-from urai import (Chat, ChatOpts, ROLE_NAMES, Resp, StreamSplit,
+from urai.loop import _pic, max_media_
+from urai import (Chat, ChatOpts, ROLE_NAMES, Resp, StreamSplit, ToolCall, cancel_msg_, tool_media,
                   est_tokens, is_media, mk_content, parse_args, parse_tool_tags_ex, render_prompt, resp_text, split_runtime,
                   split_think, sync_iter, tag_tools_sp, tc_name, to_media_part)
 
@@ -139,8 +142,8 @@ def claude_tool_use(b, sdk):
     return {'id': getattr(b, 'id', '') or '', 'name': name, 'server': server,
             'input': getattr(b, 'input', None) or {}}
 
-def norm_claude(d, model=None, asked=False):
-    "Convert a Claude Code result to a rishi `Resp`, reading `<tool_call>` tags from the text and flagging an unreadable call for one resend unless `asked`."
+def norm_claude(d, model=None, asked=False, tags=True):
+    "Convert a Claude Code result to a rishi `Resp`, reading `<tool_call>` tags from the text when `tags` and flagging an unreadable call for one resend unless `asked`."
     if d.get('is_error') and d.get('terminal_reason') not in ABORTED:
         bad = TOOL_PARSE_ERR in (d.get('result') or '')
         if bad and not asked: return Resp({'role': 'assistant', 'content': d['result'], 'tool_parse_failed': True,
@@ -148,7 +151,7 @@ def norm_claude(d, model=None, asked=False):
         raise ClaudeError(f"claude failed: {d.get('result') or d.get('subtype')}{' (no resend left)' if bad else ''}",
                           status=claude_status(d), raw=d)
     text, th = split_think(d.get('result') or '')
-    text, tcs, failed = parse_tool_tags_ex(text)
+    text, tcs, failed = parse_tool_tags_ex(text) if tags else (text, [], False)
     res = {'role': 'assistant', 'content': text}
     if failed: res['tool_parse_failed'] = True   # the loop asks for the call again instead of ending on the prose
     if th: res['channels'] = {'thought': th}
@@ -164,6 +167,15 @@ STALL_TIMEOUT = 240   #: seconds Claude Code may send nothing, not even a stream
 
 class ClaudeStall(TimeoutError):
     "Claude Code sent nothing for the chat's `timeout` seconds."
+
+RISHI_MCP = 'rishi'                  #: the in-process MCP server that carries rishi's tools when `tool_mode='native'`
+MCP_PREFIX = f'mcp__{RISHI_MCP}__'   #: what Claude Code calls one of those tools
+MCP_NAME_MAX = 64                    #: Claude Code's cap on an MCP tool name, prefix included
+#: The CLI's MCP limits in native mode: a day before a tool call times out, and room for any result `tool_max_len` lets through.
+NATIVE_ENV = {'MCP_TOOL_TIMEOUT': str(24*3600*1000), 'MAX_MCP_OUTPUT_TOKENS': '500000'}
+
+class ClaudeMcpRefused(ClaudeError):
+    "Claude Code refused the MCP server `tool_mode='native'` declares. `tool_mode='tags'` still works."
 
 
 # %% ../nbs/06_claude.ipynb #0b45f039
@@ -198,6 +210,7 @@ class ClaudeChat(RishiToolLoop, Chat):
                    "`rishi.remote`/`rishi.litert`.")
     mk_content, mk_msg, mk_msgs = staticmethod(mk_claude_content), staticmethod(mk_claude_msg), staticmethod(mk_claude_msgs)
     local, _ctx_live = False, 0
+    _nat_busy, _nat_end, _nat_ran, _session_effort = 0, 0., False, None
 
     #: Claude Code takes an effort grade and nothing else a caller can turn
     _opt_map = {}
@@ -241,6 +254,7 @@ class ClaudeChat(RishiToolLoop, Chat):
         self._sent = 0                  # how much of `hist` the live session has seen
         self._nonce = uuid.uuid4().hex  # this chat's salt for a session id. See `_file_sess`
         self._filed = []                # the transcripts it wrote, its own to remove. See `_sweep`
+        self._nat_uses, self._errlog = [], []   # native calls seen but not yet answered, and Claude Code's stderr
         self.ctx_limit, self._ctx_tokens = o.ctx or None, 0
         self._setup(model, o)
 
@@ -262,8 +276,18 @@ class ClaudeChat(RishiToolLoop, Chat):
 
     @property
     def tool_channel(self):
-        "Where this chat's tool schemas travel. The prompt, to get past a managed MCP policy."
+        "Where this chat's tool schemas travel: the prompt (`'tags'`), or rishi's in-process MCP server (`'native'`)."
         return self.opts.tool_mode or 'tags'   # urai's portable name for the same question
+
+    @property
+    def _native(self):
+        "Do rishi's tools reach Claude through its own MCP server this turn?"
+        return self.tool_channel == 'native' and bool(self.toolspecs)
+
+    @property
+    def _tool_busy(self):
+        "Is a native tool running, or did one finish less than `timeout` seconds ago? The stall timer waits for it."
+        return bool(self._nat_busy) or time.monotonic() - self._nat_end < self.timeout
 
     @property
     def mcp_toolnames(self):
@@ -306,26 +330,31 @@ class ClaudeChat(RishiToolLoop, Chat):
 
 # %% ../nbs/06_claude.ipynb #cl_sdk
 @patch
-def _opts(self:ClaudeChat, sp, resume=None, fork=False):
-    "Agent SDK options for one turn, with no MCP server for a managed policy to refuse."
+def _opts(self:ClaudeChat, sp, resume=None, fork=False, mcp=True):
+    "Agent SDK options for one turn. No MCP server for a managed policy to refuse, unless native mode and `mcp` ask for rishi's own."
     sdk = claude_agent_sdk
     cwd = self._cwd
     cwd.mkdir(parents=True, exist_ok=True)
     srv = list(self.claude_server_tools or ()) + self.mcp_toolnames   # both run on Claude Code's side
-    native = list(self.claude_tools) if self.claude_tools is not None else None
+    own = list(self.claude_tools) if self.claude_tools is not None else None
+    nat = mcp and self._native
+    mine = [MCP_PREFIX + n for n in self._tool_names] if nat else []
+    env = {} if self.api_key else {'ANTHROPIC_API_KEY': ''}   # a subscription session, not a metered one
     kw = dict(model=self.model_id, system_prompt=sp or None, cwd=str(cwd),
               permission_mode=self.permission_mode, settings=self.settings,
-              mcp_servers=dict(self.mcp_servers or {}),       # see `The wire`
+              mcp_servers={**(self.mcp_servers or {}), **({RISHI_MCP: self._mcp_server()} if nat else {})},   # see `The wire`
               strict_mcp_config=bool(self.strict_mcp_config),
               include_partial_messages=True,                 # token deltas
               max_buffer_size=self.max_buffer,               # the SDK's own 1MB cap loses a long reply
-              env={} if self.api_key else {'ANTHROPIC_API_KEY': ''},   # a subscription session, not a metered one
-              cli_path=shutil.which(self.bin),               # None: the SDK's bundled copy
+              env=env, cli_path=shutil.which(self.bin),      # None: the SDK's bundled copy
               disallowed_tools=list(self.claude_disallowed or ()))
-    if native is not None: kw['allowed_tools'] = native + srv
-    elif srv: kw['allowed_tools'] = srv
-    if srv: kw['tools'] = sorted(set((native or []) + srv))   # available: exactly these
-    elif native is None and self.toolspecs: kw['tools'] = []  # rishi's tools are the only channel
+    if own is not None or srv or mine: kw['allowed_tools'] = (own or []) + srv + mine
+    if srv: kw['tools'] = sorted(set((own or []) + srv))   # available: exactly these
+    elif own is None and self.toolspecs: kw['tools'] = []  # rishi's tools are the only channel
+    if nat:
+        env.update(NATIVE_ENV)
+        self._errlog = []
+        kw['stderr'] = self._errlog.append
     # ...and a chat with no tools of its own names none here, leaving Claude Code its default set
     # less `claude_disallowed`. That is the point of the backend, not an oversight. See `The options`.
     if self.effort: kw['effort'] = self.effort
@@ -363,34 +392,43 @@ def _holds_call(text):
 
 @patch
 async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended without a result'):
-    "Drive one Agent SDK message stream to `(kind, value)` pairs, then a final `result`; `ClaudeStall` after `timeout` seconds of silence."
-    sdk = claude_agent_sdk
+    "Drive one Agent SDK message stream to `(kind, value)` pairs, then a final `result`; `ClaudeStall` after `timeout` seconds of silence with no native tool running."
+    sdk, tags = claude_agent_sdk, not self._native
     text, res, ran, called, cut = [], None, [], False, False
     while True:
         if self._cancel.is_set(): break
-        try: m = await asyncio.wait_for(ait.__anext__(), self.timeout)
-        except StopAsyncIteration: break
-        except asyncio.TimeoutError:
+        nxt = asyncio.ensure_future(ait.__anext__())
+        while not (await asyncio.wait({nxt}, timeout=self.timeout))[0] and self._tool_busy: pass
+        if not nxt.done():
+            nxt.cancel()
+            with suppress(asyncio.CancelledError, Exception): await nxt
             await _shut(ait)
             if not called: raise ClaudeStall(self._stall_msg()) from None
             self._stale = cut = True; break   # the call is whole: answer it rather than lose the turn
+        try: m = nxt.result()
+        except StopAsyncIteration: break
+        except Exception as e:
+            if (r := self._refused(e)): raise r from e
+            raise
         if isinstance(m, sdk.AssistantMessage):
             for b in m.content:
                 if called: self._stale = True; continue   # past a call nobody answered: the model never saw what follows, and a live session must not keep it
                 if isinstance(b, sdk.ThinkingBlock) and b.thinking: yield 'thought', b.thinking
                 elif isinstance(b, sdk.TextBlock) and b.text:
                     text.append(b.text); yield 'text', b.text
-                    called = _holds_call(b.text)
-                elif (u := claude_tool_use(b, sdk)): ran.append(u); yield 'tool_use', u
+                    called = tags and _holds_call(b.text)
+                elif (u := claude_tool_use(b, sdk)):
+                    if not u['name'].startswith(MCP_PREFIX): ran.append(u); yield 'tool_use', u
+                    else: self._nat_uses.append((u, ''.join(text))); text = []; yield 'call', u   # the text before it files with the call
         elif isinstance(m, sdk.ResultMessage): res = m
     if res is None and not cut: raise RuntimeError(err)
     if after is not None and not cut: await after()   # a stalled session would not answer it either
     yield 'result', self._result(res, text, ran, called)
 
 @patch
-def _sdk_events(self:ClaudeChat, prompt, sp, resume=None):
+def _sdk_events(self:ClaudeChat, prompt, sp, resume=None, mcp=True):
     "One `query` as `(kind, value)` pairs: `thought`, `text`, and one final `result` dict."
-    ait = claude_agent_sdk.query(prompt=claude_prompt(prompt), options=self._opts(sp, resume=resume)).__aiter__()
+    ait = claude_agent_sdk.query(prompt=claude_prompt(prompt), options=self._opts(sp, resume=resume, mcp=mcp)).__aiter__()
     return sync_iter(lambda: self._drain(ait), stop=self._cancel)
 
 
@@ -454,8 +492,8 @@ def tag_calls(tcs):
     "Tool calls as `<tool_call>` text, spelled as `render_prompt` spells them."
     return '\n'.join(f"<tool_call>\n{json.dumps({'name': tc_name(tc), 'arguments': (tc.get('function') or {}).get('arguments') or {}})}\n</tool_call>" for tc in tcs)
 
-def anth_msgs(hist, ant, tags=False):
-    "rishi's history as Anthropic messages; tool calls as blocks, or as `<tool_call>` text when `tags`."
+def anth_msgs(hist, ant, tags=False, prefix=''):
+    "rishi's history as Anthropic messages; tool calls as blocks named `prefix` + name, or as `<tool_call>` text when `tags`."
     out, called = [], set()
     for m in hist:
         role = m.get('role')
@@ -471,7 +509,7 @@ def anth_msgs(hist, ant, tags=False):
             if role == 'assistant' and (tcs := m.get('tool_calls')):
                 if tags: blocks.append({'type': 'text', 'text': tag_calls(tcs)})   # so results file as prose too
                 else:
-                    tus = [{'type': 'tool_use', 'id': tu_id(tc.get('id'), ant), 'name': tc_name(tc),
+                    tus = [{'type': 'tool_use', 'id': tu_id(tc.get('id'), ant), 'name': prefix + tc_name(tc),
                             'input': parse_args((tc.get('function') or {}).get('arguments'))} for tc in tcs]
                     called |= {b['id'] for b in tus}
                     blocks += tus
@@ -494,7 +532,7 @@ def claude_prompt(prompt):
 def _file_sess(self:ClaudeChat, hist=None):
     "File `hist` as a resumable Claude Code transcript, returning its session id, or None if empty."
     if not self.transcript: return None
-    msgs = anth_msgs(ifnone(hist, self.hist), ant, tags=self.tool_channel == 'tags')
+    msgs = anth_msgs(ifnone(hist, self.hist), ant, tags=self.tool_channel == 'tags', prefix=MCP_PREFIX if self._native else '')
     if not msgs: return None
     cwd = self._cwd
     cwd.mkdir(parents=True, exist_ok=True)
@@ -562,7 +600,11 @@ def _connect(self:ClaudeChat):
     past, _ = self._split_turn()
     sid = self._file_sess(past)
     client = claude_agent_sdk.ClaudeSDKClient(options=self._opts(self._sp(), resume=sid, fork=True))
-    run_sync(asyncio.wait_for(client.connect(), self.timeout))
+    try: run_sync(asyncio.wait_for(client.connect(), self.timeout))
+    except Exception as e:
+        if (r := self._refused(e)): raise r from e
+        raise
+    self._session_effort = self.effort
     self.client = client            # `_events` connects before computing the delta, so the watermark
     self._sent = len(past) if sid else 0             # can start at what the resumed session holds
     _live_sessions.add(self)        # tracked so `atexit` can close it: `__del__` is too late
@@ -590,6 +632,87 @@ def _delta(self:ClaudeChat):
     out = self._as_turn(new)
     self._sent = len(self.hist)
     return f'{out}\n\n{CONT_PROMPT}' if new and new[-1].get('role') == 'tool' else out
+
+# %% ../nbs/06_claude.ipynb #b5d59852
+@patch(as_prop=True)
+def _tool_names(self:ClaudeChat): return [s.get('function', s)['name'] for s in self.toolspecs]
+
+@patch
+def _mcp_tools(self:ClaudeChat):
+    "One `SdkMcpTool` per toolspec, each calling back into this chat's tool loop."
+    out = []
+    for s in self.toolspecs:
+        f = s.get('function', s); n = f['name']
+        if len(MCP_PREFIX + n) > MCP_NAME_MAX: raise ValueError(
+            f'tool {n!r} is too long for native mode: Claude Code caps an MCP tool name at {MCP_NAME_MAX} '
+            f'characters, {MCP_PREFIX!r} included. Shorten it, or use `tool_mode="tags"`.')
+        schema = {'type': 'object', 'properties': {}, **(f.get('parameters') or {})}
+        out.append(claude_agent_sdk.SdkMcpTool(n, f.get('description') or n, schema, partial(self._mcp_call, n)))
+    return out
+
+@patch
+def _mcp_server(self:ClaudeChat):
+    "The in-process MCP server that carries this chat's tools in native mode."
+    return claude_agent_sdk.create_sdk_mcp_server(RISHI_MCP, tools=self._mcp_tools())
+
+@patch
+def _refused(self:ClaudeChat, e):
+    "A `ClaudeMcpRefused` when `e` or Claude Code's stderr names MCP in native mode, else None."
+    if not self._native or isinstance(e, ClaudeMcpRefused): return None
+    said = [l.strip() for l in [*self._errlog, str(e)] if 'mcp' in l.lower()]
+    if not said: return None
+    return ClaudeMcpRefused(f"Claude Code refused rishi's MCP server: {said[0].rstrip('.')}. Use tool_mode='tags' to send the tools in the prompt.", raw=e)
+
+@patch
+async def _nat_claim(self:ClaudeChat, name, args, wait=2.):
+    "The id of the `tool_use` block `_drain` saw for this call, and the text before it; waits `wait` seconds for the drain to catch up."
+    end = time.monotonic() + wait
+    while True:
+        for i, (u, said) in enumerate(self._nat_uses):
+            if u['name'] == MCP_PREFIX + name and u['input'] == args: return self._nat_uses.pop(i)[0]['id'], said
+        if time.monotonic() > end: return None, ''
+        await asyncio.sleep(0.01)
+
+@patch
+def _nat_run(self:ClaudeChat, tc, said=''):
+    "Approve, run and record one native call as `_run_tools` does a tagged one: the text Claude gets back, and any pictures."
+    self.hist.append({'role': 'assistant', 'content': said, 'tool_calls': [tc]})
+    ok, why = (False, cancel_msg_) if self.cancelled else self._approve1(tc)
+    out = self.call_tool(tc) if ok else why
+    if self.cancelled: out, self._stale = cancel_msg_, True
+    self._step_media = None
+    self._record_tool(tc, out)
+    if self.in_session: self._sent = len(self.hist)   # the session holds these rows already
+    return str(self.turn_tool_result), tool_media(out)
+
+def _mcp_pics(media):
+    "Tool pictures as MCP image content: the ones `_pic` accepts, at most `max_media_`."
+    out = []
+    for o in media:
+        if len(out) >= max_media_: break
+        if (p := _pic(o)) and (du := data_url(p['image_url']['url'])): out.append({'type': 'image', 'data': du[1], 'mimeType': du[0]})
+    return out
+
+@patch
+def _nat_halt(self:ClaudeChat, delay=0.1):
+    "Interrupt the live session once the reply that spent the tool budget has gone back."
+    if (c := self.client) is None: return
+    async def _stop():
+        await asyncio.sleep(delay)
+        with suppress(Exception): await c.interrupt()
+    self._halting = asyncio.get_running_loop().create_task(_stop())
+
+@patch
+async def _mcp_call(self:ClaudeChat, name, args):
+    "One native call: serialized, run off the event loop in the caller's context, and answered as MCP content."
+    async with self._nat_lock:
+        tid, said = await self._nat_claim(name, args)
+        self._nat_busy += 1; self._nat_ran = True
+        try: text, media = await asyncio.to_thread(self._nat_ctx.run, self._nat_run, ToolCall(name, args, id=tid), said)
+        finally: self._nat_busy -= 1; self._nat_end = time.monotonic()
+    if self._budget_exceeded: self._nat_halt()
+    return {'content': [{'type': 'text', 'text': text or EMPTY_RESULT}, *(_mcp_pics(media) if self.media_in else [])]}
+
 
 # %% ../nbs/06_claude.ipynb #d3ad2ce7
 @patch
@@ -670,11 +793,12 @@ def _with_retry(self:ClaudeChat, first):
             elif k == 'tool_use': ran = True
             yield k, v
         return
+    except ClaudeMcpRefused: raise
     except ClaudeStall:
-        if ran or self._cancel.is_set(): raise   # a replay would run Claude Code's own tools again
+        if ran or self._nat_ran or self._cancel.is_set(): raise   # a replay would run the tools again
         stalled = True
     except Exception:
-        if started or not self.in_session_mode or self._cancel.is_set(): raise
+        if started or self._nat_ran or not self.in_session_mode or self._cancel.is_set(): raise
     self._disconnect(INTERRUPT_WAIT)   # kills a live session's subprocess; `_drain` closed a query's
     if stalled: self._tell(f'Claude Code sent nothing for {self.timeout}s, so the turn was ended and is being tried once more')
     said = ''.join(said)
@@ -699,10 +823,12 @@ def _retry(self:ClaudeChat, said=''):
 @patch
 @contextmanager
 def _turn_opts(self:ClaudeChat, kw):
-    "Apply this turn's `effort` for one wire call. Claude Code takes no other generation control."
+    "Apply this turn's `effort` for one wire call, reconnecting a session opened at another, and start the step's native-call state."
     t = self.map_opts(kw)
-    old = self.effort
-    if t.get('effort'): self.effort = t['effort']
+    old, e = self.effort, t.get('effort')
+    if e and self.in_session and e != self._session_effort: self._disconnect()   # the next connect resumes from `hist`
+    if e: self.effort = e
+    self._nat_ctx, self._nat_lock, self._nat_uses, self._nat_ran = contextvars.copy_context(), asyncio.Lock(), [], False
     try: yield
     finally: self.effort = old
 
@@ -711,27 +837,28 @@ def _model_step(self:ClaudeChat, **kw):
     "One wire call."
     with self._turn_opts(kw):
         out = next(v for k, v in self._events() if k == 'result')
-    self._last_res = res = self._note_usage(norm_claude(out, self.model_id, self._reparse_asked))
+    self._last_res = res = self._note_usage(norm_claude(out, self.model_id, self._reparse_asked, not self._native))
     return res
 
 @patch
 def _stream_step(self:ClaudeChat, **kw):
-    "The same turn, streamed. Thinking gets its own channel, and tag calls are never rendered as prose."
-    split, out = StreamSplit(), None
+    "The same turn, streamed. Thinking gets its own channel, tag calls are never rendered as prose, and native calls show as calls."
+    split, out, tags = StreamSplit(), None, not self._native
     with self._turn_opts(kw):
         for kind, v in self._events():
             if kind == 'thought': yield {'channels': {'thought': v}}
-            elif kind == 'text': yield from split.feed(v)
+            elif kind == 'text': yield from (split.feed(v) if tags else [{'content': [{'type': 'text', 'text': v}]}])
             elif kind == 'tool_use': yield {'channels': {'server_tools': [v]}}
+            elif kind == 'call': yield {'content': [{'type': 'tool_call', 'name': v['name'][len(MCP_PREFIX):], 'arguments': v['input']}]}
             elif kind == 'result': out = v
     yield from split.finish()
     if out is None: raise RuntimeError('the turn ended without a result')
-    self._step_res = self._last_res = self._note_usage(norm_claude(out, self.model_id, self._reparse_asked))
+    self._step_res = self._last_res = self._note_usage(norm_claude(out, self.model_id, self._reparse_asked, tags))
 
 
 @patch
 def _oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None):
     "Stateless one-shot text: no history to file and no session to keep."
-    out = next(v for k, v in self._sdk_events(prompt, sp) if k == 'result')
+    out = next(v for k, v in self._sdk_events(prompt, sp, mcp=False) if k == 'result')
     return resp_text(norm_claude(out, self.model_id, True))
 
