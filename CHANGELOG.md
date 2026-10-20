@@ -2,6 +2,11 @@
 
 <!-- do not remove -->
 
+## 0.1.46
+
+- remote: Azure OpenAI's chat-completions route takes the reply cap as `max_completion_tokens`. An Azure reasoning deployment refuses `max_tokens`, so `RemoteChat(api_name='openai_chat')` on a host in `MAX_COMPLETION_HOSTS`, at present `.azure.com`, `.azure.us` and `.azure.cn`, sends `max_completion_tokens` in the body instead. The Responses route, `api_name='openai'`, and every other host are unchanged.
+- The `remote` page says how to reach Azure's v1 API: `base_url` set to `https://<resource>.openai.azure.com/openai/v1`, the deployment name as the model, the key as `api_key`, and `api_name='openai'`. No `api-version` is sent.
+
 ## 0.1.45
 
 - Three names other packages were importing are now public. `rishi.llama.get_model` and `rishi.litert.get_model` find a model file from a `model_path`, the Hugging Face cache, or a download. `rishi.litert.cached_model` looks in the cache only and returns None on a miss. `rishi.litert.EngineHold` holds a shared LiteRT engine for one send. The old names `_get_model`, `_cached_model` and `_Hold` still work.
