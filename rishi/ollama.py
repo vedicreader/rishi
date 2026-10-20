@@ -15,7 +15,7 @@ __all__ = ['OLLAMA_HOST', 'LOCAL_HOSTS', 'qwen3_06b', 'qwen3_17b', 'qwen3_4b', '
 import json, os, time, atexit, platform, shutil, subprocess, tarfile, zipfile
 import httpx2 as httpx
 from urllib.parse import urlsplit
-from fastcore.funccall import get_schema
+from urai.msgs import mk_toolspec
 from fastcore.all import Path, store_attr, ifnone, first, listify
 import rishi.core
 from .core import RishiToolLoop
@@ -550,7 +550,7 @@ class OllamaChat(RishiToolLoop, Chat):
     def _structured_call(self, prompt, schema, sp):
         "Schema-constrained JSON through Ollama's own `format`, returning the decoded argument dict."
         msgs = ([{'role': 'system', 'content': sp}] if sp else []) + [{'role': 'user', 'content': prompt}]
-        p = self._payload(msgs=msgs, tools=False, fmt=get_schema(schema)['input_schema'])
+        p = self._payload(msgs=msgs, tools=False, fmt=mk_toolspec(schema)['function']['parameters'])
         txt = resp_text(norm_ochat(self._ask(p), self.model_id))
         try: return json.loads(txt)
         except json.JSONDecodeError:

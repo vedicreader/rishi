@@ -20,7 +20,7 @@ from mlx_lm.sample_utils import make_sampler
 from mlx_lm.models.cache import (make_prompt_cache, trim_prompt_cache, can_trim_prompt_cache,
                                  save_prompt_cache, load_prompt_cache)
 from huggingface_hub import hf_hub_download, scan_cache_dir
-from fastcore.funccall import get_schema
+from urai.msgs import mk_toolspec
 from fastcore.all import Path, store_attr, patch, L, ifnone, first, listify
 import rishi.core
 from .core import RishiToolLoop
@@ -301,7 +301,7 @@ class MlxChat(RishiToolLoop, Chat):
 
     def _structured_call(self, prompt, schema, sp):
         "Parse a JSON reply for `schema`."
-        p = f"{prompt}\n\nReply with only a JSON object matching this schema:\n{json.dumps(get_schema(schema)['input_schema'])}"
+        p = f"{prompt}\n\nReply with only a JSON object matching this schema:\n{json.dumps(mk_toolspec(schema)['function']['parameters'])}"
         txt = self._oneshot(p, sp, think=False)
         try: return json.loads(extract_fence(txt, 'json'))
         except (json.JSONDecodeError, TypeError): pass

@@ -16,7 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "uraiyadal>=0.0.12",   # reads Claude's invoke dialect
+    "uraiyadal>=0.0.14",   # mk_toolspec spells a Literal as an enum and reads pydantic fields
     "fastcore>=2.0.0",
     "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",

@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.47
+
+- `structured` on Ollama, llama.cpp and MLX builds its schema with urai's `mk_toolspec`, as the remote backend already did. A `Literal` field reaches the model as an `enum` and a pydantic model as its own fields; through fastcore's `get_schema` they were the invalid type `"object[object, object]"` and one opaque `data` object. Requires uraiyadal 0.0.14.
+
 ## 0.1.46
 
 - remote: Azure OpenAI's chat-completions route takes the reply cap as `max_completion_tokens`. An Azure reasoning deployment refuses `max_tokens`, so `RemoteChat(api_name='openai_chat')` on a host in `MAX_COMPLETION_HOSTS`, at present `.azure.com`, `.azure.us` and `.azure.cn`, sends `max_completion_tokens` in the body instead. The Responses route, `api_name='openai'`, and every other host are unchanged.

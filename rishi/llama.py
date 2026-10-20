@@ -13,7 +13,7 @@ __all__ = ['DFLT_N_CTX', 'qwen3_06b', 'qwen3_17b', 'qwen3_4b', 'gemma3_1b', 'gem
 import json, re, os, io, ctypes
 import numpy as np
 from llama_cpp import Llama
-from fastcore.funccall import get_schema
+from urai.msgs import mk_toolspec
 from huggingface_hub import hf_hub_download, list_repo_files
 from fastcore.all import Path, patch, L, ifnone, detect_mime, first, listify
 import rishi.core
@@ -329,7 +329,7 @@ class LlamaChat(RishiToolLoop, Chat):
         return self._isolated(lambda: resp_text(norm_resp(self.engine.create_chat_completion(msgs, **kw))))
     def _structured_call(self, prompt, schema, sp):
         "Grammar-constrained JSON reply, returning the decoded argument dict."
-        rf = {'type':'json_object','schema': get_schema(schema)['input_schema']}
+        rf = {'type':'json_object','schema': mk_toolspec(schema)['function']['parameters']}
         msgs = ([{'role':'system','content':sp}] if sp else []) + [{'role':'user','content':prompt}]
         return self._isolated(lambda: json.loads(resp_text(norm_resp(
             self.engine.create_chat_completion(msgs, response_format=rf, **self._samp)))))
