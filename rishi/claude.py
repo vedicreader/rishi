@@ -7,13 +7,14 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 # %% auto #0
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_ALIASES',
            'CLAUDE_ENTRYPOINT', 'CLAUDE_DISALLOWED', 'CLAUDE_SERVER_TOOLS', 'CLAUDE_WORK_DIR', 'MAX_BUFFER', 'ABORTED',
-           'TOOL_PARSE_ERR', 'INTERRUPT_WAIT', 'CONT_PROMPT', 'NO_AUDIO', 'EMPTY_RESULT', 'claude_bin', 'claude_model',
-           'claude_fallback', 'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError',
-           'claude_status', 'claude_tool_use', 'norm_claude', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs',
-           'ClaudeChat', 'anth_blocks', 'tu_id', 'tag_calls', 'anth_msgs', 'claude_prompt']
+           'TOOL_PARSE_ERR', 'INTERRUPT_WAIT', 'CONT_PROMPT', 'STALL_PROMPT', 'STALL_TIMEOUT', 'NO_AUDIO',
+           'EMPTY_RESULT', 'claude_bin', 'claude_model', 'claude_fallback', 'claude_version', 'sess_entrypoint',
+           'prune_sessions', 'norm_claude_usage', 'ClaudeError', 'claude_status', 'claude_tool_use', 'norm_claude',
+           'ClaudeStall', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id',
+           'tag_calls', 'anth_msgs', 'claude_prompt']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
-import asyncio, atexit, json, os, re, shutil, subprocess, sys, time, uuid, weakref
+import asyncio, atexit, json, os, re, shutil, subprocess, sys, time, uuid, warnings, weakref
 import claude_agent_sdk
 from llmsurgery import ant
 from base64 import b64encode
@@ -156,6 +157,11 @@ def norm_claude(d, model=None, asked=False):
     return Resp(res)
 INTERRUPT_WAIT = 5
 CONT_PROMPT = 'The tool results are in. Continue your answer.'
+STALL_PROMPT = 'Your last reply was cut off. Continue it from exactly where it stopped, repeating nothing.'
+STALL_TIMEOUT = 240   #: seconds Claude Code may send nothing, not even a stream event, before the turn is ended and tried once more
+
+class ClaudeStall(TimeoutError):
+    "Claude Code sent nothing for the chat's `timeout` seconds."
 
 
 # %% ../nbs/06_claude.ipynb #0b45f039
@@ -212,14 +218,17 @@ class ClaudeChat(RishiToolLoop, Chat):
                  transcript=True,           # file the conversation as records rather than prose. See `_file_sess`
                  api_key=False,             # let an ambient `ANTHROPIC_API_KEY` reach the subprocess. See `_opts`
                  max_buffer=MAX_BUFFER,     # the SDK's stdout cap, in bytes
-                 bin=CLAUDE_BIN, timeout=600, settings=None,
+                 bin=CLAUDE_BIN, settings=None,
+                 timeout=STALL_TIMEOUT,     # seconds of silence before the turn is ended and tried once more. See `Silence`
+                 on_stall=None,             # called with a status note when that happens. None -> `warnings.warn`
+                 timeout_hint=None,         # how a caller raises `timeout`, named in the error. None -> `ClaudeChat(timeout=SECONDS)`
                  **kw):                     # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(opts, **kw)
         self.model_id = claude_model(split_runtime(model)[1])
         self._set_tools(o.tools)
         self.effort = o.effort or None      # 'low'/'medium'/'high'/'xhigh'/'max'
         store_attr('permission_mode,claude_tools,claude_disallowed,claude_server_tools,workspace,'
-                   'fallback,cleanup,bare,bin,timeout,settings,api_key,max_buffer,'
+                   'fallback,cleanup,bare,bin,timeout,on_stall,timeout_hint,settings,api_key,max_buffer,'
                    'mcp_servers,mcp_tools,strict_mcp_config')
         self.opts_ = dict(o.extra)          # anything else, straight through to the SDK
         self.stateful = stateful
@@ -328,11 +337,22 @@ def _opts(self:ClaudeChat, sp, resume=None, fork=False):
 
 @patch
 def _result(self:ClaudeChat, res, text, server_tools=(), called=False):
-    "A `ResultMessage` as the dict `norm_claude` reads, cost and error status included; `called` keeps the text up to a call over Claude Code's last block."
-    return {'result': ''.join(text) if called else res.result or ''.join(text), 'usage': res.usage, 'is_error': res.is_error,
-            'subtype': res.subtype, 'terminal_reason': getattr(res, 'terminal_reason', None),
-            'cost': res.total_cost_usd, 'server_tools': list(server_tools),
-            'api_error_status': getattr(res, 'api_error_status', None)}
+    "A `ResultMessage`, or None for a turn cut short, as the dict `norm_claude` reads; `called` keeps the text up to a call over Claude Code's last block."
+    g = lambda k: getattr(res, k, None)
+    return {'result': ''.join(text) if called else g('result') or ''.join(text), 'usage': g('usage'), 'is_error': bool(g('is_error')),
+            'subtype': g('subtype'), 'terminal_reason': g('terminal_reason'), 'cost': g('total_cost_usd'),
+            'server_tools': list(server_tools), 'api_error_status': g('api_error_status')}
+
+async def _shut(ait):
+    "Close a stalled stream, so the SDK ends its query and the subprocess with it; a close that fails or hangs is let go."
+    try: await asyncio.wait_for(ait.aclose(), INTERRUPT_WAIT)
+    except Exception: pass
+
+@patch
+def _stall_msg(self:ClaudeChat, again=False):
+    "What a stall says: the limit, whether the retry went silent too, and how to raise the limit."
+    return (f'Claude Code sent nothing for {self.timeout}s' + (' on this turn or on its one retry' if again else '')
+            + f'; {self.timeout_hint or "ClaudeChat(timeout=SECONDS)"} raises that limit')
 
 def _holds_call(text):
     "Whether `text` holds a tool call, readable or not, in any dialect `parse_tool_tags_ex` reads."
@@ -341,15 +361,17 @@ def _holds_call(text):
 
 @patch
 async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended without a result'):
-    "Drive one Agent SDK message stream to `(kind, value)` pairs, then a final `result`."
+    "Drive one Agent SDK message stream to `(kind, value)` pairs, then a final `result`; `ClaudeStall` after `timeout` seconds of silence."
     sdk = claude_agent_sdk
-    text, res, ran, called = [], None, [], False
+    text, res, ran, called, cut = [], None, [], False, False
     while True:
         if self._cancel.is_set(): break
         try: m = await asyncio.wait_for(ait.__anext__(), self.timeout)
         except StopAsyncIteration: break
         except asyncio.TimeoutError:
-            raise TimeoutError(f'Claude Code sent nothing for {self.timeout}s') from None
+            await _shut(ait)
+            if not called: raise ClaudeStall(self._stall_msg()) from None
+            self._stale = cut = True; break   # the call is whole: answer it rather than lose the turn
         if isinstance(m, sdk.AssistantMessage):
             for b in m.content:
                 if called: self._stale = True; continue   # past a call nobody answered: the model never saw what follows, and a live session must not keep it
@@ -359,8 +381,8 @@ async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended with
                     called = _holds_call(b.text)
                 elif (u := claude_tool_use(b, sdk)): ran.append(u); yield 'tool_use', u
         elif isinstance(m, sdk.ResultMessage): res = m
-    if res is None: raise RuntimeError(err)
-    if after is not None: await after()
+    if res is None and not cut: raise RuntimeError(err)
+    if after is not None and not cut: await after()   # a stalled session would not answer it either
     yield 'result', self._result(res, text, ran, called)
 
 @patch
@@ -545,8 +567,8 @@ def _connect(self:ClaudeChat):
     return client
 
 @patch
-def _disconnect(self:ClaudeChat):
-    "End the session and remove its filed transcripts."
+def _disconnect(self:ClaudeChat, wait=None):
+    "End the session, waiting at most `wait` seconds (default `timeout`), and remove its filed transcripts."
     c = getattr(self, 'client', None)
     self.client, self._sent, self._last_res, self._stale = None, 0, None, False
     self._ctx_live = 0
@@ -554,7 +576,7 @@ def _disconnect(self:ClaudeChat):
     if c is None: return
     _live_sessions.discard(self)
     if sys.is_finalizing(): return   # the loop thread is stopped; `run_sync` would never return
-    try: run_sync(asyncio.wait_for(c.disconnect(), self.timeout))
+    try: run_sync(asyncio.wait_for(c.disconnect(), ifnone(wait, self.timeout)))
     except Exception: pass          # a dead subprocess is already disconnected
 
 @patch
@@ -612,24 +634,64 @@ def _session_turn(self:ClaudeChat, prompt):
 @patch
 def _events(self:ClaudeChat):
     "This turn's events: the delta on a live session, else one query resuming the filed conversation."
-    if not self.in_session_mode:
-        if not self.transcript: return self._sdk_events(self._prompt(), self._sp())
-        past, prompt = self._split_turn()             # the past as records, this turn as the prompt
-        return self._sdk_events(prompt, self._sp(), resume=self._file_sess(past))
+    if not self.in_session_mode: return self._with_retry(self._query_turn)
     if self._stale: self._disconnect()   # a cancelled turn: start again from what rishi holds
     self._connect()                      # before the delta, not after: connecting must not
     return self._session_events(self._delta() or CONT_PROMPT)   # come between computing it and sending it
 
 @patch
+def _query_turn(self:ClaudeChat):
+    "One `query` for this turn: the past as records and this turn as the prompt, or all of it as text without a transcript."
+    if not self.transcript: return self._sdk_events(self._prompt(), self._sp())
+    past, prompt = self._split_turn()
+    return self._sdk_events(prompt, self._sp(), resume=self._file_sess(past))
+
+@patch
 def _session_events(self:ClaudeChat, prompt):
-    "`_session_turn`, with one reconnect if the session died before it said anything."
-    started = False
+    "`_session_turn`, with `_with_retry`'s one more try."
+    return self._with_retry(lambda: self._session_turn(prompt))
+
+@patch
+def _tell(self:ClaudeChat, text):
+    "A status note to `on_stall`, else a warning. A failing callback never stops the turn."
+    try: (self.on_stall or warnings.warn)(text)
+    except Exception: pass
+
+@patch
+def _with_retry(self:ClaudeChat, first):
+    "`first()`'s events, tried once more after a stall, or after a session that died before it said anything."
+    said, started, ran, stalled = [], False, False, False
     try:
-        for o in self._session_turn(prompt): started = True; yield o
+        for k, v in first():
+            started = True
+            if k == 'text': said.append(v)
+            elif k == 'tool_use': ran = True
+            yield k, v
+        return
+    except ClaudeStall:
+        if ran or self._cancel.is_set(): raise   # a replay would run Claude Code's own tools again
+        stalled = True
     except Exception:
-        if started: raise
-        self._disconnect(); self._connect()   # a fresh session, refiled from `hist` by `_connect`
-        for o in self._session_turn(self._delta() or CONT_PROMPT): yield o
+        if started or not self.in_session_mode or self._cancel.is_set(): raise
+    self._disconnect(INTERRUPT_WAIT)   # kills a live session's subprocess; `_drain` closed a query's
+    if stalled: self._tell(f'Claude Code sent nothing for {self.timeout}s, so the turn was ended and is being tried once more')
+    said = ''.join(said)
+    try:
+        for k, v in self._retry(said):
+            if k == 'result' and said and not v.get('is_error'): v = {**v, 'result': said + v['result']}
+            yield k, v
+    except ClaudeStall: raise ClaudeStall(self._stall_msg(again=True)) from None
+
+@patch
+def _retry(self:ClaudeChat, said=''):
+    "The one more try: the turn again, or with `said` already shown, that text filed as the reply so far and a request to finish it."
+    if not said:
+        if not self.in_session_mode: return self._query_turn()
+        self._connect()                      # a fresh session, refiled from `hist`
+        return self._session_turn(self._delta() or CONT_PROMPT)
+    hist = self.hist + [{'role': 'assistant', 'content': said}]
+    if (sid := self._file_sess(hist)): return self._sdk_events(STALL_PROMPT, self._sp(), resume=sid)
+    return self._sdk_events(f'{render_prompt(hist)}\n\n{STALL_PROMPT}', self._sp())
 
 # %% ../nbs/06_claude.ipynb #cl_steps
 @patch

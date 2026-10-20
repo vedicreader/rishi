@@ -2,6 +2,12 @@
 
 <!-- do not remove -->
 
+## 0.1.49
+
+- A Claude Code turn that sends nothing for `timeout` seconds is ended and tried once more. Before, `ClaudeChat` waited 600 seconds and raised `TimeoutError`. The default limit is now 240 seconds, and token deltas keep a working turn alive. The stalled query is closed and a live session's subprocess is killed. `on_stall` gets a status note when this happens, and `warnings.warn` gets it when `on_stall` is not set.
+- The retry depends on what was already shown. If nothing was shown, or only thinking, the turn is sent again from the same filed conversation. If text was shown, it is not sent again: it is filed as the reply so far, and a fresh query asks Claude Code to finish it. The turn's result is the shown text plus the continuation. There is no retry after one of Claude Code's own tools has run, because a replay would run it again. A whole tool call followed by silence ends the turn with that call.
+- A second silence raises `ClaudeStall`, a `TimeoutError` that names the limit and `timeout_hint`, which says how the caller raises it. The stalled attempt sent no result, so its tokens and cost are not counted. `_oneshot` is not retried.
+
 ## 0.1.48
 
 - Pins uraiyadal 0.0.15 exactly. Its `parse_tool_tags` strips `<parameter>` elements left outside any call, so a stray parameter no longer reaches the reply text.
