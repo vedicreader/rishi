@@ -75,7 +75,7 @@ def claude_fallback(models):
 @lru_cache
 def claude_version(bin=CLAUDE_BIN):
     "Return the installed Claude Code version, cached per binary, or llmsurgery's pinned version when it cannot be read."
-    try: out = subprocess.run([claude_bin(bin), '--version'], capture_output=True, text=True, timeout=30).stdout
+    try: out = subprocess.run([claude_bin(bin), '--version'], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30).stdout
     except Exception: out = ''
     m = re.search(r'\d+\.\d+\.\d+', out)
     return m.group(0) if m else ant.CC_VERSION

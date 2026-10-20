@@ -296,7 +296,7 @@ class OllamaServer:
             self.bin = b
             out = open(self.log, 'ab') if self.log else subprocess.DEVNULL
             # its own session, so a Ctrl-C meant for the parent does not also kill the daemon
-            self.proc = subprocess.Popen([str(b), 'serve'], env=self.env(), stdout=out, stderr=out,
+            self.proc = subprocess.Popen([str(b), 'serve'], env=self.env(), stdin=subprocess.DEVNULL, stdout=out, stderr=out,
                                          start_new_session=True)
             atexit.register(self.stop)
             for _ in range(int(timeout*10)):
