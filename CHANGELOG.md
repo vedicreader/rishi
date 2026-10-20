@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.48
+
+- Pins uraiyadal 0.0.15 exactly. Its `parse_tool_tags` strips `<parameter>` elements left outside any call, so a stray parameter no longer reaches the reply text.
+
 ## 0.1.47
 
 - `structured` on Ollama, llama.cpp and MLX builds its schema with urai's `mk_toolspec`, as the remote backend already did. A `Literal` field reaches the model as an `enum` and a pydantic model as its own fields; through fastcore's `get_schema` they were the invalid type `"object[object, object]"` and one opaque `data` object. Requires uraiyadal 0.0.14.
