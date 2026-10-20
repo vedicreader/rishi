@@ -210,7 +210,7 @@ class ClaudeChat(RishiToolLoop, Chat):
                    "`rishi.remote`/`rishi.litert`.")
     mk_content, mk_msg, mk_msgs = staticmethod(mk_claude_content), staticmethod(mk_claude_msg), staticmethod(mk_claude_msgs)
     local, _ctx_live = False, 0
-    _nat_busy, _nat_end, _nat_ran, _session_effort = 0, 0., False, None
+    _nat_busy, _nat_end, _nat_ran, _session_effort, _claim_wait = 0, float('-inf'), False, None, 2.
 
     #: Claude Code takes an effort grade and nothing else a caller can turn
     _opt_map = {}
@@ -254,7 +254,7 @@ class ClaudeChat(RishiToolLoop, Chat):
         self._sent = 0                  # how much of `hist` the live session has seen
         self._nonce = uuid.uuid4().hex  # this chat's salt for a session id. See `_file_sess`
         self._filed = []                # the transcripts it wrote, its own to remove. See `_sweep`
-        self._nat_uses, self._errlog = [], []   # native calls seen but not yet answered, and Claude Code's stderr
+        self._nat_uses, self._nat_missed, self._errlog = [], [], []   # native calls seen but not answered, answered but not seen, and Claude Code's stderr
         self.ctx_limit, self._ctx_tokens = o.ctx or None, 0
         self._setup(model, o)
 
@@ -287,7 +287,7 @@ class ClaudeChat(RishiToolLoop, Chat):
     @property
     def _tool_busy(self):
         "Is a native tool running, or did one finish less than `timeout` seconds ago? The stall timer waits for it."
-        return bool(self._nat_busy) or time.monotonic() - self._nat_end < self.timeout
+        return self._native and (bool(self._nat_busy) or time.monotonic() - self._nat_end < self.timeout)
 
     @property
     def mcp_toolnames(self):
@@ -394,11 +394,13 @@ def _holds_call(text):
 async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended without a result'):
     "Drive one Agent SDK message stream to `(kind, value)` pairs, then a final `result`; `ClaudeStall` after `timeout` seconds of silence with no native tool running."
     sdk, tags = claude_agent_sdk, not self._native
-    text, res, ran, called, cut = [], None, [], False, False
+    text, res, ran, called, cut, kept = [], None, [], False, False, False
     while True:
         if self._cancel.is_set(): break
         nxt = asyncio.ensure_future(ait.__anext__())
-        while not (await asyncio.wait({nxt}, timeout=self.timeout))[0] and self._tool_busy: pass
+        try:
+            while not (await asyncio.wait({nxt}, timeout=self.timeout))[0] and self._tool_busy: pass
+        except BaseException: nxt.cancel(); raise   # a read left pending would take messages off the shared stream
         if not nxt.done():
             nxt.cancel()
             with suppress(asyncio.CancelledError, Exception): await nxt
@@ -419,11 +421,14 @@ async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended with
                     called = tags and _holds_call(b.text)
                 elif (u := claude_tool_use(b, sdk)):
                     if not u['name'].startswith(MCP_PREFIX): ran.append(u); yield 'tool_use', u
-                    else: self._nat_uses.append((u, ''.join(text))); text = []; yield 'call', u   # the text before it files with the call
+                    else:
+                        if (k := (u['name'][len(MCP_PREFIX):], u['input'])) in self._nat_missed: self._nat_missed.remove(k); kept = True   # its text stays in the reply
+                        else: self._nat_uses.append((u, ''.join(text))); text = []   # the text before it files with the call
+                        yield 'call', u
         elif isinstance(m, sdk.ResultMessage): res = m
     if res is None and not cut: raise RuntimeError(err)
     if after is not None and not cut: await after()   # a stalled session would not answer it either
-    yield 'result', self._result(res, text, ran, called)
+    yield 'result', self._result(res, text, ran, called or kept)
 
 @patch
 def _sdk_events(self:ClaudeChat, prompt, sp, resume=None, mcp=True):
@@ -655,22 +660,28 @@ def _mcp_server(self:ClaudeChat):
     "The in-process MCP server that carries this chat's tools in native mode."
     return claude_agent_sdk.create_sdk_mcp_server(RISHI_MCP, tools=self._mcp_tools())
 
+def _mcp_refusal(l):
+    "Whether line `l` refuses rishi's MCP server, or every dynamic one."
+    l = l.lower()
+    return bool(MCP_PREFIX in l or re.search(rf'mcp server\W+{RISHI_MCP}\b', l) or 'dynamically configure mcp servers' in l
+                or 'enterprise mcp config' in l) and any(w in l for w in ('cannot', 'not allowed', 'policy', 'blocked'))
+
 @patch
 def _refused(self:ClaudeChat, e):
-    "A `ClaudeMcpRefused` when `e` or Claude Code's stderr names MCP in native mode, else None."
+    "A `ClaudeMcpRefused` when `e` or Claude Code's stderr refuses rishi's MCP server in native mode, else None."
     if not self._native or isinstance(e, ClaudeMcpRefused): return None
-    said = [l.strip() for l in [*self._errlog, str(e)] if 'mcp' in l.lower()]
+    said = [l.strip() for l in [*self._errlog, str(e)] if _mcp_refusal(l)]
     if not said: return None
     return ClaudeMcpRefused(f"Claude Code refused rishi's MCP server: {said[0].rstrip('.')}. Use tool_mode='tags' to send the tools in the prompt.", raw=e)
 
 @patch
-async def _nat_claim(self:ClaudeChat, name, args, wait=2.):
-    "The id of the `tool_use` block `_drain` saw for this call, and the text before it; waits `wait` seconds for the drain to catch up."
-    end = time.monotonic() + wait
+async def _nat_claim(self:ClaudeChat, name, args):
+    "The id of the `tool_use` block `_drain` saw for this call, and the text before it; waits `_claim_wait` seconds for the drain, then leaves the call for it to skip."
+    end = time.monotonic() + self._claim_wait
     while True:
         for i, (u, said) in enumerate(self._nat_uses):
             if u['name'] == MCP_PREFIX + name and u['input'] == args: return self._nat_uses.pop(i)[0]['id'], said
-        if time.monotonic() > end: return None, ''
+        if time.monotonic() > end: self._nat_missed.append((name, args)); return None, ''
         await asyncio.sleep(0.01)
 
 @patch
@@ -823,12 +834,12 @@ def _retry(self:ClaudeChat, said=''):
 @patch
 @contextmanager
 def _turn_opts(self:ClaudeChat, kw):
-    "Apply this turn's `effort` for one wire call, reconnecting a session opened at another, and start the step's native-call state."
+    "Apply this turn's `effort`, else the chat's, for one wire call, reconnecting a session opened at another, and start the step's native-call state."
     t = self.map_opts(kw)
     old, e = self.effort, t.get('effort')
-    if e and self.in_session and e != self._session_effort: self._disconnect()   # the next connect resumes from `hist`
+    if self.in_session and (e or self.effort) != self._session_effort: self._disconnect()   # the next connect resumes from `hist`
     if e: self.effort = e
-    self._nat_ctx, self._nat_lock, self._nat_uses, self._nat_ran = contextvars.copy_context(), asyncio.Lock(), [], False
+    self._nat_ctx, self._nat_lock, self._nat_uses, self._nat_missed, self._nat_ran = contextvars.copy_context(), asyncio.Lock(), [], [], False
     try: yield
     finally: self.effort = old
 

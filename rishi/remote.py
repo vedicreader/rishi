@@ -185,9 +185,8 @@ MAX_COMPLETION_HOSTS = ('.azure.com', '.azure.us', '.azure.cn')
 EFFORT_MAP = {'openai': {'max': 'xhigh'}, 'openai_chat': {'max': 'xhigh'}, 'gemini': {'xhigh': 'high', 'max': 'high'}}
 
 def effort_refused(e):
-    "Whether `e` is a provider's 400 that names the reasoning effort."
-    s = str(e).lower()
-    return (getattr(e, 'status_code', None) == 400 or '400' in s) and ('reasoning' in s or 'effort' in s)
+    "Whether `e` is a provider's 400 that names the reasoning effort (`effort`, `reasoning_effort`, `reasoning.effort`)."
+    return getattr(e, 'status_code', None) == 400 and 'effort' in str(e).lower()
 
 class RemoteChat(RishiToolLoop, Chat):
     "A `Chat` that sends each turn to a hosted model API through fastllm."
