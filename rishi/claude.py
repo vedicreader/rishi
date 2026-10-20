@@ -104,12 +104,14 @@ def prune_sessions(cwd=None, keep=0, age=None, entrypoint=CLAUDE_ENTRYPOINT):
 
 
 def norm_claude_usage(u, model=None, cost=None):
-    "Convert Claude Code's usage block to a rishi usage dict, counting cache reads and writes as prompt tokens."
+    "Convert Claude Code's usage block to a rishi usage dict, counting cache reads and writes as prompt tokens and keeping thinking tokens."
     if not u: return {}
     read, made = u.get('cache_read_input_tokens') or 0, u.get('cache_creation_input_tokens') or 0
     pt, ct = (u.get('input_tokens') or 0) + read + made, u.get('output_tokens') or 0
-    return {'prompt_tokens': pt, 'completion_tokens': ct, 'total_tokens': pt + ct, 'cached_tokens': read,
-            'cache_creation_tokens': made, 'cost': cost or 0.0, 'model': model}
+    res = {'prompt_tokens': pt, 'completion_tokens': ct, 'total_tokens': pt + ct, 'cached_tokens': read,
+           'cache_creation_tokens': made, 'cost': cost or 0.0, 'model': model}
+    if (th := (u.get('output_tokens_details') or {}).get('thinking_tokens')) is not None: res['reasoning_tokens'] = th
+    return res
 
 ABORTED = ('aborted_streaming', 'aborted')
 TOOL_PARSE_ERR = "The model's tool call could not be parsed"   #: Claude Code's error result when it cannot read a call, even after its own retry

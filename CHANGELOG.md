@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.50
+
+- A Claude Code turn's usage keeps its thinking tokens as `reasoning_tokens`, read from `output_tokens_details.thinking_tokens`. They were dropped, so a turn that thought reported `reasoning=0`. They are still part of `completion_tokens`, as Claude Code counts them. A result that does not report them leaves `reasoning_tokens` out rather than claiming 0.
+
 ## 0.1.49
 
 - A Claude Code turn that sends nothing for `timeout` seconds is ended and tried once more. Before, `ClaudeChat` waited 600 seconds and raised `TimeoutError`. The default limit is now 240 seconds, and token deltas keep a working turn alive. The stalled query is closed and a live session's subprocess is killed. `on_stall` gets a status note when this happens, and `warnings.warn` gets it when `on_stall` is not set.
