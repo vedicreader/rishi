@@ -211,6 +211,7 @@ class ClaudeChat(RishiToolLoop, Chat):
     mk_content, mk_msg, mk_msgs = staticmethod(mk_claude_content), staticmethod(mk_claude_msg), staticmethod(mk_claude_msgs)
     local, _ctx_live = False, 0
     _nat_busy, _nat_end, _nat_ran, _session_effort, _claim_wait = 0, float('-inf'), False, None, 2.
+    _spare = 0   # retries this wire call has left. See `_turn_opts`
 
     #: Claude Code takes an effort grade and nothing else a caller can turn
     _opt_map = {}
@@ -598,6 +599,23 @@ def _close_sessions():
         try: c._disconnect()
         except Exception: pass
 
+def _connect_err(e):
+    "Whether `e` is Claude Code failing to start or connect, which another try may fix, rather than a refusal another try would repeat."
+    sdk = claude_agent_sdk
+    if isinstance(e, sdk.CLINotFoundError): return False
+    return isinstance(e, (sdk.CLIConnectionError, TimeoutError)) or str(e).startswith('Control request timeout: initialize')
+
+def _connect_msg(e, timeout):
+    "What a failed connect says."
+    return f'Claude Code did not connect within {timeout}s' if isinstance(e, TimeoutError) else f'Claude Code failed while connecting ({e})'
+
+@patch
+def _spend(self:ClaudeChat, e=None):
+    "Spend this wire call's one retry, if it has one left, the turn is not cancelled, and `e`, if given, is a failure to connect."
+    if not self._spare or self._cancel.is_set() or (e is not None and not _connect_err(e)): return False
+    self._spare = 0
+    return True
+
 @patch
 def _connect(self:ClaudeChat):
     "Open or return the live Claude Code session."
@@ -608,7 +626,9 @@ def _connect(self:ClaudeChat):
     try: run_sync(asyncio.wait_for(client.connect(), self.timeout))
     except Exception as e:
         if (r := self._refused(e)): raise r from e
-        raise
+        if not self._spend(e): raise
+        self._tell(f'{_connect_msg(e, self.timeout)}, so it is being tried once more')
+        return self._connect()
     self._session_effort = self.effort
     self.client = client            # `_events` connects before computing the delta, so the watermark
     self._sent = len(past) if sid else 0             # can start at what the resumed session holds
@@ -770,6 +790,7 @@ def _session_turn(self:ClaudeChat, prompt):
 @patch
 def _events(self:ClaudeChat):
     "This turn's events: the delta on a live session, else one query resuming the filed conversation."
+    self._spare = 1   # one retry per wire call, shared by a failed connect, a stall and a dead session
     if not self.in_session_mode: return self._with_retry(self._query_turn)
     if self._stale: self._disconnect()   # a cancelled turn: start again from what rishi holds
     self._connect()                      # before the delta, not after: connecting must not
@@ -795,8 +816,8 @@ def _tell(self:ClaudeChat, text):
 
 @patch
 def _with_retry(self:ClaudeChat, first):
-    "`first()`'s events, tried once more after a stall, or after a session that died before it said anything."
-    said, started, ran, stalled = [], False, False, False
+    "`first()`'s events, tried once more after a stall, a session that died before it said anything, or a query that never connected, if the call's one retry is left."
+    said, started, ran = [], False, False
     try:
         for k, v in first():
             started = True
@@ -806,12 +827,14 @@ def _with_retry(self:ClaudeChat, first):
         return
     except ClaudeMcpRefused: raise
     except ClaudeStall:
-        if ran or self._nat_ran or self._cancel.is_set(): raise   # a replay would run the tools again
-        stalled = True
-    except Exception:
-        if started or self._nat_ran or not self.in_session_mode or self._cancel.is_set(): raise
+        if ran or self._nat_ran or not self._spend(): raise   # a replay would run the tools again
+        note = f'Claude Code sent nothing for {self.timeout}s, so the turn was ended and is being tried once more'
+    except Exception as e:
+        # a session that died before saying anything, or a query that never connected
+        if started or self._nat_ran or not self._spend(None if self.in_session_mode else e): raise
+        note = None if self.in_session_mode else f'{_connect_msg(e, self.timeout)}, so it is being tried once more'
     self._disconnect(INTERRUPT_WAIT)   # kills a live session's subprocess; `_drain` closed a query's
-    if stalled: self._tell(f'Claude Code sent nothing for {self.timeout}s, so the turn was ended and is being tried once more')
+    if note: self._tell(note)
     said = ''.join(said)
     try:
         for k, v in self._retry(said):
@@ -841,7 +864,7 @@ def _turn_opts(self:ClaudeChat, kw):
     if e: self.effort = e
     self._nat_ctx, self._nat_lock, self._nat_uses, self._nat_missed, self._nat_ran = contextvars.copy_context(), asyncio.Lock(), [], [], False
     try: yield
-    finally: self.effort = old
+    finally: self.effort, self._spare = old, 0   # a spare `_events` left must not reach a later caller
 
 @patch
 def _model_step(self:ClaudeChat, **kw):

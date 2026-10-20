@@ -5,6 +5,8 @@
 ## 0.1.52
 
 - remote: a Gemini model named without `models/`, such as `gemini-3.5-flash` or `gemini/gemini-3.5-flash`, now works. fastllm puts the model id into Gemini's URL as given, so the request went to `v1beta/gemini-3.5-flash` and Gemini answered 404. The chat now adds `models/` on the way out, also when `vendor_name`, `api_name` or a `base_url` names the route. `model_id` stays as given. A turn's `usage['model']` now reads `models/gemini-3.5-flash`.
+- claude: a failure while connecting is tried once more, with a status note to `on_stall`. On a live session that is a `CLIConnectionError`, Claude Code's initialize request timing out, or a connect that takes longer than `timeout`. On a query it is the same before any message arrives. Before, it was raised at once. A missing `claude` binary, a refusal of rishi's MCP server and any other error are still raised at once, and a cancelled turn is not retried.
+- claude: each wire call has one retry, shared by a failed connect, a stall and a session that died before it said anything. A stall after a retried connect is raised, not tried again.
 
 ## 0.1.51
 
