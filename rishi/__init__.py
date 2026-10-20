@@ -1,4 +1,4 @@
-__version__ = "0.1.51"
+__version__ = "0.1.52"
 
 from urai import *
 from .core import *
