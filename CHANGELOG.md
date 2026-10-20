@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.52
+
+- remote: a Gemini model named without `models/`, such as `gemini-3.5-flash` or `gemini/gemini-3.5-flash`, now works. fastllm puts the model id into Gemini's URL as given, so the request went to `v1beta/gemini-3.5-flash` and Gemini answered 404. The chat now adds `models/` on the way out, also when `vendor_name`, `api_name` or a `base_url` names the route. `model_id` stays as given. A turn's `usage['model']` now reads `models/gemini-3.5-flash`.
+
 ## 0.1.51
 
 - claude: `ClaudeChat(tool_mode='native')` sends rishi's tools as MCP tools. The chat declares an in-process MCP server, `rishi`, with one tool per toolspec and its JSON schema. Only those tools are allowed, as `mcp__rishi__NAME`, and the schemas leave the system prompt. Each call runs through Urai's approval gate, step budget, `tool_max_len` and tool callbacks, and is written to `hist`. Calls run one at a time, in a worker thread, in the context of the thread that started the step. The silence timer waits while a tool runs. A spent budget interrupts the session, and a cancelled turn records the call as not run. The default stays `tool_mode='tags'`.

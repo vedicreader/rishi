@@ -278,9 +278,19 @@ class RemoteChat(RishiToolLoop, Chat):
         "Whether the reply cap goes out as `max_completion_tokens`: chat completions on a host in `MAX_COMPLETION_HOSTS`."
         return self.api_name == 'openai_chat' and (urlparse(self.base_url or '').hostname or '').endswith(MAX_COMPLETION_HOSTS)
 
+    @property
+    def _wire_model(self):
+        "The id `acomplete` gets: Gemini's routes need `models/`, which fastllm puts in the URL as given."
+        if self._api != 'gemini': return self.model_id
+        v, m = split_vendor(self.model_id)
+        if '/' not in m: m = f'models/{m}'
+        # `acomplete` strips the vendor only when nothing else names the route
+        strips = not (self.vendor_name or self.api_name or (self.base_url and self.api_key))
+        return f'{v}/{m}' if v and strips else m
+
     async def _acomplete(self, msgs, stream=False, **turn):
         "One `acomplete` call for `msgs` (canonical history dicts)."
-        return await acomplete(self.hist2fmt(msgs), self.model_id, **self._kw(stream, **turn))
+        return await acomplete(self.hist2fmt(msgs), self._wire_model, **self._kw(stream, **turn))
 
     @property
     def _stream_only(self):
@@ -289,7 +299,7 @@ class RemoteChat(RishiToolLoop, Chat):
 
     async def _collect(self, msgs, **kw):
         "One `Completion`, gathered from a stream."
-        agen = await acomplete(msgs, self.model_id, **{**kw, 'stream': True})
+        agen = await acomplete(msgs, self._wire_model, **{**kw, 'stream': True})
         comp = None
         async for part in agen:
             if isinstance(part, Completion): comp = part
@@ -299,7 +309,7 @@ class RemoteChat(RishiToolLoop, Chat):
     async def _one(self, msgs, **kw):
         "One `Completion`, streamed and gathered where the vendor takes nothing else."
         if self._stream_only: return await self._collect(msgs, **kw)
-        return await acomplete(msgs, self.model_id, **kw)
+        return await acomplete(msgs, self._wire_model, **kw)
 
     def _model_step(self, **kw):
         "One completion, normalized to a `Resp`, sent once more without an effort the provider refused. The wire call `ToolLoopMixin` drives."
