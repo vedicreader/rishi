@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.55
+
+- Pins uraiyadal 0.0.17: a stray tag no longer drops a tool call's arguments, an unread call is never run, identical calls in one reply run once, and a tag quoted in an argument splits nothing.
+
 ## 0.1.54
 
 - remote: a tool call whose arguments fastllm cannot decode no longer ends the turn with a bare `JSONDecodeError`. A call cut off at the output cap goes back to the model with urai's `cut_msg_`, and the next step runs at `CUT_CAP_MULT` (4) times the cap, within the model's own maximum. Arguments that are not JSON go back naming the decoder's problem and position. A second failure in the turn raises `ToolCallError`, which says what happened, for example "openai/gpt-5.6's tool call was cut off at its 16384-token output limit". This covers sent and streamed turns on the Responses, chat-completions (Azure included) and Anthropic wires.

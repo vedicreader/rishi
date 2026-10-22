@@ -16,7 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
 ]
 dependencies = [
-    "uraiyadal==0.0.16",   # cut_msg_, reparse and lost on a reply, ToolCallError
+    "uraiyadal==0.0.17",
     "fastcore>=2.0.0",
     "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",
