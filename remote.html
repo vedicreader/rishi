@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.19">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="description" content="Hosted models such as GPT, Claude and Gemini through fastllm, with the same Chat API as the local backends.">
+
+<title>remote – rishi</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-f2788e636de456f6409e966386820849.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="remote – rishi">
+<meta property="og:description" content="Hosted models such as GPT, Claude and Gemini through fastllm, with the same Chat API as the local backends.">
+<meta property="og:site_name" content="rishi">
+<meta name="twitter:title" content="remote – rishi">
+<meta name="twitter:description" content="Hosted models such as GPT, Claude and Gemini through fastllm, with the same Chat API as the local backends.">
+<meta name="twitter:card" content="summary">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">rishi</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./remote.html">remote</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">rishi</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">core</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./llama.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">llama</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./litert.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">litert</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./mlx.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">mlx</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./remote.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">remote</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./claude.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">claude</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./copilot.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">copilot</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./ollama.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">ollama</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#messages" id="toc-messages" class="nav-link active" data-scroll-target="#messages">Messages</a></li>
+  <li><a href="#responses-and-usage" id="toc-responses-and-usage" class="nav-link" data-scroll-target="#responses-and-usage">Responses and usage</a></li>
+  <li><a href="#remotechat" id="toc-remotechat" class="nav-link" data-scroll-target="#remotechat">RemoteChat</a>
+  <ul class="collapse">
+  <li><a href="#a-tool-call-that-does-not-decode" id="toc-a-tool-call-that-does-not-decode" class="nav-link" data-scroll-target="#a-tool-call-that-does-not-decode">A tool call that does not decode</a></li>
+  </ul></li>
+  <li><a href="#against-a-real-api" id="toc-against-a-real-api" class="nav-link" data-scroll-target="#against-a-real-api">Against a real API</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="remote.html.md"><i class="bi bi-file-code"></i>Markdown</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">remote</h1>
+</div>
+
+<div>
+  <div class="description">
+    Hosted models such as GPT, Claude and Gemini through <a href="https://github.com/AnswerDotAI/fastllm">fastllm</a>, with the same <code>Chat</code> API as the local backends.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<div id="rm_test_imports" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.129875+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.130570+00:00&quot;,&quot;total&quot;:0.0006995430000102942}}" data-execution_count="5">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.test <span class="im">import</span> test_eq, test_fail, test_close</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastllm.types <span class="im">import</span> Usage</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<section id="messages" class="level2">
+<h2 class="anchored" data-anchor-id="messages">Messages</h2>
+<p>fastllm represents a message as <code>Msg(role, content=[Part, ...])</code>. Each part has a type: <code>text</code>, <code>thinking</code>, <code>tool_use</code>, <code>tool_result</code>, <code>input_image</code> or <code>input_audio</code>. An image or audio part holds a data URL in <code>part.text</code>. rishi’s history uses OpenAI-shaped dicts.</p>
+<p><a href="https://vedicreader.github.io/rishi/remote.html#to_msg"><code>to_msg</code></a> converts one history message to a <code>Msg</code>. <a href="https://vedicreader.github.io/rishi/remote.html#to_hist"><code>to_hist</code></a> converts a <code>Msg</code> back and returns a list, because one tool <code>Msg</code> can hold several results.</p>
+<p>The conversion keeps images and audio as data URLs. It does not replace them with placeholders, so media survives a move between backends. Thinking also survives. rishi stores it in <code>channels['thought']</code>, and fastllm stores it as a <code>thinking</code> part.</p>
+<p>When a message mixes text and media, <a href="https://vedicreader.github.io/rishi/remote.html#to_hist"><code>to_hist</code></a> joins all the text into one part and puts it first. The test below shows this.</p>
+<div id="c0c18d28" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.138324+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.156506+00:00&quot;,&quot;total&quot;:0.018187382999997226}}" data-execution_count="7">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/remote.py#L79" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="to_hist" class="level3">
+<h3 class="anchored" data-anchor-id="to_hist">to_hist</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> to_hist(</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    m</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Convert a fastllm <code>Msg</code> to a list of rishi history messages, since a tool <code>Msg</code> can hold several results.</em></p>
+</section>
+</div>
+<div id="289d1388" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.156653+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.162550+00:00&quot;,&quot;total&quot;:0.005900654000001282}}" data-execution_count="8">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/remote.py#L63" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="to_msg" class="level3">
+<h3 class="anchored" data-anchor-id="to_msg">to_msg</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> to_msg(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    m</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Convert one rishi history message to a fastllm <code>Msg</code>.</em></p>
+</section>
+</div>
+<div id="rm_msgs_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># a round trip through fastllm's Msg keeps text, thinking, tool calls and tool results intact</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>h <span class="op">=</span> [{<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'what is 2+2?'</span>},</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>     {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'let me add'</span>, <span class="st">'channels'</span>: {<span class="st">'thought'</span>: <span class="st">'hmm'</span>},</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>      <span class="st">'tool_calls'</span>: [ToolCall(<span class="st">'add'</span>, {<span class="st">'a'</span>: <span class="dv">2</span>, <span class="st">'b'</span>: <span class="dv">2</span>}, <span class="bu">id</span><span class="op">=</span><span class="st">'c1'</span>)]},</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>     {<span class="st">'role'</span>: <span class="st">'tool'</span>, <span class="st">'tool_call_id'</span>: <span class="st">'c1'</span>, <span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'content'</span>: <span class="st">'4'</span>},</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>     {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'it is 4'</span>}]</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>msgs <span class="op">=</span> [to_msg(m) <span class="cf">for</span> m <span class="kw">in</span> h]</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>test_eq([m.role <span class="cf">for</span> m <span class="kw">in</span> msgs], [<span class="st">'user'</span>, <span class="st">'assistant'</span>, <span class="st">'tool'</span>, <span class="st">'assistant'</span>])</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>back <span class="op">=</span> [x <span class="cf">for</span> m <span class="kw">in</span> msgs <span class="cf">for</span> x <span class="kw">in</span> to_hist(m)]</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>test_eq(back[<span class="dv">0</span>], {<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'what is 2+2?'</span>})</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>test_eq(back[<span class="dv">1</span>][<span class="st">'channels'</span>], {<span class="st">'thought'</span>: <span class="st">'hmm'</span>})</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>test_eq(back[<span class="dv">1</span>][<span class="st">'tool_calls'</span>][<span class="dv">0</span>].name, <span class="st">'add'</span>)</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>test_eq(back[<span class="dv">1</span>][<span class="st">'tool_calls'</span>][<span class="dv">0</span>].arguments, {<span class="st">'a'</span>: <span class="dv">2</span>, <span class="st">'b'</span>: <span class="dv">2</span>})</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>test_eq(back[<span class="dv">2</span>], {<span class="st">'role'</span>: <span class="st">'tool'</span>, <span class="st">'tool_call_id'</span>: <span class="st">'c1'</span>, <span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'content'</span>: <span class="st">'4'</span>})</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>test_eq(back[<span class="dv">3</span>], {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'it is 4'</span>})</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a><span class="co"># reverse conversion groups text first, then images and audio</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>mixed <span class="op">=</span> [{<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">'before'</span>},</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>         {<span class="st">'type'</span>: <span class="st">'image_url'</span>, <span class="st">'image_url'</span>: {<span class="st">'url'</span>: <span class="st">'data:image/png;base64,iVBORw0KGgo='</span>}},</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>         {<span class="st">'type'</span>: <span class="st">'image_url'</span>, <span class="st">'image_url'</span>: {}},</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>         {<span class="st">'type'</span>: <span class="st">'unknown'</span>},</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>         {<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">'between'</span>},</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>         {<span class="st">'type'</span>: <span class="st">'input_audio'</span>, <span class="st">'input_audio'</span>: {<span class="st">'data'</span>: <span class="st">'UklGRg=='</span>, <span class="st">'format'</span>: <span class="st">'wav'</span>}},</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>         {<span class="st">'type'</span>: <span class="st">'input_audio'</span>, <span class="st">'input_audio'</span>: {}},</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>         {<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">'after'</span>}]</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>m <span class="op">=</span> to_msg({<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: mixed})</span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>test_eq([p.<span class="bu">type</span> <span class="cf">for</span> p <span class="kw">in</span> m.content], [<span class="st">'text'</span>, <span class="st">'input_image'</span>, <span class="st">'input_image'</span>, <span class="st">'text'</span>, <span class="st">'input_audio'</span>, <span class="st">'input_audio'</span>, <span class="st">'text'</span>])</span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>rt <span class="op">=</span> to_hist(m)[<span class="dv">0</span>]</span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>test_eq([p[<span class="st">'type'</span>] <span class="cf">for</span> p <span class="kw">in</span> rt[<span class="st">'content'</span>]], [<span class="st">'text'</span>, <span class="st">'image_url'</span>, <span class="st">'image_url'</span>, <span class="st">'input_audio'</span>, <span class="st">'input_audio'</span>])</span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>test_eq(rt[<span class="st">'content'</span>][<span class="dv">0</span>][<span class="st">'text'</span>], <span class="st">'beforebetweenafter'</span>)</span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>test_eq(rt[<span class="st">'content'</span>][<span class="dv">1</span>][<span class="st">'image_url'</span>][<span class="st">'url'</span>], m.content[<span class="dv">1</span>].text)</span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>test_eq(rt[<span class="st">'content'</span>][<span class="dv">2</span>][<span class="st">'image_url'</span>][<span class="st">'url'</span>], m.content[<span class="dv">2</span>].text)</span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a>test_eq(rt[<span class="st">'content'</span>][<span class="dv">3</span>][<span class="st">'input_audio'</span>][<span class="st">'format'</span>], <span class="st">'wav'</span>)</span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a><span class="co"># a server-side tool call keeps its flag across the hop</span></span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>sm <span class="op">=</span> to_msg({<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">''</span>, <span class="st">'tool_calls'</span>: [ToolCall(<span class="st">'web_search'</span>, {}, <span class="bu">id</span><span class="op">=</span><span class="st">'s1'</span>, server<span class="op">=</span><span class="va">True</span>)]})</span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> to_hist(sm)[<span class="dv">0</span>][<span class="st">'tool_calls'</span>][<span class="dv">0</span>].server</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="responses-and-usage" class="level2">
+<h2 class="anchored" data-anchor-id="responses-and-usage">Responses and usage</h2>
+<p><a href="https://vedicreader.github.io/rishi/remote.html#norm_completion"><code>norm_completion</code></a> converts a fastllm <code>Completion</code> to a rishi <code>Resp</code>. It reads tool calls that the model wrote into its text as <code>&lt;tool_call&gt;</code> tags. It sets <code>truncated</code> when the reply hit the token limit. It adds token usage from <a href="https://vedicreader.github.io/rishi/remote.html#norm_usage"><code>norm_usage</code></a>.</p>
+<p><code>cached_tokens</code> is set when the provider reports prompt caching. <code>reasoning_tokens</code> and <code>cache_creation_tokens</code> appear only when the provider reports them. A local backend’s usage dict does not change.</p>
+<p>Some models generate images. fastllm’s message parts describe inputs only. <a href="https://vedicreader.github.io/rishi/remote.html#gen_media"><code>gen_media</code></a> searches the provider’s raw response for generated images in the shapes that Gemini, the OpenAI Responses and Images APIs, and LiteLLM use. <a href="https://vedicreader.github.io/rishi/remote.html#norm_completion"><code>norm_completion</code></a> stores what it finds in <code>Resp['media']</code> as <code>{mime, data}</code> dicts. It does not change the text.</p>
+<div id="c5e5d5b4" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.173056+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.179035+00:00&quot;,&quot;total&quot;:0.005983258999989971}}" data-execution_count="10">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/remote.py#L161" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="norm_completion" class="level3">
+<h3 class="anchored" data-anchor-id="norm_completion">norm_completion</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> norm_completion(</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    comp</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Convert a fastllm <code>Completion</code> to a rishi <code>Resp</code>, also reading tool calls written as <code>&lt;tool_call&gt;</code> tags in the text.</em></p>
+</section>
+</div>
+<div id="2f10e911" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.179183+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.183869+00:00&quot;,&quot;total&quot;:0.004690953999997305}}" data-execution_count="11">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/remote.py#L151" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="gen_media" class="level3">
+<h3 class="anchored" data-anchor-id="gen_media">gen_media</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> gen_media(</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    raw</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Collect the images a model generated from the provider’s raw response, <code>Completion.raw</code>, as <code>{mime, data}</code> dicts.</em></p>
+</section>
+</div>
+<div id="afa048eb" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.183993+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.188848+00:00&quot;,&quot;total&quot;:0.00485879900000441}}" data-execution_count="12">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/remote.py#L104" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="norm_usage" class="level3">
+<h3 class="anchored" data-anchor-id="norm_usage">norm_usage</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> norm_usage(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    u, model:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Convert fastllm <code>Usage</code> to a rishi usage dict, keeping reasoning and cache-write counts when the provider reports them.</em></p>
+</section>
+</div>
+<div id="512f2d71" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.190209+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.195598+00:00&quot;,&quot;total&quot;:0.005393302000001654}}" data-execution_count="13">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> base64 <span class="im">import</span> b64encode</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>png <span class="op">=</span> <span class="st">b'</span><span class="ch">\x89</span><span class="st">PNG</span><span class="ch">\r\n\x1a\n</span><span class="st">'</span> <span class="op">+</span> <span class="st">b'fake'</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>b64 <span class="op">=</span> b64encode(png).decode()</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Gemini native, camelCase and snake_case, however deep the candidate sits</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>test_eq(gen_media({<span class="st">'candidates'</span>: [{<span class="st">'content'</span>: {<span class="st">'parts'</span>: [</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    {<span class="st">'text'</span>: <span class="st">'here you go'</span>}, {<span class="st">'inlineData'</span>: {<span class="st">'mimeType'</span>: <span class="st">'image/png'</span>, <span class="st">'data'</span>: b64}}]}}]}),</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    [{<span class="st">'mime'</span>: <span class="st">'image/png'</span>, <span class="st">'data'</span>: png}])</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>test_eq(gen_media({<span class="st">'candidates'</span>: [{<span class="st">'content'</span>: {<span class="st">'parts'</span>: [</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>    {<span class="st">'inline_data'</span>: {<span class="st">'mime_type'</span>: <span class="st">'image/webp'</span>, <span class="st">'data'</span>: b64}}]}}]}),</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    [{<span class="st">'mime'</span>: <span class="st">'image/webp'</span>, <span class="st">'data'</span>: png}])</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-14"><a href="#cb8-14" aria-hidden="true" tabindex="-1"></a><span class="co"># the OpenAI-shaped route litellm normalises Gemini's image output onto</span></span>
+<span id="cb8-15"><a href="#cb8-15" aria-hidden="true" tabindex="-1"></a>test_eq(gen_media({<span class="st">'choices'</span>: [{<span class="st">'message'</span>: {<span class="st">'content'</span>: <span class="st">'done'</span>,</span>
+<span id="cb8-16"><a href="#cb8-16" aria-hidden="true" tabindex="-1"></a>    <span class="st">'images'</span>: [{<span class="st">'image_url'</span>: {<span class="st">'url'</span>: <span class="ss">f'data:image/png;base64,</span><span class="sc">{</span>b64<span class="sc">}</span><span class="ss">'</span>}}]}}]}),</span>
+<span id="cb8-17"><a href="#cb8-17" aria-hidden="true" tabindex="-1"></a>    [{<span class="st">'mime'</span>: <span class="st">'image/png'</span>, <span class="st">'data'</span>: png}])</span>
+<span id="cb8-18"><a href="#cb8-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-19"><a href="#cb8-19" aria-hidden="true" tabindex="-1"></a><span class="co"># the Responses API image tool, and the Images API</span></span>
+<span id="cb8-20"><a href="#cb8-20" aria-hidden="true" tabindex="-1"></a>test_eq(gen_media({<span class="st">'output'</span>: [{<span class="st">'type'</span>: <span class="st">'image_generation_call'</span>, <span class="st">'result'</span>: b64}]}),</span>
+<span id="cb8-21"><a href="#cb8-21" aria-hidden="true" tabindex="-1"></a>        [{<span class="st">'mime'</span>: <span class="st">'image/png'</span>, <span class="st">'data'</span>: png}])</span>
+<span id="cb8-22"><a href="#cb8-22" aria-hidden="true" tabindex="-1"></a>test_eq(gen_media({<span class="st">'data'</span>: [{<span class="st">'b64_json'</span>: b64}]}), [{<span class="st">'mime'</span>: <span class="st">'image/png'</span>, <span class="st">'data'</span>: png}])</span>
+<span id="cb8-23"><a href="#cb8-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-24"><a href="#cb8-24" aria-hidden="true" tabindex="-1"></a><span class="co"># a plain text reply carries nothing, and neither does a missing `raw`</span></span>
+<span id="cb8-25"><a href="#cb8-25" aria-hidden="true" tabindex="-1"></a>test_eq(gen_media({<span class="st">'choices'</span>: [{<span class="st">'message'</span>: {<span class="st">'content'</span>: <span class="st">'just words'</span>}}]}), [])</span>
+<span id="cb8-26"><a href="#cb8-26" aria-hidden="true" tabindex="-1"></a>test_eq(gen_media(<span class="va">None</span>), [])</span>
+<span id="cb8-27"><a href="#cb8-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-28"><a href="#cb8-28" aria-hidden="true" tabindex="-1"></a><span class="co"># the same image reached by two routes in one payload is still one image</span></span>
+<span id="cb8-29"><a href="#cb8-29" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">len</span>(gen_media({<span class="st">'candidates'</span>: [{<span class="st">'content'</span>: {<span class="st">'parts'</span>: [{<span class="st">'inlineData'</span>: {<span class="st">'mimeType'</span>: <span class="st">'image/png'</span>, <span class="st">'data'</span>: b64}}]}}],</span>
+<span id="cb8-30"><a href="#cb8-30" aria-hidden="true" tabindex="-1"></a>                       <span class="st">'choices'</span>: [{<span class="st">'message'</span>: {<span class="st">'images'</span>: [{<span class="st">'image_url'</span>: {<span class="st">'url'</span>: <span class="ss">f'data:image/png;base64,</span><span class="sc">{</span>b64<span class="sc">}</span><span class="ss">'</span>}}]}}]})), <span class="dv">1</span>)</span>
+<span id="cb8-31"><a href="#cb8-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-32"><a href="#cb8-32" aria-hidden="true" tabindex="-1"></a><span class="co"># and it rides on `Resp.media`, leaving `content` alone</span></span>
+<span id="cb8-33"><a href="#cb8-33" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> norm_completion(Completion(model<span class="op">=</span><span class="st">'m'</span>, usage<span class="op">=</span>Usage(prompt_tokens<span class="op">=</span><span class="dv">1</span>, completion_tokens<span class="op">=</span><span class="dv">2</span>),</span>
+<span id="cb8-34"><a href="#cb8-34" aria-hidden="true" tabindex="-1"></a>        message<span class="op">=</span>Msg(role<span class="op">=</span><span class="st">'assistant'</span>, content<span class="op">=</span>[Text(text<span class="op">=</span><span class="st">'here'</span>)]),</span>
+<span id="cb8-35"><a href="#cb8-35" aria-hidden="true" tabindex="-1"></a>        raw<span class="op">=</span>{<span class="st">'candidates'</span>: [{<span class="st">'content'</span>: {<span class="st">'parts'</span>: [{<span class="st">'inlineData'</span>: {<span class="st">'mimeType'</span>: <span class="st">'image/png'</span>, <span class="st">'data'</span>: b64}}]}}]}))</span>
+<span id="cb8-36"><a href="#cb8-36" aria-hidden="true" tabindex="-1"></a>test_eq(r[<span class="st">'content'</span>], <span class="st">'here'</span>)</span>
+<span id="cb8-37"><a href="#cb8-37" aria-hidden="true" tabindex="-1"></a>test_eq(r[<span class="st">'media'</span>], [{<span class="st">'mime'</span>: <span class="st">'image/png'</span>, <span class="st">'data'</span>: png}])</span>
+<span id="cb8-38"><a href="#cb8-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb8-39"><a href="#cb8-39" aria-hidden="true" tabindex="-1"></a><span class="co"># a caller may hand in anything Completion-shaped; `raw` is newer than the function and</span></span>
+<span id="cb8-40"><a href="#cb8-40" aria-hidden="true" tabindex="-1"></a><span class="co"># must not become a requirement -- ramabana's routing test builds one without it</span></span>
+<span id="cb8-41"><a href="#cb8-41" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _NoRaw:</span>
+<span id="cb8-42"><a href="#cb8-42" aria-hidden="true" tabindex="-1"></a>    model, usage, finish_reason, tool_calls <span class="op">=</span> <span class="st">'m'</span>, <span class="va">None</span>, <span class="st">'stop'</span>, <span class="va">None</span></span>
+<span id="cb8-43"><a href="#cb8-43" aria-hidden="true" tabindex="-1"></a>    message <span class="op">=</span> Msg(role<span class="op">=</span><span class="st">'assistant'</span>, content<span class="op">=</span>[Text(text<span class="op">=</span><span class="st">'hi'</span>)])</span>
+<span id="cb8-44"><a href="#cb8-44" aria-hidden="true" tabindex="-1"></a>test_eq(norm_completion(_NoRaw())[<span class="st">'content'</span>], <span class="st">'hi'</span>)</span>
+<span id="cb8-45"><a href="#cb8-45" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'media'</span> <span class="kw">not</span> <span class="kw">in</span> norm_completion(_NoRaw())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="remotechat" class="level2">
+<h2 class="anchored" data-anchor-id="remotechat">RemoteChat</h2>
+<p><a href="https://vedicreader.github.io/rishi/remote.html#remotechat"><code>RemoteChat</code></a> runs fastllm’s async client from synchronous code. It uses Urai’s <code>run_coro</code> and <code>sync_iter</code>. With no model named, it uses <code>dflt_remote</code>, which is <code>gpt-5.1</code>.</p>
+<p><code>max_output_tokens</code> sets the output cap. Without it, the cap is the maximum that fastllm’s model table gives for the model. For a model that is not in the table, the cap is <code>DFLT_MAX_TOKENS</code>, 16,000. A reasoning model spends its thinking from the same cap. A small cap cut its tool calls short.</p>
+<p>These options exist only on <a href="https://vedicreader.github.io/rishi/remote.html#remotechat"><code>RemoteChat</code></a>:</p>
+<ul>
+<li><code>tool_choice</code> forces one tool. The value <code>'required'</code> forces any tool.</li>
+<li><code>effort</code> sets the provider’s reasoning effort. <code>reasoning_effort</code> is an accepted alias.</li>
+<li><code>tool_mode='native'</code> is the default. It sends tool schemas in the API’s tools field.</li>
+<li><code>tool_mode='tags'</code> writes the tool schemas into the system prompt and reads <code>&lt;tool_call&gt;</code> tags from the reply. Use it for a provider that has no tools field.</li>
+<li><code>vendor_name</code> and <code>api_name</code> override the vendor and the API that fastllm infers from the model id.</li>
+</ul>
+<p>You can pass <code>tool_mode</code> for a single turn, streamed or not.</p>
+<p>When the provider’s API lacks the effort level you set, the chat sends the level that <code>EFFORT_MAP</code> names. <code>max</code> becomes <code>xhigh</code> on OpenAI and Azure. <code>xhigh</code> and <code>max</code> become <code>high</code> on Gemini.</p>
+<p>When a provider refuses the effort with a 400, the chat repeats the call once without it. <code>dropped_effort</code> then holds the reason, and the chat sends no effort. Set <code>dropped_effort</code> back to <code>None</code> to send effort again.</p>
+<p>A one-shot call with <code>think=False</code> asks for <code>NO_THINK_EFFORT</code>, which is <code>'minimal'</code>.</p>
+<p>You can name a Gemini model with or without <code>models/</code>, as in <code>gemini-3.5-flash</code>, <code>gemini/gemini-3.5-flash</code> or <code>models/gemini-3.5-flash</code>. Gemini’s API puts the model in the URL and answers 404 without that prefix. The chat adds the prefix to the request. <code>model_id</code> stays as you gave it.</p>
+<p>Some providers run tools on their own side, such as web search. Those calls come back marked <code>server=True</code>. The chat records them in the history. rishi does not run them.</p>
+<p>A vendor in <code>STREAM_ONLY</code> answers only streamed requests. At present the only such vendor is <code>codex</code>. For it, the chat streams every request and collects the result.</p>
+<p>Azure OpenAI’s v1 API works through <code>base_url</code>. Set these values:</p>
+<ul>
+<li><code>base_url</code>: <code>https://&lt;resource&gt;.openai.azure.com/openai/v1</code></li>
+<li>model: the deployment name</li>
+<li><code>api_key</code>: the Azure key</li>
+<li><code>api_name='openai'</code> for the Responses API</li>
+</ul>
+<p>The chat sends no <code>api-version</code>. The v1 API needs none.</p>
+<p>On the chat-completions route, <code>api_name='openai_chat'</code>, an Azure reasoning deployment refuses <code>max_tokens</code>. For a host in <code>MAX_COMPLETION_HOSTS</code>, the chat sends the output cap as <code>max_completion_tokens</code>. Every Azure model accepts that field.</p>
+<div id="fbde982b" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.222794+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.229224+00:00&quot;,&quot;total&quot;:0.00643472600000905}}" data-execution_count="15">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/remote.py#L211" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="remotechat-1" class="level3">
+<h3 class="anchored" data-anchor-id="remotechat-1">RemoteChat</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> RemoteChat(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    model:NoneType<span class="op">=</span><span class="va">None</span>, <span class="op">*</span>, runtime:NoneType<span class="op">=</span><span class="va">None</span>, model_path:NoneType<span class="op">=</span><span class="va">None</span>, opts:NoneType<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    vendor_name:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># override the vendor fastllm infers from the model id</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    api_name:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># override the api name fastllm infers</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    tool_choice:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># force a particular tool, or 'required'</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    retries:<span class="bu">int</span><span class="op">=</span><span class="dv">2</span>, comp_kw:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># passed to `acomplete` verbatim</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>kw</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>A <code>Chat</code> that sends each turn to a hosted model API through fastllm.</em></p>
+</section>
+</div>
+<div id="b9ec54f1" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.229353+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.233533+00:00&quot;,&quot;total&quot;:0.004184403000010661}}" data-execution_count="16">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/remote.py#L207" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="effort_refused" class="level3">
+<h3 class="anchored" data-anchor-id="effort_refused">effort_refused</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> effort_refused(</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    e</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Whether <code>e</code> is a provider’s 400 that names the reasoning effort (<code>effort</code>, <code>reasoning_effort</code>, <code>reasoning.effort</code>).</em></p>
+</section>
+</div>
+<div id="747c7dca" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.233662+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.237733+00:00&quot;,&quot;total&quot;:0.0040746670000118}}" data-execution_count="17">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/remote.py#L203" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="cut_args" class="level3">
+<h3 class="anchored" data-anchor-id="cut_args">cut_args</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cut_args(</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    e</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Whether the JSON in <code>e</code> ended early, as arguments cut off at the output cap do, rather than being malformed.</em></p>
+</section>
+</div>
+<div id="a0647027" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.237850+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.242363+00:00&quot;,&quot;total&quot;:0.0045169570000069825}}" data-execution_count="18">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/remote.py#L195" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="args_error" class="level3">
+<h3 class="anchored" data-anchor-id="args_error">args_error</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> args_error(</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    e</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Whether the <code>JSONDecodeError</code> <code>e</code> came from fastllm decoding a model’s tool-call arguments.</em></p>
+</section>
+</div>
+<div id="rm_tags_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _add(a: <span class="bu">int</span>, b: <span class="bu">int</span>) <span class="op">-&gt;</span> <span class="bu">int</span>:</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    <span class="co">'Add a and b.'</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> a <span class="op">+</span> b</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="co"># native puts the schemas on the wire; tags puts them in the system prompt and leaves the field empty</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>kw <span class="op">=</span> RemoteChat(<span class="st">'gpt-5.1'</span>, tools<span class="op">=</span>[_add], sp<span class="op">=</span><span class="st">'Be terse.'</span>)._kw()</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>test_eq([t[<span class="st">'function'</span>][<span class="st">'name'</span>] <span class="cf">for</span> t <span class="kw">in</span> kw[<span class="st">'tools'</span>]], [<span class="st">'_add'</span>])</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>test_eq(kw[<span class="st">'system'</span>], <span class="st">'Be terse.'</span>)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>kw <span class="op">=</span> RemoteChat(<span class="st">'gpt-5.1'</span>, tools<span class="op">=</span>[_add], sp<span class="op">=</span><span class="st">'Be terse.'</span>, tool_mode<span class="op">=</span><span class="st">'tags'</span>, tool_choice<span class="op">=</span><span class="st">'required'</span>)._kw()</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'tools'</span> <span class="kw">not</span> <span class="kw">in</span> kw <span class="kw">and</span> <span class="st">'tool_choice'</span> <span class="kw">not</span> <span class="kw">in</span> kw</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> kw[<span class="st">'system'</span>].startswith(<span class="st">'Be terse.'</span>) <span class="kw">and</span> <span class="st">'"name": "_add"'</span> <span class="kw">in</span> kw[<span class="st">'system'</span>]</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="co"># Parse tagged calls without dropping surrounding text.</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _comp(text):</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> Completion(model<span class="op">=</span><span class="st">'m'</span>, usage<span class="op">=</span>Usage(prompt_tokens<span class="op">=</span><span class="dv">1</span>, completion_tokens<span class="op">=</span><span class="dv">2</span>),</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>                      message<span class="op">=</span>Msg(role<span class="op">=</span><span class="st">'assistant'</span>, content<span class="op">=</span>[Text(text<span class="op">=</span>text)]))</span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> norm_completion(_comp(<span class="st">'on it</span><span class="ch">\n</span><span class="st">&lt;tool_call&gt;{"name": "_add", "arguments": {"a": 1, "b": 2</span><span class="sc">}}</span><span class="st">&lt;/tool_call&gt;'</span>))</span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>test_eq(resp_text(r), <span class="st">'on it'</span>)</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>test_eq((r[<span class="st">'tool_calls'</span>][<span class="dv">0</span>].name, r[<span class="st">'tool_calls'</span>][<span class="dv">0</span>].arguments), (<span class="st">'_add'</span>, {<span class="st">'a'</span>: <span class="dv">1</span>, <span class="st">'b'</span>: <span class="dv">2</span>}))</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>test_eq(norm_completion(_comp(<span class="st">'just prose'</span>)).get(<span class="st">'tool_calls'</span>), <span class="va">None</span>)</span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a><span class="co"># provider-billed reasoning and cache-write token counts appear only when the provider reports them</span></span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>u <span class="op">=</span> Usage(prompt_tokens<span class="op">=</span><span class="dv">10</span>, completion_tokens<span class="op">=</span><span class="dv">5</span>, cached_tokens<span class="op">=</span><span class="dv">4</span>, reasoning_tokens<span class="op">=</span><span class="dv">7</span>, cache_creation_tokens<span class="op">=</span><span class="dv">3</span>)</span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>test_eq(norm_usage(u, <span class="st">'m'</span>), {<span class="st">'prompt_tokens'</span>: <span class="dv">10</span>, <span class="st">'completion_tokens'</span>: <span class="dv">5</span>, <span class="st">'total_tokens'</span>: <span class="dv">15</span>,</span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>                             <span class="st">'cached_tokens'</span>: <span class="dv">4</span>, <span class="st">'model'</span>: <span class="st">'m'</span>, <span class="st">'reasoning_tokens'</span>: <span class="dv">7</span>, <span class="st">'cache_creation_tokens'</span>: <span class="dv">3</span>})</span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">set</span>(norm_usage(Usage(prompt_tokens<span class="op">=</span><span class="dv">1</span>, completion_tokens<span class="op">=</span><span class="dv">1</span>), <span class="st">'m'</span>)),</span>
+<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>        {<span class="st">'prompt_tokens'</span>, <span class="st">'completion_tokens'</span>, <span class="st">'total_tokens'</span>, <span class="st">'cached_tokens'</span>, <span class="st">'model'</span>})</span>
+<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a>us <span class="op">=</span> UsageStats(<span class="op">**</span>norm_usage(u)) <span class="op">+</span> UsageStats(<span class="op">**</span>norm_usage(u))</span>
+<span id="cb13-31"><a href="#cb13-31" aria-hidden="true" tabindex="-1"></a>test_eq((us.reasoning_tokens, us.cache_creation_tokens, us.cached_tokens), (<span class="dv">14</span>, <span class="dv">6</span>, <span class="dv">8</span>))</span>
+<span id="cb13-32"><a href="#cb13-32" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'reasoning=14'</span> <span class="kw">in</span> <span class="bu">repr</span>(us) <span class="kw">and</span> <span class="st">'cache_write=6'</span> <span class="kw">in</span> <span class="bu">repr</span>(us)</span>
+<span id="cb13-33"><a href="#cb13-33" aria-hidden="true" tabindex="-1"></a>test_eq(sum_usage([norm_usage(u), norm_usage(u)])[<span class="st">'reasoning_tokens'</span>], <span class="dv">14</span>)</span>
+<span id="cb13-34"><a href="#cb13-34" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'reasoning_tokens'</span> <span class="kw">not</span> <span class="kw">in</span> sum_usage([{<span class="st">'prompt_tokens'</span>: <span class="dv">1</span>}])   <span class="co"># absent, not zero, when nothing was reported</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="d205fcb1" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># codex answers a streamed request and refuses every other one (400 "Stream must be set to true"),</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co"># so the calls that are not already streams have to be gathered from one</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _Stop(<span class="pp">Exception</span>): <span class="cf">pass</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _fake(msgs, model, <span class="op">**</span>kw):</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> go(): <span class="cf">raise</span> _Stop(kw.get(<span class="st">'stream'</span>))</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> go()</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _streamed(chat, fn):</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>: fn(chat)</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">except</span> _Stop <span class="im">as</span> e: <span class="cf">return</span> e.args[<span class="dv">0</span>]</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>_real, acomplete <span class="op">=</span> acomplete, _fake</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    codex, plain <span class="op">=</span> RemoteChat(<span class="st">'codex/gpt-5.5'</span>), RemoteChat(<span class="st">'gpt-5.1'</span>)</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>    test_eq((codex._stream_only, plain._stream_only), (<span class="va">True</span>, <span class="va">False</span>))</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>    test_eq(_streamed(codex, <span class="kw">lambda</span> c: c._model_step()), <span class="va">True</span>)</span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>    test_eq(_streamed(plain, <span class="kw">lambda</span> c: c._model_step()), <span class="va">False</span>)</span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>    test_eq(_streamed(codex, <span class="kw">lambda</span> c: c._oneshot(<span class="st">'hi'</span>)), <span class="va">True</span>)</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>    test_eq(_streamed(codex, <span class="kw">lambda</span> c: c._structured_call(<span class="st">'hi'</span>, _add, <span class="st">''</span>)), <span class="va">True</span>)</span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>    test_eq(_streamed(plain, <span class="kw">lambda</span> c: c._structured_call(<span class="st">'hi'</span>, _add, <span class="st">''</span>)), <span class="va">False</span>)</span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>: acomplete <span class="op">=</span> _real</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="b9abad38" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.249334+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.329576+00:00&quot;,&quot;total&quot;:0.08024807699999315}}" data-execution_count="19">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Azure's chat-completions route refuses `max_tokens` from a reasoning deployment, so the cap goes out as</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="co"># `max_completion_tokens` there; its Responses route and every other host keep `max_tokens`</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>az <span class="op">=</span> <span class="st">'https://res.openai.azure.com/openai/v1'</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>kw <span class="op">=</span> RemoteChat(<span class="st">'gpt-5.4'</span>, base_url<span class="op">=</span>az, api_key<span class="op">=</span><span class="st">'k'</span>, api_name<span class="op">=</span><span class="st">'openai_chat'</span>, max_output_tokens<span class="op">=</span><span class="dv">900</span>)._kw()</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>test_eq((<span class="st">'max_tokens'</span> <span class="kw">in</span> kw, kw[<span class="st">'xtra_body'</span>]), (<span class="va">False</span>, {<span class="st">'max_completion_tokens'</span>: <span class="dv">900</span>}))</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>kw <span class="op">=</span> RemoteChat(<span class="st">'gpt-5.4'</span>, base_url<span class="op">=</span>az, api_key<span class="op">=</span><span class="st">'k'</span>, api_name<span class="op">=</span><span class="st">'openai_chat'</span>, comp_kw<span class="op">=</span>{<span class="st">'xtra_body'</span>: {<span class="st">'store'</span>: <span class="va">False</span>}})._kw()</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>mx54 <span class="op">=</span> get_model_info(<span class="st">'gpt-5.4'</span>)[<span class="st">'max_output_tokens'</span>]   <span class="co"># a model fastllm knows asks for its own maximum</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>test_eq(kw[<span class="st">'xtra_body'</span>], {<span class="st">'max_completion_tokens'</span>: mx54, <span class="st">'store'</span>: <span class="va">False</span>})</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'gpt-5.4'</span>, base_url<span class="op">=</span>az, api_key<span class="op">=</span><span class="st">'k'</span>, api_name<span class="op">=</span><span class="st">'openai'</span>)._kw()[<span class="st">'max_tokens'</span>], mx54)</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'m'</span>, base_url<span class="op">=</span><span class="st">'https://res.openai.azure.us/openai/v1'</span>, api_key<span class="op">=</span><span class="st">'k'</span>, api_name<span class="op">=</span><span class="st">'openai_chat'</span>)._max_completion, <span class="va">True</span>)</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'m'</span>, base_url<span class="op">=</span><span class="st">'https://api.example.com/v1'</span>, api_key<span class="op">=</span><span class="st">'k'</span>, api_name<span class="op">=</span><span class="st">'openai_chat'</span>)._kw()[<span class="st">'max_tokens'</span>], DFLT_MAX_TOKENS)</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a><span class="co"># the request itself: the deployment as the model, Bearer auth, `/openai/v1/responses`, no `api-version`</span></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> fastllm.acomplete <span class="im">as</span> fa</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastllm.acomplete <span class="im">import</span> mk_client</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>seen, _req <span class="op">=</span> {}, fa.provider_req</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> _fake_req(cli, path, body, params<span class="op">=</span><span class="va">None</span>, stream<span class="op">=</span><span class="va">False</span>, <span class="op">**</span>kw):   <span class="co"># newer fastllm passes `headers`</span></span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>    seen.update(url<span class="op">=</span>cli._url(path), params<span class="op">=</span>params, body<span class="op">=</span>body)</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">'output'</span>: [{<span class="st">'type'</span>: <span class="st">'message'</span>, <span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: [{<span class="st">'type'</span>: <span class="st">'output_text'</span>, <span class="st">'text'</span>: <span class="st">'pong'</span>}]}],</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>            <span class="st">'usage'</span>: {<span class="st">'input_tokens'</span>: <span class="dv">5</span>, <span class="st">'output_tokens'</span>: <span class="dv">1</span>, <span class="st">'total_tokens'</span>: <span class="dv">6</span>}, <span class="st">'status'</span>: <span class="st">'completed'</span>}</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>fa.provider_req <span class="op">=</span> _fake_req</span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>: r <span class="op">=</span> RemoteChat(<span class="st">'gpt-5.4'</span>, base_url<span class="op">=</span>az, api_key<span class="op">=</span><span class="st">'k'</span>, api_name<span class="op">=</span><span class="st">'openai'</span>)(<span class="st">'ping'</span>)</span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>: fa.provider_req <span class="op">=</span> _req</span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>test_eq((seen[<span class="st">'url'</span>], seen[<span class="st">'params'</span>], seen[<span class="st">'body'</span>][<span class="st">'model'</span>], seen[<span class="st">'body'</span>][<span class="st">'max_output_tokens'</span>]), (<span class="ss">f'</span><span class="sc">{</span>az<span class="sc">}</span><span class="ss">/responses'</span>, <span class="va">None</span>, <span class="st">'gpt-5.4'</span>, mx54))</span>
+<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>test_eq((resp_text(r), r[<span class="st">'usage'</span>][<span class="st">'prompt_tokens'</span>]), (<span class="st">'pong'</span>, <span class="dv">5</span>))</span>
+<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a>test_eq(mk_client(<span class="st">'gpt-5.4'</span>, api_name<span class="op">=</span><span class="st">'openai'</span>, api_key<span class="op">=</span><span class="st">'k'</span>, base_url<span class="op">=</span>az)[<span class="dv">0</span>].transport.base_headers[<span class="st">'Authorization'</span>], <span class="st">'Bearer k'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<section id="a-tool-call-that-does-not-decode" class="level3">
+<h3 class="anchored" data-anchor-id="a-tool-call-that-does-not-decode">A tool call that does not decode</h3>
+<p>fastllm decodes a model’s tool-call arguments before rishi sees the reply. It raises <code>JSONDecodeError</code> when the arguments are not whole JSON. The usual cause is the output cap: the model ran out of tokens while it wrote the call.</p>
+<p><a href="https://vedicreader.github.io/rishi/remote.html#args_error"><code>args_error</code></a> checks that the error came from one of the fastllm functions in <code>ARG_SITES</code>. rishi raises any other decode error unchanged. <a href="https://vedicreader.github.io/rishi/remote.html#cut_args"><code>cut_args</code></a> tells a cut-off call from a malformed one.</p>
+<p>A cut-off call goes back to the model with urai’s <code>cut_msg_</code>. The next step runs at <code>CUT_CAP_MULT</code> times the cap, up to the most that fastllm says the model can write. A malformed call goes back with the decoder’s error message.</p>
+<p>A reply cut off while the model was still thinking, with no text and no call, goes back the same way and uses the same single resend. A second failure in the turn raises <code>ToolCallError</code> with the reason.</p>
+<div id="4b7aefaa" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.333450+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.479337+00:00&quot;,&quot;total&quot;:0.14589279499999463}}" data-execution_count="20">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># a tool call cut off at the output cap, or not JSON at all, goes back to the model rather than killing the turn</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="co"># with fastllm's bare `JSONDecodeError`; the step after a cut-off call gets `CUT_CAP_MULT` times the cap</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> fastllm.acomplete <span class="im">as</span> fa</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.xtras <span class="im">import</span> dict2obj</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> urai <span class="im">import</span> cut_msg_</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _wf(path: <span class="bu">str</span>, content: <span class="bu">str</span>) <span class="op">-&gt;</span> <span class="bu">str</span>:</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    <span class="co">'Write content to path.'</span></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="ss">f'wrote </span><span class="sc">{</span><span class="bu">len</span>(content)<span class="sc">}</span><span class="ss">'</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>_CUT, _BAD, _OK <span class="op">=</span> <span class="st">'{"path": "a.txt", "content": "it stops'</span>, <span class="st">'{"path": "a.txt" "content": "x"}'</span>, <span class="st">'{"path": "a.txt", "content": "whole"}'</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _resp(args):    <span class="co"># a Responses reply, its call cut short when `args` is</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> args <span class="kw">is</span> <span class="va">None</span>: <span class="cf">return</span> {<span class="st">'output'</span>: [{<span class="st">'type'</span>: <span class="st">'message'</span>, <span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: [{<span class="st">'type'</span>: <span class="st">'output_text'</span>, <span class="st">'text'</span>: <span class="st">'done'</span>}]}], <span class="st">'status'</span>: <span class="st">'completed'</span>,</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>                             <span class="st">'usage'</span>: {<span class="st">'input_tokens'</span>: <span class="dv">5</span>, <span class="st">'output_tokens'</span>: <span class="dv">1</span>, <span class="st">'total_tokens'</span>: <span class="dv">6</span>}}</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">'output'</span>: [{<span class="st">'type'</span>: <span class="st">'function_call'</span>, <span class="st">'call_id'</span>: <span class="st">'c1'</span>, <span class="st">'id'</span>: <span class="st">'fc1'</span>, <span class="st">'name'</span>: <span class="st">'_wf'</span>, <span class="st">'arguments'</span>: args}],</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>            <span class="st">'usage'</span>: {<span class="st">'input_tokens'</span>: <span class="dv">5</span>, <span class="st">'output_tokens'</span>: <span class="dv">9</span>, <span class="st">'total_tokens'</span>: <span class="dv">14</span>}, <span class="st">'status'</span>: <span class="st">'incomplete'</span> <span class="cf">if</span> args <span class="op">==</span> _CUT <span class="cf">else</span> <span class="st">'completed'</span>}</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _cc(args):      <span class="co"># a chat-completions reply</span></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>    m <span class="op">=</span> {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'done'</span>} <span class="cf">if</span> args <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="va">None</span>, <span class="st">'tool_calls'</span>: [{<span class="st">'id'</span>: <span class="st">'c1'</span>, <span class="st">'type'</span>: <span class="st">'function'</span>, <span class="st">'function'</span>: {<span class="st">'name'</span>: <span class="st">'_wf'</span>, <span class="st">'arguments'</span>: args}}]}</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">'choices'</span>: [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'message'</span>: m, <span class="st">'finish_reason'</span>: <span class="st">'stop'</span> <span class="cf">if</span> args <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> <span class="st">'length'</span> <span class="cf">if</span> args <span class="op">==</span> _CUT <span class="cf">else</span> <span class="st">'tool_calls'</span>}],</span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>            <span class="st">'usage'</span>: {<span class="st">'prompt_tokens'</span>: <span class="dv">5</span>, <span class="st">'completion_tokens'</span>: <span class="dv">9</span>, <span class="st">'total_tokens'</span>: <span class="dv">14</span>}}</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _chunks(args):  <span class="co"># a chat-completions stream: some prose, then the call in pieces, then `length` when it was cut</span></span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">yield</span> {<span class="st">'choices'</span>: [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'delta'</span>: {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'Writing it.'</span>}}]}</span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> args <span class="kw">is</span> <span class="va">None</span>: <span class="cf">yield</span> {<span class="st">'choices'</span>: [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'delta'</span>: {}, <span class="st">'finish_reason'</span>: <span class="st">'stop'</span>}]}<span class="op">;</span> <span class="cf">return</span></span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> i <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">0</span>, <span class="bu">len</span>(args), <span class="dv">8</span>):</span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>        f <span class="op">=</span> {<span class="st">'arguments'</span>: args[i:i<span class="op">+</span><span class="dv">8</span>]} <span class="op">|</span> ({<span class="st">'name'</span>: <span class="st">'_wf'</span>} <span class="cf">if</span> <span class="kw">not</span> i <span class="cf">else</span> {})</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>        <span class="cf">yield</span> {<span class="st">'choices'</span>: [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'delta'</span>: {<span class="st">'tool_calls'</span>: [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'id'</span>: <span class="st">'c1'</span> <span class="cf">if</span> <span class="kw">not</span> i <span class="cf">else</span> <span class="va">None</span>, <span class="st">'type'</span>: <span class="st">'function'</span>, <span class="st">'function'</span>: f}]}}]}</span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>    <span class="cf">yield</span> {<span class="st">'choices'</span>: [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'delta'</span>: {}, <span class="st">'finish_reason'</span>: <span class="st">'length'</span> <span class="cf">if</span> args <span class="op">==</span> _CUT <span class="cf">else</span> <span class="st">'tool_calls'</span>}]}</span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _wire(<span class="op">*</span>script):</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>    <span class="co">"A fake `provider_req` answering with `script` in order, and the request bodies it saw."</span></span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>    bodies, it <span class="op">=</span> [], <span class="bu">iter</span>(script)</span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> req(cli, path, body, params<span class="op">=</span><span class="va">None</span>, stream<span class="op">=</span><span class="va">False</span>, <span class="op">**</span>kw):</span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>        bodies.append(body)<span class="op">;</span> a <span class="op">=</span> <span class="bu">next</span>(it)</span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="bu">isinstance</span>(a, <span class="pp">Exception</span>): <span class="cf">raise</span> a</span>
+<span id="cb16-32"><a href="#cb16-32" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="kw">not</span> stream: <span class="cf">return</span> dict2obj((_cc <span class="cf">if</span> <span class="st">'chat'</span> <span class="kw">in</span> path <span class="cf">else</span> _resp)(a))</span>
+<span id="cb16-33"><a href="#cb16-33" aria-hidden="true" tabindex="-1"></a>        <span class="cf">async</span> <span class="kw">def</span> ev():</span>
+<span id="cb16-34"><a href="#cb16-34" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> c <span class="kw">in</span> _chunks(a): <span class="cf">yield</span> dict2obj(c)</span>
+<span id="cb16-35"><a href="#cb16-35" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> ev()</span>
+<span id="cb16-36"><a href="#cb16-36" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> req, bodies</span>
+<span id="cb16-37"><a href="#cb16-37" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _run(chat, <span class="op">*</span>script, stream<span class="op">=</span><span class="va">False</span>):</span>
+<span id="cb16-38"><a href="#cb16-38" aria-hidden="true" tabindex="-1"></a>    req, bodies <span class="op">=</span> _wire(<span class="op">*</span>script)</span>
+<span id="cb16-39"><a href="#cb16-39" aria-hidden="true" tabindex="-1"></a>    _req, fa.provider_req <span class="op">=</span> fa.provider_req, req</span>
+<span id="cb16-40"><a href="#cb16-40" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>: r <span class="op">=</span> chat(<span class="st">'go'</span>, stream<span class="op">=</span>stream)<span class="op">;</span> r <span class="op">=</span> <span class="st">''</span>.join(r) <span class="cf">if</span> stream <span class="cf">else</span> r</span>
+<span id="cb16-41"><a href="#cb16-41" aria-hidden="true" tabindex="-1"></a>    <span class="cf">finally</span>: fa.provider_req <span class="op">=</span> _req</span>
+<span id="cb16-42"><a href="#cb16-42" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> r, bodies</span>
+<span id="cb16-43"><a href="#cb16-43" aria-hidden="true" tabindex="-1"></a>_resps <span class="op">=</span> <span class="kw">lambda</span> <span class="op">**</span>kw: RemoteChat(<span class="st">'gpt-5.4'</span>, api_key<span class="op">=</span><span class="st">'k'</span>, tools<span class="op">=</span>[_wf], max_output_tokens<span class="op">=</span><span class="dv">1000</span>, <span class="op">**</span>kw)</span>
+<span id="cb16-44"><a href="#cb16-44" aria-hidden="true" tabindex="-1"></a>_chats <span class="op">=</span> <span class="kw">lambda</span> <span class="op">**</span>kw: RemoteChat(<span class="st">'gpt-5.4'</span>, base_url<span class="op">=</span><span class="st">'https://x.example.com/v1'</span>, api_key<span class="op">=</span><span class="st">'k'</span>, api_name<span class="op">=</span><span class="st">'openai_chat'</span>, tools<span class="op">=</span>[_wf], max_output_tokens<span class="op">=</span><span class="dv">1000</span>, <span class="op">**</span>kw)</span>
+<span id="cb16-45"><a href="#cb16-45" aria-hidden="true" tabindex="-1"></a>caps <span class="op">=</span> <span class="kw">lambda</span> bodies: [b.get(<span class="st">'max_output_tokens'</span>) <span class="kw">or</span> b.get(<span class="st">'max_tokens'</span>) <span class="kw">or</span> b.get(<span class="st">'max_completion_tokens'</span>) <span class="cf">for</span> b <span class="kw">in</span> bodies]</span>
+<span id="cb16-46"><a href="#cb16-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-47"><a href="#cb16-47" aria-hidden="true" tabindex="-1"></a><span class="co"># cut off, then asked again at four times the cap, then whole: the call runs, on both wires and both ways of sending</span></span>
+<span id="cb16-48"><a href="#cb16-48" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> mk, stream <span class="kw">in</span> ((_resps, <span class="va">False</span>), (_resps, <span class="va">True</span>), (_chats, <span class="va">False</span>), (_chats, <span class="va">True</span>)):</span>
+<span id="cb16-49"><a href="#cb16-49" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> mk <span class="kw">is</span> _resps <span class="kw">and</span> stream: <span class="cf">continue</span>           <span class="co"># the Responses stream is fastllm's, covered by its own event parser</span></span>
+<span id="cb16-50"><a href="#cb16-50" aria-hidden="true" tabindex="-1"></a>    c <span class="op">=</span> mk()</span>
+<span id="cb16-51"><a href="#cb16-51" aria-hidden="true" tabindex="-1"></a>    r, bodies <span class="op">=</span> _run(c, _CUT, _OK, <span class="va">None</span>, stream<span class="op">=</span>stream)</span>
+<span id="cb16-52"><a href="#cb16-52" aria-hidden="true" tabindex="-1"></a>    test_eq([m[<span class="st">'role'</span>] <span class="cf">for</span> m <span class="kw">in</span> c.hist], [<span class="st">'user'</span>, <span class="st">'assistant'</span>, <span class="st">'user'</span>, <span class="st">'assistant'</span>, <span class="st">'tool'</span>, <span class="st">'assistant'</span>])</span>
+<span id="cb16-53"><a href="#cb16-53" aria-hidden="true" tabindex="-1"></a>    test_eq((c.hist[<span class="dv">2</span>][<span class="st">'content'</span>], c.hist[<span class="dv">4</span>][<span class="st">'content'</span>]), (cut_msg_, <span class="st">'wrote 5'</span>))</span>
+<span id="cb16-54"><a href="#cb16-54" aria-hidden="true" tabindex="-1"></a>    test_eq(caps(bodies), [<span class="dv">1000</span>, <span class="dv">4000</span>, <span class="dv">1000</span>])        <span class="co"># the raise lasts one step</span></span>
+<span id="cb16-55"><a href="#cb16-55" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> (<span class="st">'Writing it.'</span> <span class="cf">if</span> stream <span class="cf">else</span> <span class="st">'cut off at its 1000-token output limit'</span>) <span class="kw">in</span> c.hist[<span class="dv">1</span>][<span class="st">'content'</span>] <span class="kw">and</span> <span class="st">'lost'</span> <span class="kw">not</span> <span class="kw">in</span> c.hist[<span class="dv">1</span>]   <span class="co"># what streamed, else why</span></span>
+<span id="cb16-56"><a href="#cb16-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-57"><a href="#cb16-57" aria-hidden="true" tabindex="-1"></a><span class="co"># cut off twice: `ToolCallError` says what happened, not a decoder message</span></span>
+<span id="cb16-58"><a href="#cb16-58" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> mk, stream <span class="kw">in</span> ((_resps, <span class="va">False</span>), (_chats, <span class="va">True</span>)):</span>
+<span id="cb16-59"><a href="#cb16-59" aria-hidden="true" tabindex="-1"></a>    test_fail(<span class="kw">lambda</span>: _run(mk(), _CUT, _CUT, stream<span class="op">=</span>stream), contains<span class="op">=</span><span class="st">"gpt-5.4's tool call was cut off at its 4000-token output limit"</span>)</span>
+<span id="cb16-60"><a href="#cb16-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-61"><a href="#cb16-61" aria-hidden="true" tabindex="-1"></a><span class="co"># arguments that are not JSON go back naming the problem, at the same cap</span></span>
+<span id="cb16-62"><a href="#cb16-62" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> _chats()</span>
+<span id="cb16-63"><a href="#cb16-63" aria-hidden="true" tabindex="-1"></a>r, bodies <span class="op">=</span> _run(c, _BAD, _OK, <span class="va">None</span>, stream<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb16-64"><a href="#cb16-64" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">"not valid JSON (Expecting ',' delimiter at char 17)"</span> <span class="kw">in</span> c.hist[<span class="dv">2</span>][<span class="st">'content'</span>]</span>
+<span id="cb16-65"><a href="#cb16-65" aria-hidden="true" tabindex="-1"></a>test_eq((c.hist[<span class="dv">4</span>][<span class="st">'content'</span>], caps(bodies)), (<span class="st">'wrote 5'</span>, [<span class="dv">1000</span>, <span class="dv">1000</span>, <span class="dv">1000</span>]))</span>
+<span id="cb16-66"><a href="#cb16-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-67"><a href="#cb16-67" aria-hidden="true" tabindex="-1"></a><span class="co"># a `JSONDecodeError` that is not the model's, such as a proxy's HTML page, is raised as it was</span></span>
+<span id="cb16-68"><a href="#cb16-68" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: _run(_chats(), json.JSONDecodeError(<span class="st">'Expecting value'</span>, <span class="st">'&lt;html&gt;'</span>, <span class="dv">0</span>)), contains<span class="op">=</span><span class="st">'Expecting value'</span>)</span>
+<span id="cb16-69"><a href="#cb16-69" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-70"><a href="#cb16-70" aria-hidden="true" tabindex="-1"></a><span class="co"># the raise stays within what fastllm says the model can write; past that, the advice is smaller steps</span></span>
+<span id="cb16-71"><a href="#cb16-71" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> RemoteChat(<span class="st">'gpt-5.4'</span>, max_output_tokens<span class="op">=</span><span class="dv">100_000</span>)</span>
+<span id="cb16-72"><a href="#cb16-72" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'ask for smaller steps'</span> <span class="kw">in</span> c._cut(<span class="dv">100_000</span>) <span class="kw">and</span> c._boost <span class="op">==</span> get_model_info(<span class="st">'gpt-5.4'</span>)[<span class="st">'max_output_tokens'</span>]</span>
+<span id="cb16-73"><a href="#cb16-73" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> RemoteChat(<span class="st">'gpt-5.4'</span>, max_output_tokens<span class="op">=</span><span class="dv">128_000</span>)</span>
+<span id="cb16-74"><a href="#cb16-74" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'raise max_output_tokens'</span> <span class="kw">not</span> <span class="kw">in</span> c._cut(<span class="dv">128_000</span>) <span class="kw">and</span> c._boost <span class="kw">is</span> <span class="va">None</span></span>
+<span id="cb16-75"><a href="#cb16-75" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> RemoteChat(<span class="st">'no-such-model'</span>, base_url<span class="op">=</span><span class="st">'https://x.example.com/v1'</span>, api_key<span class="op">=</span><span class="st">'k'</span>, max_output_tokens<span class="op">=</span><span class="dv">500</span>)<span class="op">;</span> c._cut(<span class="dv">500</span>)<span class="op">;</span> test_eq(c._boost, <span class="dv">2000</span>)</span>
+<span id="cb16-76"><a href="#cb16-76" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-77"><a href="#cb16-77" aria-hidden="true" tabindex="-1"></a><span class="co"># a reply that is all thinking when the cap cuts it goes back once at the raised cap, then raises</span></span>
+<span id="cb16-78"><a href="#cb16-78" aria-hidden="true" tabindex="-1"></a>_THINK <span class="op">=</span> <span class="st">'think'</span></span>
+<span id="cb16-79"><a href="#cb16-79" aria-hidden="true" tabindex="-1"></a>_r0, _c0 <span class="op">=</span> _resp, _chunks</span>
+<span id="cb16-80"><a href="#cb16-80" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _resp(args):</span>
+<span id="cb16-81"><a href="#cb16-81" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> args <span class="op">!=</span> _THINK: <span class="cf">return</span> _r0(args)</span>
+<span id="cb16-82"><a href="#cb16-82" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">'output'</span>: [{<span class="st">'type'</span>: <span class="st">'reasoning'</span>, <span class="st">'id'</span>: <span class="st">'r1'</span>, <span class="st">'summary'</span>: []}], <span class="st">'status'</span>: <span class="st">'incomplete'</span>, <span class="st">'incomplete_details'</span>: {<span class="st">'reason'</span>: <span class="st">'max_output_tokens'</span>},</span>
+<span id="cb16-83"><a href="#cb16-83" aria-hidden="true" tabindex="-1"></a>            <span class="st">'usage'</span>: {<span class="st">'input_tokens'</span>: <span class="dv">5</span>, <span class="st">'output_tokens'</span>: <span class="dv">1000</span>, <span class="st">'total_tokens'</span>: <span class="dv">1005</span>}}</span>
+<span id="cb16-84"><a href="#cb16-84" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _chunks(args):</span>
+<span id="cb16-85"><a href="#cb16-85" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> args <span class="op">!=</span> _THINK: <span class="cf">yield</span> <span class="cf">from</span> _c0(args)<span class="op">;</span> <span class="cf">return</span></span>
+<span id="cb16-86"><a href="#cb16-86" aria-hidden="true" tabindex="-1"></a>    <span class="cf">yield</span> {<span class="st">'choices'</span>: [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'delta'</span>: {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">''</span>}}]}</span>
+<span id="cb16-87"><a href="#cb16-87" aria-hidden="true" tabindex="-1"></a>    <span class="cf">yield</span> {<span class="st">'choices'</span>: [{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'delta'</span>: {}, <span class="st">'finish_reason'</span>: <span class="st">'length'</span>}]}</span>
+<span id="cb16-88"><a href="#cb16-88" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> mk, stream <span class="kw">in</span> ((_resps, <span class="va">False</span>), (_chats, <span class="va">True</span>)):</span>
+<span id="cb16-89"><a href="#cb16-89" aria-hidden="true" tabindex="-1"></a>    c <span class="op">=</span> mk()</span>
+<span id="cb16-90"><a href="#cb16-90" aria-hidden="true" tabindex="-1"></a>    r, bodies <span class="op">=</span> _run(c, _THINK, <span class="va">None</span>, stream<span class="op">=</span>stream)</span>
+<span id="cb16-91"><a href="#cb16-91" aria-hidden="true" tabindex="-1"></a>    test_eq((c.hist[<span class="op">-</span><span class="dv">1</span>][<span class="st">'content'</span>], caps(bodies)), (<span class="st">'Writing it.'</span> <span class="cf">if</span> stream <span class="cf">else</span> <span class="st">'done'</span>, [<span class="dv">1000</span>, <span class="dv">4000</span>]))</span>
+<span id="cb16-92"><a href="#cb16-92" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> <span class="st">'still thinking'</span> <span class="kw">in</span> c.hist[<span class="dv">1</span>][<span class="st">'content'</span>] <span class="kw">and</span> <span class="st">'channels'</span> <span class="kw">not</span> <span class="kw">in</span> c.hist[<span class="dv">1</span>] <span class="kw">and</span> <span class="st">'thinking less'</span> <span class="kw">in</span> c.hist[<span class="dv">2</span>][<span class="st">'content'</span>]</span>
+<span id="cb16-93"><a href="#cb16-93" aria-hidden="true" tabindex="-1"></a>    test_fail(<span class="kw">lambda</span>: _run(mk(), _THINK, _THINK, stream<span class="op">=</span>stream), contains<span class="op">=</span><span class="st">'gpt-5.4 was still thinking when its reply was cut off at its 4000-token output limit'</span>)</span>
+<span id="cb16-94"><a href="#cb16-94" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-95"><a href="#cb16-95" aria-hidden="true" tabindex="-1"></a><span class="co"># the default cap: the model's own maximum, `DFLT_MAX_TOKENS` for a model fastllm does not know, and `max_output_tokens` over both</span></span>
+<span id="cb16-96"><a href="#cb16-96" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'gpt-5.4'</span>).max_output_tokens, get_model_info(<span class="st">'gpt-5.4'</span>)[<span class="st">'max_output_tokens'</span>])</span>
+<span id="cb16-97"><a href="#cb16-97" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'no-such-model'</span>, base_url<span class="op">=</span><span class="st">'https://x.example.com/v1'</span>, api_key<span class="op">=</span><span class="st">'k'</span>).max_output_tokens, DFLT_MAX_TOKENS)</span>
+<span id="cb16-98"><a href="#cb16-98" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'gpt-5.4'</span>, max_output_tokens<span class="op">=</span><span class="dv">900</span>).max_output_tokens, <span class="dv">900</span>)</span>
+<span id="cb16-99"><a href="#cb16-99" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> DFLT_MAX_TOKENS <span class="op">&gt;=</span> <span class="dv">16_000</span></span>
+<span id="cb16-100"><a href="#cb16-100" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-101"><a href="#cb16-101" aria-hidden="true" tabindex="-1"></a><span class="co"># tags mode: a `&lt;tool_call&gt;` cut off at the cap keeps `unread`, so it is asked for again, not run with no arguments</span></span>
+<span id="cb16-102"><a href="#cb16-102" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> norm_completion(Completion(model<span class="op">=</span><span class="st">'m'</span>, finish_reason<span class="op">=</span><span class="st">'length'</span>, message<span class="op">=</span>Msg(role<span class="op">=</span><span class="st">'assistant'</span>, content<span class="op">=</span>[Text(text<span class="op">=</span><span class="st">'&lt;tool_call&gt;{"name": "_wf", "arguments": {"path": "a'</span>)])))</span>
+<span id="cb16-103"><a href="#cb16-103" aria-hidden="true" tabindex="-1"></a>test_eq((r[<span class="st">'truncated'</span>], r[<span class="st">'tool_calls'</span>][<span class="dv">0</span>].get(<span class="st">'unread'</span>)), (<span class="va">True</span>, <span class="va">True</span>))</span>
+<span id="cb16-104"><a href="#cb16-104" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-105"><a href="#cb16-105" aria-hidden="true" tabindex="-1"></a><span class="co"># `ask(schema=)`: once more at the raised cap, then `ToolCallError`</span></span>
+<span id="cb16-106"><a href="#cb16-106" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> _resps()</span>
+<span id="cb16-107"><a href="#cb16-107" aria-hidden="true" tabindex="-1"></a>req, bodies <span class="op">=</span> _wire(_CUT, _OK)<span class="op">;</span> _req, fa.provider_req <span class="op">=</span> fa.provider_req, req</span>
+<span id="cb16-108"><a href="#cb16-108" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>: test_eq(c._structured_call(<span class="st">'go'</span>, _wf, <span class="st">''</span>), {<span class="st">'path'</span>: <span class="st">'a.txt'</span>, <span class="st">'content'</span>: <span class="st">'whole'</span>})</span>
+<span id="cb16-109"><a href="#cb16-109" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>: fa.provider_req <span class="op">=</span> _req</span>
+<span id="cb16-110"><a href="#cb16-110" aria-hidden="true" tabindex="-1"></a>test_eq(caps(bodies), [<span class="dv">1000</span>, <span class="dv">4000</span>])</span>
+<span id="cb16-111"><a href="#cb16-111" aria-hidden="true" tabindex="-1"></a>req, bodies <span class="op">=</span> _wire(_CUT, _CUT)<span class="op">;</span> _req, fa.provider_req <span class="op">=</span> fa.provider_req, req</span>
+<span id="cb16-112"><a href="#cb16-112" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>: test_fail(<span class="kw">lambda</span>: c._structured_call(<span class="st">'go'</span>, _wf, <span class="st">''</span>), contains<span class="op">=</span><span class="st">'cut off at its 1000-token output limit'</span>)</span>
+<span id="cb16-113"><a href="#cb16-113" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>: fa.provider_req <span class="op">=</span> _req</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="16b4db81" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-24T21:29:15.480459+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-24T21:29:15.840706+00:00&quot;,&quot;total&quot;:0.3602535280000012}}" data-execution_count="21">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># a Gemini model reaches `v1beta/models/&lt;id&gt;`, however it was named: without `models/` Gemini answers 404</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> fastllm.acomplete <span class="im">as</span> fa</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>seen, _req <span class="op">=</span> [], fa.provider_req</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="cf">async</span> <span class="kw">def</span> _gem_req(cli, path, body, params<span class="op">=</span><span class="va">None</span>, stream<span class="op">=</span><span class="va">False</span>, <span class="op">**</span>kw):</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>    seen.append(cli._url(path))</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> {<span class="st">'candidates'</span>: [{<span class="st">'content'</span>: {<span class="st">'role'</span>: <span class="st">'model'</span>, <span class="st">'parts'</span>: [{<span class="st">'text'</span>: <span class="st">'pong'</span>}]}, <span class="st">'finishReason'</span>: <span class="st">'STOP'</span>}],</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>            <span class="st">'usageMetadata'</span>: {<span class="st">'promptTokenCount'</span>: <span class="dv">5</span>, <span class="st">'candidatesTokenCount'</span>: <span class="dv">1</span>, <span class="st">'totalTokenCount'</span>: <span class="dv">6</span>}}</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>gem <span class="op">=</span> <span class="st">'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent'</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>fa.provider_req <span class="op">=</span> _gem_req</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> m <span class="kw">in</span> (<span class="st">'gemini-3.5-flash'</span>, <span class="st">'gemini/gemini-3.5-flash'</span>, <span class="st">'models/gemini-3.5-flash'</span>, <span class="st">'gemini/models/gemini-3.5-flash'</span>):</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>        seen.clear()<span class="op">;</span> c <span class="op">=</span> RemoteChat(m, api_key<span class="op">=</span><span class="st">'k'</span>)</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>        r <span class="op">=</span> c(<span class="st">'ping'</span>)</span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>        test_eq((seen, resp_text(r), c.model_id), ([gem], <span class="st">'pong'</span>, m))</span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">assert</span> r[<span class="st">'usage'</span>][<span class="st">'prompt_tokens'</span>] <span class="op">==</span> <span class="dv">5</span>, r[<span class="st">'usage'</span>]</span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> kw <span class="kw">in</span> (<span class="bu">dict</span>(vendor_name<span class="op">=</span><span class="st">'gemini'</span>), <span class="bu">dict</span>(vendor_name<span class="op">=</span><span class="st">'gemini'</span>, base_url<span class="op">=</span><span class="st">'https://generativelanguage.googleapis.com/'</span>)):   <span class="co"># a named route: `acomplete` keeps the vendor prefix, so it goes here</span></span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>        seen.clear()<span class="op">;</span> RemoteChat(<span class="st">'gemini/gemini-3.5-flash'</span>, api_key<span class="op">=</span><span class="st">'k'</span>, <span class="op">**</span>kw)(<span class="st">'ping'</span>)<span class="op">;</span> test_eq(seen, [gem])</span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>    seen.clear()<span class="op">;</span> RemoteChat(<span class="st">'gemini-3.5-flash'</span>, api_key<span class="op">=</span><span class="st">'k'</span>, api_name<span class="op">=</span><span class="st">'gemini'</span>, base_url<span class="op">=</span><span class="st">'https://gw.example.com/'</span>)(<span class="st">'ping'</span>)</span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>    test_eq(seen, [<span class="st">'https://gw.example.com/v1beta/models/gemini-3.5-flash:generateContent'</span>])</span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>    seen.clear()<span class="op">;</span> RemoteChat(<span class="st">'tunedModels/mine'</span>, api_key<span class="op">=</span><span class="st">'k'</span>, vendor_name<span class="op">=</span><span class="st">'gemini'</span>)(<span class="st">'ping'</span>)</span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>    test_eq(seen, [<span class="st">'https://generativelanguage.googleapis.com/v1beta/tunedModels/mine:generateContent'</span>])</span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>: fa.provider_req <span class="op">=</span> _req</span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'gemini-3.5-flash'</span>, base_url<span class="op">=</span><span class="st">'https://gw.example.com/v1'</span>, api_key<span class="op">=</span><span class="st">'k'</span>)._wire_model, <span class="st">'gemini-3.5-flash'</span>)   <span class="co"># an OpenAI-shaped route takes the bare id</span></span>
+<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'gpt-5.4'</span>)._wire_model, <span class="st">'gpt-5.4'</span>)</span>
+<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'gemini-3.5-flash'</span>)._kw(stream<span class="op">=</span><span class="va">True</span>)[<span class="st">'stream'</span>], <span class="va">True</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="89c7395a" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># an effort level the provider's API lacks goes out as the nearest one it takes</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'gpt-5.4-mini'</span>, effort<span class="op">=</span><span class="st">'max'</span>)._kw()[<span class="st">'reasoning_effort'</span>], <span class="st">'xhigh'</span>)</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'gpt-5.4'</span>, base_url<span class="op">=</span>az, api_key<span class="op">=</span><span class="st">'k'</span>, api_name<span class="op">=</span><span class="st">'openai_chat'</span>, effort<span class="op">=</span><span class="st">'max'</span>)._kw()[<span class="st">'reasoning_effort'</span>], <span class="st">'xhigh'</span>)</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'gpt-5.4-mini'</span>)._kw(effort<span class="op">=</span><span class="st">'max'</span>)[<span class="st">'reasoning_effort'</span>], <span class="st">'xhigh'</span>)    <span class="co"># per turn too</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'gpt-5.4-mini'</span>, effort<span class="op">=</span><span class="st">'xhigh'</span>)._kw()[<span class="st">'reasoning_effort'</span>], <span class="st">'xhigh'</span>)</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'anthropic/claude-sonnet-4-5'</span>, effort<span class="op">=</span><span class="st">'max'</span>)._kw()[<span class="st">'reasoning_effort'</span>], <span class="st">'max'</span>)</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>test_eq(RemoteChat(<span class="st">'models/gemini-3.5-flash'</span>, effort<span class="op">=</span><span class="st">'max'</span>)._kw()[<span class="st">'reasoning_effort'</span>], <span class="st">'high'</span>)</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="st">'reasoning_effort'</span> <span class="kw">in</span> RemoteChat(<span class="st">'gpt-5.4-mini'</span>)._kw(), <span class="va">False</span>)</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a><span class="co"># a 400 that names the effort: the call goes once more without it, and `dropped_effort` says why</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _E400(<span class="pp">Exception</span>): status_code <span class="op">=</span> <span class="dv">400</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _fake(msgs, model, <span class="op">**</span>kw):</span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>    sent.append(kw.get(<span class="st">'reasoning_effort'</span>))</span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> go():</span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> kw.get(<span class="st">'reasoning_effort'</span>): <span class="cf">raise</span> _E400(<span class="st">"Unsupported value: 'reasoning_effort' does not support 'xhigh' with this model."</span>)</span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> _comp(<span class="st">'pong'</span>)</span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> gen():</span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> kw.get(<span class="st">'reasoning_effort'</span>): <span class="cf">raise</span> _E400(<span class="st">'400 Bad Request: reasoning.effort is not supported'</span>)</span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">yield</span> Text(text<span class="op">=</span><span class="st">'po'</span>)<span class="op">;</span> <span class="cf">yield</span> Text(text<span class="op">=</span><span class="st">'ng'</span>)<span class="op">;</span> <span class="cf">yield</span> _comp(<span class="st">'pong'</span>)</span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> kw.get(<span class="st">'stream'</span>): <span class="cf">return</span> go()</span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> wrap(): <span class="cf">return</span> gen()</span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> wrap()</span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>_real, acomplete <span class="op">=</span> acomplete, _fake</span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>    sent, c <span class="op">=</span> [], RemoteChat(<span class="st">'gpt-5.4-mini'</span>, effort<span class="op">=</span><span class="st">'max'</span>)</span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>    test_eq((resp_text(c(<span class="st">'ping'</span>)), sent), (<span class="st">'pong'</span>, [<span class="st">'xhigh'</span>, <span class="va">None</span>]))</span>
+<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> <span class="st">'refused reasoning effort'</span> <span class="kw">in</span> c.dropped_effort <span class="kw">and</span> <span class="st">'xhigh'</span> <span class="kw">in</span> c.dropped_effort, c.dropped_effort</span>
+<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a>    sent.clear()<span class="op">;</span> c(<span class="st">'again'</span>)</span>
+<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>    test_eq(sent, [<span class="va">None</span>])                         <span class="co"># while it is set, no effort goes out</span></span>
+<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>    sent, s <span class="op">=</span> [], RemoteChat(<span class="st">'gpt-5.4-mini'</span>, effort<span class="op">=</span><span class="st">'high'</span>)</span>
+<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>    test_eq((<span class="st">''</span>.join(s(<span class="st">'ping'</span>, stream<span class="op">=</span><span class="va">True</span>)), sent, <span class="bu">bool</span>(s.dropped_effort)), (<span class="st">'pong'</span>, [<span class="st">'high'</span>, <span class="va">None</span>], <span class="va">True</span>))</span>
+<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> _other(msgs, model, <span class="op">**</span>kw):</span>
+<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>        <span class="cf">async</span> <span class="kw">def</span> go(): <span class="cf">raise</span> _E400(<span class="st">'400 Bad Request: messages is empty'</span>)</span>
+<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> go()</span>
+<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a>    acomplete <span class="op">=</span> _other</span>
+<span id="cb18-37"><a href="#cb18-37" aria-hidden="true" tabindex="-1"></a>    test_fail(<span class="kw">lambda</span>: RemoteChat(<span class="st">'gpt-5.4-mini'</span>, effort<span class="op">=</span><span class="st">'high'</span>)(<span class="st">'ping'</span>), contains<span class="op">=</span><span class="st">'messages is empty'</span>)   <span class="co"># any other 400 is the caller's</span></span>
+<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> _rs(msgs, model, <span class="op">**</span>kw):</span>
+<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a>        <span class="cf">async</span> <span class="kw">def</span> go(): <span class="cf">raise</span> _E400(<span class="st">"Item 'rs_0a1b' of type 'reasoning' was provided without its required following item."</span>)</span>
+<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> go()</span>
+<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a>    acomplete, c <span class="op">=</span> _rs, RemoteChat(<span class="st">'gpt-5.4-mini'</span>, effort<span class="op">=</span><span class="st">'high'</span>)</span>
+<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a>    test_fail(<span class="kw">lambda</span>: c(<span class="st">'ping'</span>), contains<span class="op">=</span><span class="st">"type 'reasoning'"</span>)     <span class="co"># a reasoning item, not the effort</span></span>
+<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a>    test_eq(c.dropped_effort, <span class="va">None</span>)</span>
+<span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a>    <span class="kw">class</span> _E500(<span class="pp">Exception</span>): status_code <span class="op">=</span> <span class="dv">500</span></span>
+<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> _down(msgs, model, <span class="op">**</span>kw):</span>
+<span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a>        <span class="cf">async</span> <span class="kw">def</span> go(): <span class="cf">raise</span> _E500(<span class="st">'upstream said 400 times: reasoning_effort timed out'</span>)</span>
+<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> go()</span>
+<span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a>    acomplete, c <span class="op">=</span> _down, RemoteChat(<span class="st">'gpt-5.4-mini'</span>, effort<span class="op">=</span><span class="st">'high'</span>)</span>
+<span id="cb18-49"><a href="#cb18-49" aria-hidden="true" tabindex="-1"></a>    test_fail(<span class="kw">lambda</span>: c(<span class="st">'ping'</span>), contains<span class="op">=</span><span class="st">'upstream'</span>)               <span class="co"># only a 400 status counts, not "400" in the text</span></span>
+<span id="cb18-50"><a href="#cb18-50" aria-hidden="true" tabindex="-1"></a>    test_eq(c.dropped_effort, <span class="va">None</span>)</span>
+<span id="cb18-51"><a href="#cb18-51" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>: acomplete <span class="op">=</span> _real</span>
+<span id="cb18-52"><a href="#cb18-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-53"><a href="#cb18-53" aria-hidden="true" tabindex="-1"></a><span class="co"># a turn's own `tool_mode` decides whether the stream is split on tags, as it decides where the schemas go</span></span>
+<span id="cb18-54"><a href="#cb18-54" aria-hidden="true" tabindex="-1"></a>call <span class="op">=</span> <span class="st">'on it</span><span class="ch">\n</span><span class="st">&lt;'</span> <span class="op">+</span> <span class="st">'tool_call&gt;{"name": "_add", "arguments": {"a": 1, "b": 2</span><span class="sc">}}</span><span class="st">&lt;/'</span> <span class="op">+</span> <span class="st">'tool_call&gt;'</span></span>
+<span id="cb18-55"><a href="#cb18-55" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _tagged(msgs, model, <span class="op">**</span>kw):</span>
+<span id="cb18-56"><a href="#cb18-56" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> gen():</span>
+<span id="cb18-57"><a href="#cb18-57" aria-hidden="true" tabindex="-1"></a>        <span class="cf">yield</span> Text(text<span class="op">=</span>call)<span class="op">;</span> <span class="cf">yield</span> _comp(call)</span>
+<span id="cb18-58"><a href="#cb18-58" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> wrap(): <span class="cf">return</span> gen()</span>
+<span id="cb18-59"><a href="#cb18-59" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> wrap()</span>
+<span id="cb18-60"><a href="#cb18-60" aria-hidden="true" tabindex="-1"></a>_real, acomplete <span class="op">=</span> acomplete, _tagged</span>
+<span id="cb18-61"><a href="#cb18-61" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
+<span id="cb18-62"><a href="#cb18-62" aria-hidden="true" tabindex="-1"></a>    out <span class="op">=</span> <span class="bu">list</span>(RemoteChat(<span class="st">'gpt-5.1'</span>, tools<span class="op">=</span>[_add])._stream_step(tool_mode<span class="op">=</span><span class="st">'tags'</span>))</span>
+<span id="cb18-63"><a href="#cb18-63" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> <span class="kw">not</span> <span class="bu">any</span>(<span class="st">'tool_call&gt;'</span> <span class="kw">in</span> <span class="bu">str</span>(o) <span class="cf">for</span> o <span class="kw">in</span> out <span class="cf">if</span> <span class="st">'content'</span> <span class="kw">in</span> o <span class="kw">and</span> o[<span class="st">'content'</span>][<span class="dv">0</span>].get(<span class="st">'type'</span>) <span class="op">==</span> <span class="st">'text'</span>), out</span>
+<span id="cb18-64"><a href="#cb18-64" aria-hidden="true" tabindex="-1"></a>    out <span class="op">=</span> <span class="bu">list</span>(RemoteChat(<span class="st">'gpt-5.1'</span>, tools<span class="op">=</span>[_add], tool_mode<span class="op">=</span><span class="st">'tags'</span>)._stream_step(tool_mode<span class="op">=</span><span class="st">'native'</span>))</span>
+<span id="cb18-65"><a href="#cb18-65" aria-hidden="true" tabindex="-1"></a>    test_eq(out, [{<span class="st">'content'</span>: [{<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: call}]}])</span>
+<span id="cb18-66"><a href="#cb18-66" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>: acomplete <span class="op">=</span> _real</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>A one-shot with <code>think=False</code> is sent again without the effort only when the provider’s 400 names it. Any other failure, such as a bad key, is raised after one request.</p>
+<div id="d49fcf05" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _HTTPErr(<span class="pp">Exception</span>):</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> <span class="fu">__init__</span>(<span class="va">self</span>, code, msg): <span class="bu">super</span>().<span class="fu">__init__</span>(msg)<span class="op">;</span> <span class="va">self</span>.status_code <span class="op">=</span> code</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> _failing(code, msg, sent):</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">async</span> <span class="kw">def</span> collect(msgs, <span class="op">**</span>kw): sent.append(kw.get(<span class="st">'reasoning_effort'</span>))<span class="op">;</span> <span class="cf">raise</span> _HTTPErr(code, msg)</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> collect</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>rc, sent <span class="op">=</span> RemoteChat(<span class="st">'gpt-4o'</span>, key<span class="op">=</span><span class="st">'k'</span>), []</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>rc._collect <span class="op">=</span> _failing(<span class="dv">401</span>, <span class="st">'bad key'</span>, sent)</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: rc._oneshot(<span class="st">'hi'</span>, think<span class="op">=</span><span class="va">False</span>), contains<span class="op">=</span><span class="st">'bad key'</span>)</span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">len</span>(sent), <span class="dv">1</span>)</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a>rc._collect <span class="op">=</span> _failing(<span class="dv">400</span>, <span class="st">'Unsupported reasoning_effort'</span>, sent <span class="op">:=</span> [])</span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: rc._oneshot(<span class="st">'hi'</span>, think<span class="op">=</span><span class="va">False</span>), contains<span class="op">=</span><span class="st">'reasoning_effort'</span>)</span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>sent</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="against-a-real-api" class="level2">
+<h2 class="anchored" data-anchor-id="against-a-real-api">Against a real API</h2>
+<p><code>Chat('gpt-5.1')</code>, <code>Chat('anthropic/claude-sonnet-4-5')</code> and <code>Chat(model, runtime='remote')</code> all use this backend. These cells call paid APIs and need a provider key. The test run skips them, and the output shown was saved earlier. The last cell starts a conversation on a local Qwen3 through llama.cpp and continues it on GPT-5.1.</p>
+<div id="rm_real_basic" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(<span class="st">'gpt-4.1'</span>, sp<span class="op">=</span><span class="st">'You are concise.'</span>)</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>test_eq(chat.runtime, <span class="st">'remote'</span>)</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">'Reply with exactly: pong'</span>)</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'pong'</span> <span class="kw">in</span> resp_text(r).lower()</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat.use)</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>chat.oneshot(<span class="st">'what do you say to ping in one word'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>total=22|in=20|out=2|turns=1|model=gpt-4.1</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<pre><code>'The phrase "**say to ping**" can be interpreted in different contexts, but commonly, when someone says they want to "ping" someone (or something), it usually refers to one of the following:\n\n### 1. **In Networking or IT:**\nTo **ping** is to send a small data packet to a server or device to check if it\'s reachable/alive (like `ping google.com` in the command line).\n- **What you say:**  \n  You typically "say" or type the command:  \n  ```\n  ping [IP address or domain]\n  ```\n  For example: `ping google.com`\n\n### 2. **In Chat/Business Communication:**\nTo "ping" someone means to send them a quick message, usually to get their attention or check in.\n- **What you say:**  \n  You might say:  \n  - "I\'ll ping you later."\n  - "Can you ping John to see if he\'s available?"\n  - "Just pinging you to follow up on this."\n\n  Or, if you’re the person "pinging," you might send a message like:\n  - "Hi, just pinging to check in."\n  - "Ping!"\n\n### 3. **If Someone Says “What do you say to ping?”**\n- They might be asking **if you\'re okay with sending a quick message** or **checking the status** of a device/person.\n- **Possible replies:**  \n  - "Sure, I can ping them."\n  - "Go ahead and ping."\n  - "I already pinged them."\n\n---\n\n## **In summary:**\n- **To ping** = to reach out or check the status (either electronically or in conversation).\n- **What you say:**  \n  In IT: Use the command (e.g., `ping example.com`).  \n  In chat: Send a quick message ("Just pinging you...").\n\n**Let me know which context you meant if you want a more specific answer!**'</code></pre>
+</div>
+</div>
+<div id="rm_real_stream" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>display_stream(Chat(<span class="st">'gpt-5.1'</span>)(<span class="st">'Write two sentences about the monsoon.'</span>, stream<span class="op">=</span><span class="va">True</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p>The monsoon is a seasonal wind system that brings heavy rainfall to regions such as South Asia, Southeast Asia, and parts of Africa. It is crucial for agriculture and water resources but can also cause severe flooding and landslides.</p>
+</div>
+<div class="cell-output cell-output-display">
+<pre><code>'The monsoon is a seasonal wind system that brings heavy rainfall to regions such as South Asia, Southeast Asia, and parts of Africa. It is crucial for agriculture and water resources but can also cause severe flooding and landslides.'</code></pre>
+</div>
+</div>
+<div id="rm_real_think" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>th <span class="op">=</span> Chat(<span class="st">'gpt-5.1'</span>, reasoning_effort<span class="op">=</span><span class="st">'high'</span>, max_output_tokens<span class="op">=</span><span class="dv">2048</span>)</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> th(<span class="st">'A bat and ball cost $1.10, the bat is $1 more than the ball. How much is the ball?'</span>)</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(thought(r)[:<span class="dv">400</span>])<span class="op">;</span> <span class="bu">print</span>(<span class="st">'---'</span>)<span class="op">;</span> <span class="bu">print</span>(resp_text(r))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+---
+Let the price of the ball be \(x\) dollars.  
+Then the bat costs \(x + 1\) dollars.
+
+Total cost:
+\[
+x + (x + 1) = 1.10
+\]
+\[
+2x + 1 = 1.10
+\]
+\[
+2x = 0.10
+\]
+\[
+x = 0.05
+\]
+
+The ball costs **5 cents**.</code></pre>
+</div>
+</div>
+<div id="rm_real_image" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>img <span class="op">=</span> Path(<span class="st">'images.jpeg'</span>).read_bytes()</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(Chat(<span class="st">'gpt-5.1'</span>)([img, <span class="st">'What is in this image? One sentence.'</span>])))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>A German Shepherd dog is standing on an outdoor path with its tongue out.</code></pre>
+</div>
+</div>
+<div id="rm_real_hop" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the whole point: start local, finish hosted, with one history</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rishi.llama <span class="im">import</span> LlamaChat, qwen3_17b</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>local <span class="op">=</span> LlamaChat(qwen3_17b, n_ctx<span class="op">=</span><span class="dv">4096</span>)</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>local(<span class="st">'My name is Karthik and my favourite number is 17. Remember both.'</span>)</span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>hist <span class="op">=</span> local.hist</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>local.close()</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a>remote <span class="op">=</span> Chat(<span class="st">'gpt-5.1'</span>, messages<span class="op">=</span>hist)</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> remote(<span class="st">'What is my name and my favourite number?'</span>)</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'karthik'</span> <span class="kw">in</span> resp_text(r).lower() <span class="kw">and</span> <span class="st">'17'</span> <span class="kw">in</span> resp_text(r)</span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>resp_text(r)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>/Users/71293/code/personal/orgs/ramabana/.venv/lib/python3.13/site-packages/tqdm/auto.py:21: TqdmWarning: IProgress not found. Please update jupyter and ipywidgets. See https://ipywidgets.readthedocs.io/en/stable/user_install.html
+  from .autonotebook import tqdm as notebook_tqdm
+llama_context: n_ctx_seq (4096) &lt; n_ctx_train (40960) -- the full capacity of the model will not be utilized</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<pre><code>'Your name is Karthik, and your favourite number is 17.'</code></pre>
+</div>
+</div>
+<div id="59bbb36d" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>empty_parts <span class="op">=</span> _parts([{<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">''</span>}])</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>test_eq(empty_parts, [])</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>mixed_parts <span class="op">=</span> _parts([{<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">''</span>}, {<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">'keep'</span>}])</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>test_eq([p.text <span class="cf">for</span> p <span class="kw">in</span> mixed_parts], [<span class="st">'keep'</span>])</span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>test_eq(to_msg({<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: [{<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">''</span>}]}).content, [])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vedicreader\.github\.io\/rishi");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
