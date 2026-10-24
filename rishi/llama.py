@@ -60,7 +60,7 @@ def get_model(model_id, model_path=None, quant='Q4_K_M'):
 _cached_model, _get_model = cached_model, get_model
 
 def _mmproj(fs):
-    "First `mmproj` projector `.gguf` path in `fs` (the image encoder that sits beside the model)."
+    "First `mmproj` projector `.gguf` path in `fs` (the projector that sits beside the model)."
     return first(L(fs).filter(lambda p: p.lower().endswith('.gguf') and 'mmproj' in Path(p).name.lower()))
 
 def _cached_mmproj(model_id):
@@ -97,7 +97,7 @@ def read_audio(o, sr=16000):
     try: a, src = sf.read(io.BytesIO(o), dtype='float32', always_2d=False)
     except (sf.LibsndfileError, RuntimeError, ValueError) as e:
         raise ValueError(f"could not decode audio ({detect_mime(o)}): {e}") from None
-    if a.ndim > 1: a = a.mean(axis=1)   # downmix to mono
+    if a.ndim > 1: a = a.mean(axis=1)
     return np.ascontiguousarray(_resample(a, src, sr), dtype=np.float32)
 
 # %% ../nbs/01_llama.ipynb #8da9504d
@@ -310,8 +310,8 @@ class LlamaChat(RishiToolLoop, Chat):
 
     def _step(self, stream=False, **turn):
         mx, samp = self._samp_kw(turn)
-        return self.engine.create_chat_completion(self._msgs(), tools=self.toolspecs or None,
-            stream=stream, max_tokens=mx, **samp, **self.comp_kw)
+        return self.engine.create_chat_completion(self._msgs(), **{
+            'tools': self.toolspecs or None, 'stream': stream, 'max_tokens': mx, **samp, **self.comp_kw})
 
     def _model_step(self, **kw):
         "One completion, normalized to a `Resp`. The single wire call `ToolLoopMixin` drives."
@@ -344,14 +344,19 @@ class LlamaChat(RishiToolLoop, Chat):
             _acc_tc(tcs, d.get('tool_calls'))
             yield from split.feed(d.get('content') or '')
         yield from split.finish()
-        tcs = [{'id': tc['id'] or f'call_{i}', 'type': 'function',
-                'function': {'name': tc['function']['name'], 'arguments': _parse_args(tc['function']['arguments'])}}
-               for i, tc in enumerate(tcs)] + split.tool_calls
+        calls = []
+        for i, tc in enumerate(tcs):
+            args = _parse_args(tc['function']['arguments'])
+            calls.append({'id': tc['id'] or f'call_{i}', 'type': 'function',
+                          'function': {'name': tc['function']['name'], 'arguments': {} if args is None else args},
+                          **({'unread': True} if args is None else {})})
+        tcs = calls + split.tool_calls
         out = self.count_tokens(split.text + split.thought) if (split.text or split.thought) else 0
         n = self.engine.n_tokens
         self._step_res = stream_resp(split, tool_calls=tcs, truncated=(fin == 'length'),
             usage=self._note_cache({'prompt_tokens': max(n - out, 0), 'completion_tokens': out,
                                     'total_tokens': n}, cached))
+        if any(tc.get('unread') for tc in calls): self._step_res['tool_parse_failed'] = True
 
 # %% ../nbs/01_llama.ipynb #e31eee10
 class LlamaBroker(ChatBroker):

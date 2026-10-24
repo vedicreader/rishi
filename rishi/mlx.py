@@ -305,7 +305,7 @@ class MlxChat(RishiToolLoop, Chat):
         txt = self._oneshot(p, sp, think=False)
         try: return json.loads(extract_fence(txt, 'json'))
         except (json.JSONDecodeError, TypeError): pass
-        try: return json.loads(txt[txt.index('{'):txt.rindex('}') + 1])   # last resort: the outermost braces
+        try: return json.loads(txt[txt.index('{'):txt.rindex('}') + 1])
         except Exception as e: raise ValueError(f"model did not return JSON; reply: {txt[:200]!r}") from e
 
     def close(self):
@@ -371,7 +371,7 @@ class MlxVlmChat(MlxChat):
         from mlx_vlm.prompt_utils import apply_chat_template as vlm_tmpl
         # mlx-vlm defaults to `enable_thinking=False`, which prefills an empty `<think></think>` block
         # into the assistant turn. A model told it has already finished thinking can end the turn on the
-        # spot - Qwen3-Omni answers an audio prompt with nothing at all. Pass rishi's own `think` through
+        # spot. Qwen3-Omni answers an audio prompt with nothing at all. Pass rishi's own `think` through
         # instead, so `think=None` (the default) leaves the model's chat template default alone.
         kw = dict(num_images=len(imgs), num_audios=len(auds), enable_thinking=self.think)
         if self.toolspecs: kw['tools'] = self.toolspecs
@@ -388,7 +388,7 @@ class MlxVlmChat(MlxChat):
                   **self.gen_kw, **t)
         if imgs: kw['image'] = imgs
         # mlx-vlm decodes each audio file and resamples it to the processor's own feature-extractor
-        # rate, so the source rate is its business, not ours - handing it one is how you get silence
+        # rate. Do not pass a source rate: doing so gives silence.
         if auds: kw['audio'] = auds
         split, fin, pt, gt = StreamSplit(), None, 0, 0
         if s is not None: kw['sampler'] = s

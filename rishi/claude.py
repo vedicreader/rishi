@@ -221,7 +221,7 @@ class ClaudeChat(RishiToolLoop, Chat):
     def __init__(self, model=None, *, runtime=None, model_path=None, opts=None,
                  permission_mode='auto',    # Claude Code's gate on its *own* tools. Yours are rishi's
                  claude_tools=None,         # Claude Code's own tools, allowlisted. None -> none at all when this chat carries tools, its default set when it carries none
-                 claude_disallowed=CLAUDE_DISALLOWED,   # ...and the ones it may never use
+                 claude_disallowed=CLAUDE_DISALLOWED,   # Claude Code tools it may never use
                  claude_server_tools=(),    # its web tools, which run on its side and never reach rishi's loop
                  mcp_servers=None,          # MCP servers to declare. None -> none at all. See `The wire`
                  mcp_tools=None,            # which of their tools to allow. None -> every tool of every server named
@@ -232,7 +232,7 @@ class ClaudeChat(RishiToolLoop, Chat):
                  bare=True,                 # answer as a model: no CLAUDE.md, skills, plugins or hooks
                  stateful=True,             # keep one Claude Code session per chat. See `_connect`
                  transcript=True,           # file the conversation as records rather than prose. See `_file_sess`
-                 api_key=False,             # let an ambient `ANTHROPIC_API_KEY` reach the subprocess. See `_opts`
+                 api_key=False,             # False blanks `ANTHROPIC_API_KEY` in the subprocess; True lets it through. See `_opts`
                  max_buffer=MAX_BUFFER,     # the SDK's stdout cap, in bytes
                  bin=CLAUDE_BIN, settings=None,
                  timeout=STALL_TIMEOUT,     # seconds of silence before the turn is ended and tried once more. See `Silence`
@@ -516,7 +516,7 @@ def anth_msgs(hist, ant, tags=False, prefix=''):
                 if tags: blocks.append({'type': 'text', 'text': tag_calls(tcs)})   # so results file as prose too
                 else:
                     tus = [{'type': 'tool_use', 'id': tu_id(tc.get('id'), ant), 'name': prefix + tc_name(tc),
-                            'input': parse_args((tc.get('function') or {}).get('arguments'))} for tc in tcs]
+                            'input': parse_args((tc.get('function') or {}).get('arguments')) or {}} for tc in tcs]
                     called |= {b['id'] for b in tus}
                     blocks += tus
         if not blocks: continue                        # an empty turn is not a message

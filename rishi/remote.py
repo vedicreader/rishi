@@ -231,7 +231,7 @@ class RemoteChat(RishiToolLoop, Chat):
 
     def __init__(self, model=None, *, runtime=None, model_path=None, opts=None,
                  vendor_name=None,   # override the vendor fastllm infers from the model id
-                 api_name=None,      # ...and the api name
+                 api_name=None,      # override the api name fastllm infers
                  tool_choice=None,   # force a particular tool, or 'required'
                  retries=2,
                  comp_kw=None,       # passed to `acomplete` verbatim
@@ -427,7 +427,9 @@ class RemoteChat(RishiToolLoop, Chat):
         send = lambda k: resp_text(norm_completion(run_coro(self._collect(msgs, **k))))
         if think is not False: return send(kw)
         try: return send({**kw, 'reasoning_effort': NO_THINK_EFFORT})
-        except Exception: return send(kw)   # a provider that spells the effort differently
+        except Exception as e:
+            if not effort_refused(e): raise
+            return send(kw)   # a provider that spells the effort differently
 
     def _structured_call(self, prompt, schema, sp):
         "Force the tool call for `schema` and return its arguments, falling back to JSON found in prose."

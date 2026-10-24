@@ -12,7 +12,7 @@ __all__ = ['COPILOT_API', 'COPILOT_TOKEN_URL', 'COPILOT_CLIENT_ID', 'EDITOR_VERS
            'copilot_ctx', 'save_oauth', 'copilot_login', 'CopilotChat']
 
 # %% ../nbs/07_copilot.ipynb #cp_imports
-import json, os, time
+import asyncio, json, os, time
 import httpx
 from dataclasses import dataclass, replace
 from fastcore.all import L, Path, store_attr, first
@@ -196,11 +196,15 @@ class CopilotChat(RemoteChat):
                  auth=None,          # a `CopilotAuth` to share, instead of building one
                  integration_id=INTEGRATION_ID,
                  hdrs=None,          # extra headers, merged over Copilot's own
+                 tool_choice=None,   # force a particular tool, or 'required'
+                 retries=2,
+                 comp_kw=None,       # passed to `acomplete` verbatim
                  **kw):              # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(kw.pop('opts', None), **kw)
         self.auth = auth or CopilotAuth(oauth_token, key=o.key, base_url=o.base_url or None)
         self.integration_id, self.hdrs = integration_id, dict(hdrs or {})
-        super().__init__(model or copilot_default, opts=o)
+        super().__init__(model or copilot_default, opts=o, api_name='openai_chat',   # fastllm has no Copilot vendor, and must not route a Gemini id to Gemini
+                         tool_choice=tool_choice, retries=retries, comp_kw=comp_kw)
 
     def _has_media(self):
         "Does the history carry an image or audio part? Copilot gates those behind a header."
@@ -214,8 +218,13 @@ class CopilotChat(RemoteChat):
         "`RemoteChat._kw` plus Copilot's endpoint, a live token, and the headers it insists on."
         kw = super()._kw(stream, **turn)
         t  = self.auth.token()
-        kw.update(api_key=t.key, base_url=t.base_url, vendor_name=None, api_name='openai_chat')
+        kw.update(api_key=t.key, base_url=t.base_url)
         kw['xtra_hdrs'] = {**copilot_hdrs(integration_id=self.integration_id, vision=self._has_media(),
                                           initiator=self._initiator()),
                            **(kw.get('xtra_hdrs') or {}), **self.hdrs}
         return kw
+
+    async def _acomplete(self, msgs, stream=False, **turn):
+        "`RemoteChat._acomplete`, with a token refresh kept off the event loop."
+        await asyncio.to_thread(self.auth.token)
+        return await super()._acomplete(msgs, stream, **turn)

@@ -403,15 +403,17 @@ class LitertChat(Chat):
 
     def _retry_evicted(self, err, keep_first=2, keep_last=6, **turn):
         "The window filled up mid-turn: evict the middle of `hist`, rebuild, and send the same turn again."
-        kept, dropped = evict_middle(self.hist, keep_first, keep_last)
-        if not dropped:
+        h = self.hist
+        # A recorded outgoing message is the last user entry. The engine will rerun the tool rounds
+        # that follow it, so they leave the history and the message is sent again, not preloaded.
+        cut = next((i for i in range(len(h)-1, -1, -1) if h[i]['role'] == 'user'), len(h)) if self._turn_msg_recorded else len(h)
+        kept, dropped = evict_middle(h[:cut], keep_first, keep_last)
+        partial = max(len(h) - cut - 1, 0)
+        if not dropped and not partial:
             raise ContextWindowExceededError(f"context window full and nothing left to evict: {err}") from err
-        self.hist[:] = kept
-        self.evicted = getattr(self, 'evicted', 0) + len(dropped)
-        # The outgoing message may already be in Python history, but it is about to be
-        # sent again. Do not put that copy in the rebuilt engine preface.
-        prior = self.hist[:-1] if self._turn_msg_recorded else self.hist
-        self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in prior])
+        h[:] = kept + h[cut:cut+1]
+        self.evicted = getattr(self, 'evicted', 0) + len(dropped) + partial
+        self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in kept])
         self._tc0 = self.conv.token_count            # the rebuilt cache is a new baseline for usage
         try: return self.conv.send_message(self.turn_msg, **self._turn_kw(turn))
         except RuntimeError:
@@ -464,12 +466,19 @@ class LitertChat(Chat):
         added = self.add_cbs(cbs); prev = getattr(self, '_streaming', False); self._streaming = True
         try:
             self.turn_msg = _mk_msg(msg)
+            self._turn_msg_recorded = False
             for _ in run_cbs(self, 'before_send'): pass
             self._tc0 = self.conv.token_count   # after the callbacks: one may have rebuilt `conv`
             fmt, chunks = StreamFormatter(), []
             with self._hold:
-                for o in self.conv.send_message_async(self.turn_msg, **self._turn_kw(kw)):
-                    chunks.append(o); yield self._emit(o, fmt)
+                it, done = self.conv.send_message_async(self.turn_msg, **self._turn_kw(kw)), False
+                try:
+                    for o in it:
+                        chunks.append(o); yield self._emit(o, fmt)
+                    done = True
+                finally:
+                    if not done: self.conv.cancel_process()   # a stream closed early would otherwise keep generating natively
+                    it.close()
             self.turn_res = _merge_chunks(chunks)
             yield from run_cbs(self, 'after_response')
             return self.turn_res   # stream's final Resp, captured by SaveReturn / AsyncChat `.value`

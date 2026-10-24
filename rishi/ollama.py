@@ -12,7 +12,7 @@ __all__ = ['OLLAMA_HOST', 'LOCAL_HOSTS', 'qwen3_06b', 'qwen3_17b', 'qwen3_4b', '
            'to_ollama_msgs', 'ollama_usage', 'norm_ochat', 'dflt_ctx', 'OllamaChat', 'ollama_caps']
 
 # %% ../nbs/08_ollama.ipynb #ol_imports
-import json, os, time, atexit, platform, shutil, subprocess, tarfile, zipfile
+import json, os, time, atexit, platform, shutil, subprocess, tarfile, threading, zipfile
 import httpx2 as httpx
 from urllib.parse import urlsplit
 from urai.msgs import mk_toolspec
@@ -20,7 +20,7 @@ from fastcore.all import Path, store_attr, ifnone, first, listify
 import rishi.core
 from .core import RishiToolLoop
 from urai import (Caps, Chat, ChatOpts, Resp, StreamSplit, ToolCall,
-                  est_tokens, is_path, mk_content, mk_msg, mk_msgs, parse_args, parse_tool_tags, render_prompt,
+                  est_tokens, is_path, mk_content, mk_msg, mk_msgs, parse_args, parse_tool_tags_ex, render_prompt,
                   model_caps, resp_text, split_runtime, split_think, stream_resp, thought, truncated, tc_name)
 
 # %% ../nbs/08_ollama.ipynb #ol_addr
@@ -206,9 +206,8 @@ def _zstd_reader(f):
     return ZstdDecompressor().stream_reader(f)
 
 def _untar(t, dest):
-    "Extract tarfile `t`, asking for the `tar` filter where the runtime has PEP 706 filters."
-    try: t.extractall(dest, filter='tar')
-    except TypeError: t.extractall(dest)
+    "Extract tarfile `t` with the `tar` filter."
+    t.extractall(dest, filter='tar')
 
 def extract_archive(src, dest):
     "Extract a `.tgz`, `.tar.zst` or `.zip` release archive into `dest`."
@@ -286,6 +285,8 @@ class OllamaServer:
         cl = self.client(timeout=30)
         try:
             if cl.up(): return self
+            if not is_local(self.url): raise OllamaError(
+                f'nothing is listening at {self.url}, and rishi only starts a daemon on this machine')
             if (b := self.bin) is not None:
                 # an explicit `bin` that is not there is a mistake to report, not one to route around
                 if not Path(b).exists(): raise OllamaError(f'no ollama binary at {b}')
@@ -319,7 +320,7 @@ class OllamaServer:
 
 # %% ../nbs/08_ollama.ipynb #ol_ensure
 #: Daemons rishi started, by URL, so a second chat reuses the first one's server.
-_servers = {}
+_servers, _servers_lock = {}, threading.Lock()
 
 def ensure_ollama(host=None, install=True, serve=True, timeout=60, on_progress=None, srv_kw=None):
     "A client for a live daemon at `host`: reuse one already listening, else start one, installing Ollama if needed."
@@ -329,9 +330,10 @@ def ensure_ollama(host=None, install=True, serve=True, timeout=60, on_progress=N
     cl.close()
     if not serve: raise OllamaError(
         f'nothing is listening at {url}. Start one with `ollama serve`, or pass serve=True.')
-    srv = _servers.get(url) or OllamaServer(url, **(srv_kw or {}))
-    srv.start(install=install, timeout=timeout, on_progress=on_progress)
-    _servers[url] = srv
+    with _servers_lock:   # `start` finds a daemon another thread just started, instead of launching a second
+        srv = _servers.get(url) or OllamaServer(url, **(srv_kw or {}))
+        srv.start(install=install, timeout=timeout, on_progress=on_progress)
+        _servers[url] = srv
     return srv.client()
 
 def stop_ollama(host=None):
@@ -364,7 +366,7 @@ def to_ollama_msg(m):
     if (th := (m.get('channels') or {}).get('thought')): out['thinking'] = th
     if (tcs := m.get('tool_calls')):
         out['tool_calls'] = [{'function': {'name': tc_name(tc),
-                                           'arguments': (tc.get('function') or {}).get('arguments') or {}}}
+                                           'arguments': parse_args((tc.get('function') or {}).get('arguments')) or {}}}
                              for tc in tcs]
     return out
 
@@ -382,23 +384,35 @@ def ollama_usage(r, model=None):
 
 def _tcs(tcs):
     "Ollama tool calls -> canonical `ToolCall`s. Ollama sends arguments as an object, and no call id."
-    return [ToolCall(name=(f := tc.get('function') or {}).get('name', ''),
-                     arguments=parse_args(f.get('arguments'))) for tc in (tcs or [])]
+    calls = []
+    for tc in tcs or []:
+        f = tc.get('function') or {}
+        args = parse_args(f.get('arguments'))
+        call = ToolCall(name=f.get('name', ''), arguments=args if args is not None else {})
+        if args is None: call['unread'] = True
+        calls.append(call)
+    return calls
 
 def _tag_tcs(tcs):
     "`<tool_call>` blocks parsed out of reply text -> canonical `ToolCall`s."
-    return [ToolCall(name=tc['function']['name'], arguments=tc['function']['arguments'], id=tc['id'])
-            for tc in tcs]
+    calls = []
+    for tc in tcs:
+        call = ToolCall(name=tc['function']['name'], arguments=tc['function']['arguments'], id=tc['id'])
+        if tc.get('unread'): call['unread'] = True
+        calls.append(call)
+    return calls
 
 def norm_ochat(r, model=None):
     "Convert one `/api/chat` response to a rishi `Resp`, reading `<think>` and `<tool_call>` text as well as the native fields."
     m = r.get('message') or {}
     text, th = split_think(m.get('content') or '')
-    text, tag_tcs = parse_tool_tags(text)
+    text, tag_tcs, failed = parse_tool_tags_ex(text)
     th = '\n'.join(x for x in (m.get('thinking') or '', th) if x)
     res = {'role': 'assistant', 'content': text}
     if th: res['channels'] = {'thought': th}
-    if (tcs := _tcs(m.get('tool_calls')) + _tag_tcs(tag_tcs)): res['tool_calls'] = tcs
+    tcs = _tcs(m.get('tool_calls')) + _tag_tcs(tag_tcs)
+    if tcs: res['tool_calls'] = tcs
+    if failed or any(tc.get('unread') for tc in tcs): res['tool_parse_failed'] = True
     if r.get('done_reason') == 'length': res['truncated'] = True
     res['usage'] = ollama_usage(r, model)
     return Resp(res)
@@ -486,7 +500,7 @@ class OllamaChat(RishiToolLoop, Chat):
         n = ifnone(t.pop('num_predict', None), self.max_output_tokens)
         opts = {**self._opts, **t}
         if n is not None: opts['num_predict'] = int(n)
-        p = {'model': self.model_id, 'messages': ifnone(msgs, self._msgs()), 'stream': stream}
+        p = {'model': self.model_id, 'messages': msgs if msgs is not None else self._msgs(), 'stream': stream}
         if opts: p['options'] = opts
         if tools and self.toolspecs: p['tools'] = self.toolspecs
         if fmt is not None: p['format'] = fmt
@@ -536,6 +550,7 @@ class OllamaChat(RishiToolLoop, Chat):
             tcs += msg.get('tool_calls') or []
             if d.get('done'): last = d
         yield from split.finish()
+        if not last: raise OllamaError('the stream ended before the daemon sent its final chunk, so the reply may be cut short')
         self._step_res = stream_resp(split,
             thought='\n'.join(x for x in (native_th, split.thought) if x),
             tool_calls=_tcs(tcs) + _tag_tcs(split.tool_calls),

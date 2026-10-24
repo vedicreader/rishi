@@ -1,4 +1,4 @@
-"""How rishi registers its backends with Urai, plus the few helpers that belong to rishi itself.
+"""How rishi registers its backends with Urai, and the helpers that belong to rishi itself.
 
 Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
@@ -43,24 +43,26 @@ async def _rishi_run_python(code, g=None, ok_dests=None):
         comp = compile(src, _spc.srcfn(src), 'exec' if is_exec else 'eval', flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
         r = eval(comp, g)                          # one namespace: defs see top-level imports
         return (await r) if inspect.isawaitable(r) else r
-    tree = ast.parse(code)
-    warnings.filterwarnings('ignore', category=SyntaxWarning)
-    res = None
-    if tree.body and isinstance(tree.body[-1], ast.Expr):
-        last = tree.body.pop()
-        if tree.body: await run(ast.unparse(ast.Module(tree.body, [])))
-        res = await run(ast.unparse(ast.Expression(last.value)), False)
-    else: await run(code)
-    for k in protect:                              # restore host names to their pre-run state
-        if k in had: g[k] = saved[k]
-        else: g.pop(k, None)
-    return res
+    try:
+        tree = ast.parse(code)
+        warnings.filterwarnings('ignore', category=SyntaxWarning)
+        res = None
+        if tree.body and isinstance(tree.body[-1], ast.Expr):
+            last = tree.body.pop()
+            if tree.body: await run(ast.unparse(ast.Module(tree.body, [])))
+            res = await run(ast.unparse(ast.Expression(last.value)), False)
+        else: await run(code)
+        return res
+    finally:
+        for k in protect:
+            if k in had: g[k] = saved[k]
+            else: g.pop(k, None)
 
 setattr(_spc, '__run_python', _rishi_run_python)
 
 # %% ../nbs/00_core.ipynb #dc247d61
 def litert_caps(model=None, model_path=None):
-    "Report text, image and audio input for any LiteRT-LM model, since LiteRT-LM builds both encoders whenever multimodal input is on."
+    "Report text, image and audio input for any LiteRT-LM model."
     return Caps(('text', 'image', 'audio'), ('text',), (), 'runtime')
 
 def ollama_caps_(model=None, model_path=None):
