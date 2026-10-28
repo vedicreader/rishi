@@ -28,7 +28,7 @@ from fastcore.aio import run_sync
 import rishi.core
 from .core import RishiToolLoop
 from urai.loop import _pic, max_media_
-from urai import (Chat, ChatOpts, ROLE_NAMES, Resp, StreamSplit, ToolCall, cancel_msg_, tool_media,
+from urai import (Chat, ChatOpts, ROLE_NAMES, UsageStats, Resp, StreamSplit, ToolCall, cancel_msg_, tool_media,
                   est_tokens, is_media, mk_content, parse_args, parse_tool_tags_ex, render_prompt, resp_text, split_runtime,
                   split_think, sync_iter, tag_tools_sp, tc_name, to_media_part)
 
@@ -880,11 +880,21 @@ def _turn_opts(self:ClaudeChat, kw):
     finally: self.effort, self._spare = old, 0   # a spare `_events` left must not reach a later caller
 
 @patch
+def _norm(self:ClaudeChat, out):
+    "`norm_claude` of a step's result. A failed run was still paid for, so its usage joins `use` before the error goes up."
+    try: return norm_claude(out, self.model_id, self._reparse_asked, not self._native)
+    except ClaudeError as e:
+        u = e.usage
+        if u: self.use += UsageStats(u.get('prompt_tokens', 0), u.get('completion_tokens', 0), u.get('total_tokens', 0), 1, cached_tokens=u.get('cached_tokens', 0),
+                                     model=u.get('model'), reasoning_tokens=u.get('reasoning_tokens', 0), cache_creation_tokens=u.get('cache_creation_tokens', 0), cost=u.get('cost', 0.0))
+        raise
+
+@patch
 def _model_step(self:ClaudeChat, **kw):
     "One wire call."
     with self._turn_opts(kw):
         out = next(v for k, v in self._events() if k == 'result')
-    self._last_res = res = self._note_usage(norm_claude(out, self.model_id, self._reparse_asked, not self._native))
+    self._last_res = res = self._note_usage(self._norm(out))
     return res
 
 @patch
@@ -900,7 +910,7 @@ def _stream_step(self:ClaudeChat, **kw):
             elif kind == 'result': out = v
     yield from split.finish()
     if out is None: raise RuntimeError('the turn ended without a result')
-    self._step_res = self._last_res = self._note_usage(norm_claude(out, self.model_id, self._reparse_asked, tags))
+    self._step_res = self._last_res = self._note_usage(self._norm(out))
 
 
 @patch
