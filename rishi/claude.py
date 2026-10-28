@@ -121,9 +121,9 @@ TOOL_PARSE_ERR = "The model's tool call could not be parsed"   #: Claude Code's 
 _status_re = re.compile(r'\b(\d{3})\b')
 
 class ClaudeError(RuntimeError):
-    "A failed Claude Code turn: what it said, the status behind it, and the raw result."
-    def __init__(self, msg, status=None, raw=None):
-        self.status, self.raw = status, raw
+    "A failed Claude Code turn: what it said, the status behind it, the raw result, what it cost, and whether `max_budget_usd` stopped it."
+    def __init__(self, msg, status=None, raw=None, usage=None, budget=False):
+        self.status, self.raw, self.usage, self.budget = status, raw, usage or {}, budget
         super().__init__(msg)
 
 def claude_status(d):
@@ -148,8 +148,11 @@ def norm_claude(d, model=None, asked=False, tags=True):
         bad = TOOL_PARSE_ERR in (d.get('result') or '')
         if bad and not asked: return Resp({'role': 'assistant', 'content': d['result'], 'tool_parse_failed': True,
                                            'usage': norm_claude_usage(d.get('usage'), model, d.get('cost'))})
+        use = norm_claude_usage(d.get('usage'), model, d.get('cost')) or ({'cost': d['cost'], 'model': model} if d.get('cost') else {})
+        if (budget := d.get('subtype') == 'error_max_budget_usd'):   # the run was paid for: the cost goes with the error
+            raise ClaudeError(f"claude stopped by its budget: it spent ${d.get('cost') or 0:.2f}, past max_budget_usd", status=None, raw=d, usage=use, budget=True)
         raise ClaudeError(f"claude failed: {d.get('result') or d.get('subtype')}{' (no resend left)' if bad else ''}",
-                          status=claude_status(d), raw=d)
+                          status=claude_status(d), raw=d, usage=use)
     text, th = split_think(d.get('result') or '')
     text, tcs, failed = parse_tool_tags_ex(text) if tags else (text, [], False)
     res = {'role': 'assistant', 'content': text}
@@ -657,6 +660,16 @@ def _delta(self:ClaudeChat):
     out = self._as_turn(new)
     self._sent = len(self.hist)
     return f'{out}\n\n{CONT_PROMPT}' if new and new[-1].get('role') == 'tool' else out
+
+# %% ../nbs/06_claude.ipynb #c3862bda
+@patch
+def set_opts(self:ClaudeChat, **kw):
+    "Change the Claude Code options of the next connect; None drops one. A change ends an open session, which the next call resumes."
+    new = {k: v for k, v in {**self.opts_, **kw}.items() if v is not None}
+    if new == self.opts_: return self
+    self.opts_ = new
+    if self.in_session: self._disconnect()
+    return self
 
 # %% ../nbs/06_claude.ipynb #b5d59852
 @patch(as_prop=True)
