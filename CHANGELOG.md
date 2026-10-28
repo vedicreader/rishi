@@ -2,6 +2,12 @@
 
 <!-- do not remove -->
 
+## 0.1.57
+
+- A failed Claude Code turn keeps its cost. `ClaudeError` has `usage`, and the chat adds that usage to `use` before the error goes up. Before, a failed run was paid for but not counted.
+- A turn that Claude Code stops at its `max_budget_usd` raises `ClaudeError` with `budget=True` and says what it spent.
+- `ClaudeChat.set_opts(**kw)` changes the Claude Code options of the next connect. `None` removes an option. A change ends an open session, and the next call resumes it.
+
 ## 0.1.56
 
 - Pins uraiyadal 0.0.19. A call that lacks a required argument returns a tool error and does not run. Native arguments that urai cannot read mark the call `unread`.
