@@ -2,6 +2,14 @@
 
 <!-- do not remove -->
 
+## 0.1.59
+
+- A full LiteRT window is recovered per step, not per turn. A step is the model's work between two tool rounds. When a later step fills the window before it shows any text, rishi drops older history and sends that step's tool results again. Earlier text is not shown twice and tools do not run again. Before, text from an earlier step stopped the recovery with `ContextWindowExceededError`.
+- A step that already showed text and then fills the window still raises `ContextWindowExceededError`, now saying that the step was not sent again.
+- Text that the model writes before a tool call stays with that call in the history. Before, it was moved into the final reply.
+- A streamed turn returns the last step's reply, as a plain send does. Before, it returned the text of every step joined.
+- A plain send that fills the window after a tool round sends the tool results again, not the user's message, so tools do not run twice.
+
 ## 0.1.58
 
 - A LiteRT stream recovers from a full context window, as a plain send already did. Both paths use one helper: it drops older turns and sends the turn again once. Before, a full window in a stream raised a bare `RuntimeError`, and every later turn failed with `INTERNAL: Task failed with state: 7`.
