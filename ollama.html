@@ -1,0 +1,1335 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.19">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="description" content="Run models through a local Ollama daemon, with rishi installing Ollama, pulling models and starting ollama serve for you when needed.">
+
+<title>ollama – rishi</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-66a38d7287321bc50e069add96f8c30e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="ollama – rishi">
+<meta property="og:description" content="Run models through a local Ollama daemon, with rishi installing Ollama, pulling models and starting ollama serve for you when needed.">
+<meta property="og:site_name" content="rishi">
+<meta name="twitter:title" content="ollama – rishi">
+<meta name="twitter:description" content="Run models through a local Ollama daemon, with rishi installing Ollama, pulling models and starting ollama serve for you when needed.">
+<meta name="twitter:card" content="summary">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">rishi</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./ollama.html">ollama</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">rishi</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">core</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./llama.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">llama</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./litert.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">litert</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./mlx.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">mlx</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./remote.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">remote</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./claude.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">claude</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./copilot.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">copilot</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./ollama.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">ollama</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#where-the-daemon-is" id="toc-where-the-daemon-is" class="nav-link active" data-scroll-target="#where-the-daemon-is">Where the daemon is</a></li>
+  <li><a href="#model-ids" id="toc-model-ids" class="nav-link" data-scroll-target="#model-ids">Model ids</a></li>
+  <li><a href="#the-wire" id="toc-the-wire" class="nav-link" data-scroll-target="#the-wire">The wire</a></li>
+  <li><a href="#installing-ollama" id="toc-installing-ollama" class="nav-link" data-scroll-target="#installing-ollama">Installing Ollama</a></li>
+  <li><a href="#running-the-daemon" id="toc-running-the-daemon" class="nav-link" data-scroll-target="#running-the-daemon">Running the daemon</a></li>
+  <li><a href="#messages" id="toc-messages" class="nav-link" data-scroll-target="#messages">Messages</a></li>
+  <li><a href="#ollamachat" id="toc-ollamachat" class="nav-link" data-scroll-target="#ollamachat">OllamaChat</a>
+  <ul class="collapse">
+  <li><a href="#against-a-real-daemon" id="toc-against-a-real-daemon" class="nav-link" data-scroll-target="#against-a-real-daemon">Against a real daemon</a></li>
+  </ul></li>
+  <li><a href="#what-this-backend-does-not-do" id="toc-what-this-backend-does-not-do" class="nav-link" data-scroll-target="#what-this-backend-does-not-do">What this backend does not do</a>
+  <ul class="collapse">
+  <li><a href="#tests" id="toc-tests" class="nav-link" data-scroll-target="#tests">Tests</a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="ollama.html.md"><i class="bi bi-file-code"></i>Markdown</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">ollama</h1>
+</div>
+
+<div>
+  <div class="description">
+    Run models through a local <a href="https://ollama.com">Ollama</a> daemon, with rishi installing Ollama, pulling models and starting <code>ollama serve</code> for you when needed.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<div id="ol_test_imports" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.810176+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.810894+00:00&quot;,&quot;total&quot;:0.0007224860000860645}}" data-execution_count="3">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.test <span class="im">import</span> test_eq, test_fail</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<section id="where-the-daemon-is" class="level2">
+<h2 class="anchored" data-anchor-id="where-the-daemon-is">Where the daemon is</h2>
+<p><code>OLLAMA_HOST</code> takes a bare port, a <code>host:port</code>, or a full URL. One variable both configures the daemon and finds it. <a href="https://vedicreader.github.io/rishi/ollama.html#ollama_url"><code>ollama_url</code></a> accepts all three forms.</p>
+<p>A request to a loopback daemon must not go through an HTTP proxy. <code>httpx</code> reads <code>$HTTPS_PROXY</code> from the environment by default. In a sandbox, that setting sends <code>127.0.0.1</code> to a proxy with no route back. <a href="https://vedicreader.github.io/rishi/ollama.html#is_local"><code>is_local</code></a> decides whether a client trusts the environment.</p>
+<div id="41059bb0" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.813278+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.834686+00:00&quot;,&quot;total&quot;:0.021415639999986524}}" data-execution_count="5">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L40" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="is_local" class="level3">
+<h3 class="anchored" data-anchor-id="is_local">is_local</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> is_local(</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    url</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Return True when <code>url</code> points at this machine, whose daemon must be reached without any HTTP proxy.</em></p>
+</section>
+</div>
+<div id="1cf65652" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.834876+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.840514+00:00&quot;,&quot;total&quot;:0.005642693000027066}}" data-execution_count="6">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L33" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="ollama_url" class="level3">
+<h3 class="anchored" data-anchor-id="ollama_url">ollama_url</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ollama_url(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    host:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Normalize an Ollama host (<code>:11434</code>, <code>host:port</code>, or a full URL) to a base URL. <code>None</code> reads <code>$OLLAMA_HOST</code>.</em></p>
+</section>
+</div>
+<div id="ol_addr_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_url(<span class="st">'http://127.0.0.1:11434'</span>), <span class="st">'http://127.0.0.1:11434'</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_url(<span class="st">'localhost:11434'</span>), <span class="st">'http://localhost:11434'</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_url(<span class="st">':11434'</span>), <span class="st">'http://127.0.0.1:11434'</span>)          <span class="co"># the bare-port spelling</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_url(<span class="st">'box.local'</span>), <span class="st">'http://box.local:11434'</span>)       <span class="co"># port defaulted</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_url(<span class="st">'https://gpu.internal'</span>), <span class="st">'https://gpu.internal:443'</span>)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> is_local(ollama_url()) <span class="kw">and</span> is_local(ollama_url(<span class="st">'localhost'</span>))</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="kw">not</span> is_local(ollama_url(<span class="st">'https://gpu.internal'</span>))          <span class="co"># that one does go through the proxy</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="model-ids" class="level2">
+<h2 class="anchored" data-anchor-id="model-ids">Model ids</h2>
+<p>Ollama names models <code>family:tag</code>. It also serves any GGUF repo on the HuggingFace Hub under an <code>hf.co/</code> prefix. <a href="https://vedicreader.github.io/rishi/ollama.html#ollama_model"><code>ollama_model</code></a> maps rishi’s ids to these names, with <code>quant</code> as the tag. The <code>Qwen/Qwen3-4B-GGUF</code> constant that <code>rishi.llama</code> uses works here unchanged.</p>
+<p>A local <code>.gguf</code> file has no address in Ollama’s store. Importing one takes a blob upload and an <code>/api/create</code> call. <a href="https://vedicreader.github.io/rishi/ollama.html#ollama_model"><code>ollama_model</code></a> raises a <code>ValueError</code> that says so. It does not send the path to the daemon.</p>
+<div id="58f6a65c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.843632+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.849406+00:00&quot;,&quot;total&quot;:0.0057790800000248055}}" data-execution_count="8">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L57" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="ollama_model" class="level3">
+<h3 class="anchored" data-anchor-id="ollama_model">ollama_model</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ollama_model(</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    model:NoneType<span class="op">=</span><span class="va">None</span>, quant:<span class="bu">str</span><span class="op">=</span><span class="st">'Q4_K_M'</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>A rishi model id as Ollama addresses it: a hub GGUF repo becomes <code>hf.co/&lt;repo&gt;:&lt;quant&gt;</code>, an Ollama id passes through.</em></p>
+</section>
+</div>
+<div id="ol_ids_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_model(<span class="st">'qwen3:4b'</span>), <span class="st">'qwen3:4b'</span>)                    <span class="co"># an Ollama id is left alone</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_model(<span class="st">'gemma3'</span>), <span class="st">'gemma3'</span>)                          <span class="co"># ...tagless too</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_model(), dflt_model)</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_model(<span class="st">'Qwen/Qwen3-4B-GGUF'</span>), <span class="st">'hf.co/Qwen/Qwen3-4B-GGUF:Q4_K_M'</span>)     <span class="co"># the rishi.llama id</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_model(<span class="st">'Qwen/Qwen3-4B-GGUF'</span>, <span class="st">'Q8_0'</span>), <span class="st">'hf.co/Qwen/Qwen3-4B-GGUF:Q8_0'</span>)</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_model(<span class="st">'Qwen/Qwen3-4B-GGUF'</span>, <span class="va">None</span>), <span class="st">'hf.co/Qwen/Qwen3-4B-GGUF'</span>)      <span class="co"># let Ollama choose</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>test_eq(ollama_model(<span class="st">'hf.co/bartowski/x-GGUF:IQ3_M'</span>), <span class="st">'hf.co/bartowski/x-GGUF:IQ3_M'</span>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: ollama_model(<span class="st">'/models/mine.gguf'</span>), contains<span class="op">=</span><span class="st">"runtime='llama'"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="the-wire" class="level2">
+<h2 class="anchored" data-anchor-id="the-wire">The wire</h2>
+<p><a href="https://vedicreader.github.io/rishi/ollama.html#ollamaclient"><code>OllamaClient</code></a> wraps the HTTP endpoints that rishi uses. <code>/api/chat</code> talks to a model. The management endpoints list the local store, pull missing models, and name the models in memory.</p>
+<p>A refusal carries a JSON <code>error</code> field. <a href="https://vedicreader.github.io/rishi/ollama.html#ollamaerror"><code>OllamaError</code></a> repeats that message.</p>
+<p><code>/api/pull</code> and a streamed <code>/api/chat</code> both answer in newline-delimited JSON. One <code>stream</code> method serves both. An error can also arrive mid-stream, after a 200 status. The iterator checks for it.</p>
+<div id="27938684" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.857646+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.862396+00:00&quot;,&quot;total&quot;:0.004754067000021678}}" data-execution_count="10">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L76" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="ollamaclient" class="level3">
+<h3 class="anchored" data-anchor-id="ollamaclient">OllamaClient</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> OllamaClient(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    host:NoneType<span class="op">=</span><span class="va">None</span>, timeout:<span class="bu">int</span><span class="op">=</span><span class="dv">600</span>, client:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>One Ollama daemon over HTTP: <code>/api/chat</code>, plus the model-management endpoints rishi drives.</em></p>
+</section>
+</div>
+<div id="893dcac6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.862524+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.866653+00:00&quot;,&quot;total&quot;:0.004133953999939877}}" data-execution_count="11">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L67" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="ollamaerror" class="level3">
+<h3 class="anchored" data-anchor-id="ollamaerror">OllamaError</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> OllamaError(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    <span class="op">*</span>args, <span class="op">**</span>kwargs</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>What the daemon said went wrong, or that nothing answered.</em></p>
+</section>
+</div>
+<p><code>pull</code> passes Ollama’s own progress records to a callback. <a href="https://vedicreader.github.io/rishi/ollama.html#pull_progress"><code>pull_progress</code></a> renders them as one line that it rewrites in place. A 4 GB download then shows progress and does not look like a hang.</p>
+<div id="5d77c429" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.869241+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.874063+00:00&quot;,&quot;total&quot;:0.0048264530000778905}}" data-execution_count="13">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L165" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="pull_progress" class="level3">
+<h3 class="anchored" data-anchor-id="pull_progress">pull_progress</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> pull_progress(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    out:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>A <code>pull</code> callback printing one rewritten line: the status, and how far the bytes have got.</em></p>
+</section>
+</div>
+<div id="0030cade" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.874191+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.878528+00:00&quot;,&quot;total&quot;:0.004341963999991094}}" data-execution_count="14">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L158" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="fmt_bytes" class="level3">
+<h3 class="anchored" data-anchor-id="fmt_bytes">fmt_bytes</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> fmt_bytes(</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    n</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Bytes as a short human string.</em></p>
+</section>
+</div>
+<div id="ol_client_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the client against a scripted daemon: one `httpx.MockTransport` stands in for the whole HTTP</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="co"># surface, so requests and responses are exercised rather than mocked away</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> mk_client(handler, <span class="op">**</span>kw):</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">"An `OllamaClient` whose requests are answered by `handler` instead of a daemon."</span></span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> OllamaClient(client<span class="op">=</span>httpx.Client(transport<span class="op">=</span>httpx.MockTransport(handler),</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>                                            base_url<span class="op">=</span><span class="st">'http://test'</span>), <span class="op">**</span>kw)</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>seen <span class="op">=</span> []</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> handler(req):</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>    seen.append((req.method, req.url.path, json.loads(req.content) <span class="cf">if</span> req.content <span class="cf">else</span> {}))</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> req.url.path <span class="op">==</span> <span class="st">'/api/version'</span>: <span class="cf">return</span> httpx.Response(<span class="dv">200</span>, json<span class="op">=</span>{<span class="st">'version'</span>: <span class="st">'0.12.0'</span>})</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> req.url.path <span class="op">==</span> <span class="st">'/api/tags'</span>:    <span class="cf">return</span> httpx.Response(<span class="dv">200</span>, json<span class="op">=</span>{<span class="st">'models'</span>: [{<span class="st">'name'</span>: <span class="st">'qwen3:0.6b'</span>}]})</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> req.url.path <span class="op">==</span> <span class="st">'/api/show'</span>:    <span class="cf">return</span> httpx.Response(<span class="dv">200</span>, json<span class="op">=</span>{<span class="st">'capabilities'</span>: [<span class="st">'completion'</span>,<span class="st">'tools'</span>,<span class="st">'vision'</span>]})</span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> req.url.path <span class="op">==</span> <span class="st">'/api/ps'</span>:      <span class="cf">return</span> httpx.Response(<span class="dv">200</span>, json<span class="op">=</span>{<span class="st">'models'</span>: [{<span class="st">'name'</span>: <span class="st">'qwen3:0.6b'</span>}]})</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> req.url.path <span class="op">==</span> <span class="st">'/api/delete'</span>:  <span class="cf">return</span> httpx.Response(<span class="dv">200</span>, text<span class="op">=</span><span class="st">''</span>)</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> httpx.Response(<span class="dv">404</span>, json<span class="op">=</span>{<span class="st">'error'</span>: <span class="ss">f'unknown path </span><span class="sc">{</span>req<span class="sc">.</span>url<span class="sc">.</span>path<span class="sc">}</span><span class="ss">'</span>})</span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>cl <span class="op">=</span> mk_client(handler)</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>test_eq(cl.version(), <span class="st">'0.12.0'</span>)</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>test_eq(cl.up(), <span class="va">True</span>)</span>
+<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>test_eq(cl.models(), [<span class="st">'qwen3:0.6b'</span>])</span>
+<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a>test_eq(cl.have(<span class="st">'qwen3:0.6b'</span>), <span class="va">True</span>)</span>
+<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>test_eq(cl.have(<span class="st">'gemma3:1b'</span>), <span class="va">False</span>)</span>
+<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>test_eq(cl.show(<span class="st">'qwen3:0.6b'</span>)[<span class="st">'capabilities'</span>], [<span class="st">'completion'</span>, <span class="st">'tools'</span>, <span class="st">'vision'</span>])</span>
+<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">len</span>(cl.ps()), <span class="dv">1</span>)</span>
+<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>test_eq(cl.delete(<span class="st">'qwen3:0.6b'</span>), <span class="va">True</span>)</span>
+<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>test_eq(seen[<span class="op">-</span><span class="dv">1</span>][:<span class="dv">2</span>], (<span class="st">'DELETE'</span>, <span class="st">'/api/delete'</span>))</span>
+<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: cl.get(<span class="st">'/api/nope'</span>), contains<span class="op">=</span><span class="st">'unknown path'</span>)      <span class="co"># the daemon's own words</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="8dabae77" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.880008+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.880723+00:00&quot;,&quot;total&quot;:0.0007182170000987753}}" data-execution_count="15">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> io</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="ol_client_test2" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Connection failure returns `None`; streamed errors still raise.</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> dead(req): <span class="cf">raise</span> httpx.ConnectError(<span class="st">'nothing listening'</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>test_eq(mk_client(dead).version(), <span class="va">None</span>)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>test_eq(mk_client(dead).up(), <span class="va">False</span>)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>lines <span class="op">=</span> [{<span class="st">'status'</span>: <span class="st">'pulling manifest'</span>}, {<span class="st">'status'</span>: <span class="st">'downloading'</span>, <span class="st">'completed'</span>: <span class="dv">512</span>, <span class="st">'total'</span>: <span class="dv">1024</span>},</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>         {<span class="st">'error'</span>: <span class="st">'model not found'</span>}]</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> puller(req): <span class="cf">return</span> httpx.Response(<span class="dv">200</span>, text<span class="op">=</span><span class="st">'</span><span class="ch">\n</span><span class="st">'</span>.join(json.dumps(d) <span class="cf">for</span> d <span class="kw">in</span> lines))</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>got <span class="op">=</span> []</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: mk_client(puller).pull(<span class="st">'nope'</span>, got.append), contains<span class="op">=</span><span class="st">'model not found'</span>)</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>test_eq([d[<span class="st">'status'</span>] <span class="cf">for</span> d <span class="kw">in</span> got], [<span class="st">'pulling manifest'</span>, <span class="st">'downloading'</span>])   <span class="co"># progress up to the failure</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>buf <span class="op">=</span> io.StringIO()</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>pull_progress(buf)({<span class="st">'status'</span>: <span class="st">'downloading'</span>, <span class="st">'completed'</span>: <span class="dv">512</span><span class="op">*</span><span class="dv">1024</span>, <span class="st">'total'</span>: <span class="dv">1024</span><span class="op">*</span><span class="dv">1024</span>})</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'downloading 512.0KB/1.0MB'</span> <span class="kw">in</span> buf.getvalue()</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>test_eq(fmt_bytes(<span class="dv">900</span>), <span class="st">'900B'</span>)</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>test_eq(fmt_bytes(<span class="dv">1536</span>), <span class="st">'1.5KB'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="installing-ollama" class="level2">
+<h2 class="anchored" data-anchor-id="installing-ollama">Installing Ollama</h2>
+<p>Ollama publishes one release archive per platform. Installing from the archive needs no root access and no package manager. The published one-liner installs into <code>/usr</code>. The archive extracts to any folder. rishi installs its own copy under <code>~/.cache/rishi/ollama</code> and leaves the system alone.</p>
+<p><a href="https://vedicreader.github.io/rishi/ollama.html#ollama_bin"><code>ollama_bin</code></a> looks for a binary in this order:</p>
+<ol type="1">
+<li><code>$OLLAMA_BIN</code>.</li>
+<li>rishi’s own install.</li>
+<li><code>ollama</code> on <code>$PATH</code>, unless you pass <code>system=False</code>.</li>
+</ol>
+<p>rishi downloads and installs Ollama only when none of these exists.</p>
+<p>Linux archives use zstd. Python 3.14 and later reads zstd from the standard library. Earlier versions need <code>zstandard</code>, which <code>rishi[ollama]</code> installs. The macOS archive is gzip, and the Windows archive is a zip.</p>
+<div id="7ecce79a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.884218+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.889038+00:00&quot;,&quot;total&quot;:0.004825371000038103}}" data-execution_count="17">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L187" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="ollama_bin" class="level3">
+<h3 class="anchored" data-anchor-id="ollama_bin">ollama_bin</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ollama_bin(</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">dir</span>:NoneType<span class="op">=</span><span class="va">None</span>, system:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>An <code>ollama</code> binary: <code>$OLLAMA_BIN</code>, then rishi’s own install, then <code>$PATH</code> unless <code>system=False</code>. None if there is none.</em></p>
+</section>
+</div>
+<div id="8cdbfa7a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.889165+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.893877+00:00&quot;,&quot;total&quot;:0.004717478000088704}}" data-execution_count="18">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L178" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="install_url" class="level3">
+<h3 class="anchored" data-anchor-id="install_url">install_url</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> install_url(</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    system:NoneType<span class="op">=</span><span class="va">None</span>, machine:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>URL of the Ollama release archive for this platform.</em></p>
+</section>
+</div>
+<div id="b6246a90" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.901610+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.907273+00:00&quot;,&quot;total&quot;:0.005669443999977375}}" data-execution_count="20">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L237" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="install_ollama" class="level3">
+<h3 class="anchored" data-anchor-id="install_ollama">install_ollama</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> install_ollama(</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">dir</span>:pathlib.PosixPath<span class="op">=</span>Path(<span class="st">'/home/runner/.cache/rishi/ollama'</span>), url:NoneType<span class="op">=</span><span class="va">None</span>, force:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    on_progress:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Install Ollama under <code>dir</code> for this user: no root, no package manager, no system service. Returns the binary.</em></p>
+</section>
+</div>
+<div id="245b8686" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.907420+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.912435+00:00&quot;,&quot;total&quot;:0.00502118800000062}}" data-execution_count="21">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L226" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="download" class="level3">
+<h3 class="anchored" data-anchor-id="download">download</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> download(</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>    url, dest, on_progress:NoneType<span class="op">=</span><span class="va">None</span>, timeout:<span class="bu">int</span><span class="op">=</span><span class="dv">600</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Stream <code>url</code> to <code>dest</code>, reporting <code>(done, total)</code> bytes to <code>on_progress</code>.</em></p>
+</section>
+</div>
+<div id="17a52a5c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.912585+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.917574+00:00&quot;,&quot;total&quot;:0.004994097000007969}}" data-execution_count="22">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L212" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="extract_archive" class="level3">
+<h3 class="anchored" data-anchor-id="extract_archive">extract_archive</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> extract_archive(</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    src, dest</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Extract a <code>.tgz</code>, <code>.tar.zst</code> or <code>.zip</code> release archive into <code>dest</code>.</em></p>
+</section>
+</div>
+<div id="ol_install_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>test_eq(install_url(<span class="st">'Linux'</span>, <span class="st">'x86_64'</span>),  <span class="st">'https://ollama.com/download/ollama-linux-amd64.tar.zst'</span>)</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>test_eq(install_url(<span class="st">'Linux'</span>, <span class="st">'aarch64'</span>), <span class="st">'https://ollama.com/download/ollama-linux-arm64.tar.zst'</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>test_eq(install_url(<span class="st">'Darwin'</span>, <span class="st">'arm64'</span>),  <span class="st">'https://ollama.com/download/ollama-darwin.tgz'</span>)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>test_eq(install_url(<span class="st">'Windows'</span>, <span class="st">'amd64'</span>), <span class="st">'https://ollama.com/download/ollama-windows-amd64.zip'</span>)</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: install_url(<span class="st">'Plan9'</span>, <span class="st">'x86_64'</span>), contains<span class="op">=</span><span class="st">'no Ollama release'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="ol_extract_test" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.918451+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.924781+00:00&quot;,&quot;total&quot;:0.006335143000001153}}" data-execution_count="23">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># extraction and binary discovery, on a tarball built here. `bin/ollama` is what the real Linux</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="co"># and macOS archives lay down, and what `ollama_bin` has to find without consulting $PATH</span></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> tempfile</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> tempfile.TemporaryDirectory() <span class="im">as</span> d:</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>    d <span class="op">=</span> Path(d)</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a>    (d<span class="op">/</span><span class="st">'bin'</span>).mkdir()</span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>    (d<span class="op">/</span><span class="st">'bin'</span><span class="op">/</span><span class="st">'ollama'</span>).write_text(<span class="st">'#!/bin/sh</span><span class="ch">\n</span><span class="st">echo fake'</span>)</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">with</span> tarfile.<span class="bu">open</span>(d<span class="op">/</span><span class="st">'a.tgz'</span>, <span class="st">'w:gz'</span>) <span class="im">as</span> t: t.add(d<span class="op">/</span><span class="st">'bin'</span><span class="op">/</span><span class="st">'ollama'</span>, arcname<span class="op">=</span><span class="st">'bin/ollama'</span>)</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a>    out <span class="op">=</span> extract_archive(d<span class="op">/</span><span class="st">'a.tgz'</span>, d<span class="op">/</span><span class="st">'out'</span>)</span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> (out<span class="op">/</span><span class="st">'bin'</span><span class="op">/</span><span class="st">'ollama'</span>).exists()</span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>    test_eq(ollama_bin(out, system<span class="op">=</span><span class="va">False</span>), out<span class="op">/</span><span class="st">'bin'</span><span class="op">/</span><span class="st">'ollama'</span>)</span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>    test_eq(install_ollama(out), out<span class="op">/</span><span class="st">'bin'</span><span class="op">/</span><span class="st">'ollama'</span>)       <span class="co"># already there, so nothing is downloaded</span></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>    test_eq(ollama_bin(d<span class="op">/</span><span class="st">'empty'</span>, system<span class="op">=</span><span class="va">False</span>), <span class="va">None</span>)</span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>    <span class="co"># a flat archive (just `ollama`) is found too, and $OLLAMA_BIN wins over both</span></span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a>    (d<span class="op">/</span><span class="st">'flat'</span>).mkdir()<span class="op">;</span> (d<span class="op">/</span><span class="st">'flat'</span><span class="op">/</span><span class="st">'ollama'</span>).write_text(<span class="st">'x'</span>)</span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a>    test_eq(ollama_bin(d<span class="op">/</span><span class="st">'flat'</span>, system<span class="op">=</span><span class="va">False</span>), d<span class="op">/</span><span class="st">'flat'</span><span class="op">/</span><span class="st">'ollama'</span>)</span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>    os.environ[<span class="st">'OLLAMA_BIN'</span>] <span class="op">=</span> <span class="bu">str</span>(d<span class="op">/</span><span class="st">'bin'</span><span class="op">/</span><span class="st">'ollama'</span>)</span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>: test_eq(ollama_bin(d<span class="op">/</span><span class="st">'flat'</span>, system<span class="op">=</span><span class="va">False</span>), d<span class="op">/</span><span class="st">'bin'</span><span class="op">/</span><span class="st">'ollama'</span>)</span>
+<span id="cb20-21"><a href="#cb20-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">finally</span>: <span class="kw">del</span> os.environ[<span class="st">'OLLAMA_BIN'</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="running-the-daemon" class="level2">
+<h2 class="anchored" data-anchor-id="running-the-daemon">Running the daemon</h2>
+<p><a href="https://vedicreader.github.io/rishi/ollama.html#ollamaserver"><code>OllamaServer</code></a> starts <code>ollama serve</code> and waits for it to answer. It installs Ollama first if the machine has none.</p>
+<p>Ollama sets some options per process, not per request. <a href="https://vedicreader.github.io/rishi/ollama.html#ollamaserver"><code>OllamaServer</code></a> takes these options as constructor arguments:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Argument</th>
+<th>Environment variable</th>
+<th>Sets</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>models</code></td>
+<td><code>OLLAMA_MODELS</code></td>
+<td>the model store</td>
+</tr>
+<tr class="even">
+<td><code>n_ctx</code></td>
+<td><code>OLLAMA_CONTEXT_LENGTH</code></td>
+<td>the default context length</td>
+</tr>
+<tr class="odd">
+<td><code>keep_alive</code></td>
+<td><code>OLLAMA_KEEP_ALIVE</code></td>
+<td>how long a model stays resident</td>
+</tr>
+<tr class="even">
+<td><code>flash_attn</code></td>
+<td><code>OLLAMA_FLASH_ATTENTION</code></td>
+<td>flash attention</td>
+</tr>
+<tr class="odd">
+<td><code>kv_cache_type</code></td>
+<td><code>OLLAMA_KV_CACHE_TYPE</code></td>
+<td>KV cache quantization</td>
+</tr>
+<tr class="even">
+<td><code>num_parallel</code></td>
+<td><code>OLLAMA_NUM_PARALLEL</code></td>
+<td>parallel requests</td>
+</tr>
+<tr class="odd">
+<td><code>max_loaded</code></td>
+<td><code>OLLAMA_MAX_LOADED_MODELS</code></td>
+<td>models loaded at once</td>
+</tr>
+</tbody>
+</table>
+<p>rishi does not restart or reconfigure a daemon that already listens at the address. That server belongs to someone else.</p>
+<p>rishi stops a daemon that it started when the interpreter exits. A notebook leaves no daemon running. The daemon gets <code>/dev/null</code> as stdin, so it never shares the caller’s terminal. It runs in its own session, so a Ctrl-C sent to the parent does not kill it.</p>
+<div id="d8f1aa2e" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.931490+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.936207+00:00&quot;,&quot;total&quot;:0.004722258000015245}}" data-execution_count="25">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L258" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="ollamaserver" class="level3">
+<h3 class="anchored" data-anchor-id="ollamaserver">OllamaServer</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> OllamaServer(</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>    host:NoneType<span class="op">=</span><span class="va">None</span>, <span class="bu">bin</span>:NoneType<span class="op">=</span><span class="va">None</span>, <span class="bu">dir</span>:pathlib.PosixPath<span class="op">=</span>Path(<span class="st">'/home/runner/.cache/rishi/ollama'</span>),</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    models:NoneType<span class="op">=</span><span class="va">None</span>, n_ctx:NoneType<span class="op">=</span><span class="va">None</span>, keep_alive:NoneType<span class="op">=</span><span class="va">None</span>, flash_attn:NoneType<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>    kv_cache_type:NoneType<span class="op">=</span><span class="va">None</span>, num_parallel:NoneType<span class="op">=</span><span class="va">None</span>, max_loaded:NoneType<span class="op">=</span><span class="va">None</span>, log:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>An <code>ollama serve</code> process rishi starts and owns, installing Ollama first if the machine has none.</em></p>
+</section>
+</div>
+<div id="dcd04d12" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.938644+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.942680+00:00&quot;,&quot;total&quot;:0.004040899999949943}}" data-execution_count="27">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L339" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="stop_ollama" class="level3">
+<h3 class="anchored" data-anchor-id="stop_ollama">stop_ollama</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> stop_ollama(</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    host:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Stop the daemon rishi started at <code>host</code>, or every one of them when <code>host</code> is None.</em></p>
+</section>
+</div>
+<div id="9e0689e5" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.942802+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:57.948305+00:00&quot;,&quot;total&quot;:0.005509053000082531}}" data-execution_count="28">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L325" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="ensure_ollama" class="level3">
+<h3 class="anchored" data-anchor-id="ensure_ollama">ensure_ollama</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ensure_ollama(</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    host:NoneType<span class="op">=</span><span class="va">None</span>, install:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, serve:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, timeout:<span class="bu">int</span><span class="op">=</span><span class="dv">60</span>, on_progress:NoneType<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    srv_kw:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>A client for a live daemon at <code>host</code>: reuse one already listening, else start one, installing Ollama if needed.</em></p>
+</section>
+</div>
+<div id="ol_server_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the process-level configuration, which is the half of Ollama that is not a request field</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a>s <span class="op">=</span> OllamaServer(<span class="st">'localhost:11500'</span>, models<span class="op">=</span><span class="st">'/data/models'</span>, n_ctx<span class="op">=</span><span class="dv">8192</span>, keep_alive<span class="op">=</span><span class="st">'30m'</span>,</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>                 flash_attn<span class="op">=</span><span class="va">True</span>, kv_cache_type<span class="op">=</span><span class="st">'q8_0'</span>, num_parallel<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>e <span class="op">=</span> s.env()</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>test_eq(e[<span class="st">'OLLAMA_HOST'</span>], <span class="st">'http://localhost:11500'</span>)</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>test_eq(e[<span class="st">'OLLAMA_MODELS'</span>], <span class="st">'/data/models'</span>)</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>test_eq(e[<span class="st">'OLLAMA_CONTEXT_LENGTH'</span>], <span class="st">'8192'</span>)</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a>test_eq(e[<span class="st">'OLLAMA_KEEP_ALIVE'</span>], <span class="st">'30m'</span>)</span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>test_eq(e[<span class="st">'OLLAMA_FLASH_ATTENTION'</span>], <span class="st">'1'</span>)            <span class="co"># a bool, in the spelling Ollama reads</span></span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>test_eq(e[<span class="st">'OLLAMA_KV_CACHE_TYPE'</span>], <span class="st">'q8_0'</span>)</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a>test_eq(e[<span class="st">'OLLAMA_NUM_PARALLEL'</span>], <span class="st">'2'</span>)</span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'OLLAMA_MAX_LOADED_MODELS'</span> <span class="kw">not</span> <span class="kw">in</span> e           <span class="co"># unset stays unset, rather than guessing a default</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>test_eq(s.running, <span class="va">False</span>)</span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>test_eq(s.stop().running, <span class="va">False</span>)                     <span class="co"># stopping one that never started is fine</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="ol_server_test2" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:57.949760+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:51:03.483371+00:00&quot;,&quot;total&quot;:5.533615982000015}}" data-execution_count="29">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># with nothing listening and no leave to start anything, the error names both ways out</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: ensure_ollama(<span class="st">'127.0.0.1:11599'</span>, serve<span class="op">=</span><span class="va">False</span>), contains<span class="op">=</span><span class="st">'ollama serve'</span>)</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: OllamaServer(<span class="st">'127.0.0.1:11599'</span>, <span class="bu">bin</span><span class="op">=</span><span class="st">'/nonexistent/ollama'</span>).start(install<span class="op">=</span><span class="va">False</span>, timeout<span class="op">=</span><span class="dv">1</span>),</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>          contains<span class="op">=</span><span class="st">'no ollama binary'</span>)</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a><span class="co"># a daemon that is not on this machine is never started here</span></span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: OllamaServer(<span class="st">'http://203.0.113.9:11434'</span>, <span class="bu">bin</span><span class="op">=</span><span class="st">'/bin/echo'</span>).start(install<span class="op">=</span><span class="va">False</span>, timeout<span class="op">=</span><span class="dv">1</span>),</span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>          contains<span class="op">=</span><span class="st">'only starts a daemon on this machine'</span>)</span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a><span class="co"># the daemon gets end of file as stdin, so the caller's terminal keeps its waiting line and stays blocking</span></span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> os, pty, subprocess, sys, tempfile</span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pathlib <span class="im">import</span> Path</span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>fake <span class="op">=</span> Path(tempfile.mkdtemp())<span class="op">/</span><span class="st">'ollama'</span></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>fake.write_text(<span class="ss">f'#!</span><span class="sc">{</span>sys<span class="sc">.</span>executable<span class="sc">}</span><span class="ch">\n</span><span class="ss">import os, sys; t = os.isatty(0); os.set_blocking(0, False); open(sys.argv[0] + ".tty", "w").write(str(t)); sys.exit(3)</span><span class="ch">\n</span><span class="ss">'</span>)<span class="op">;</span> fake.chmod(<span class="bn">0o755</span>)</span>
+<span id="cb25-13"><a href="#cb25-13" aria-hidden="true" tabindex="-1"></a>m, s <span class="op">=</span> pty.openpty()<span class="op">;</span> os.write(m, <span class="st">b'x</span><span class="ch">\n</span><span class="st">'</span>)</span>
+<span id="cb25-14"><a href="#cb25-14" aria-hidden="true" tabindex="-1"></a>probe <span class="op">=</span> <span class="ss">f"""import os, select</span></span>
+<span id="cb25-15"><a href="#cb25-15" aria-hidden="true" tabindex="-1"></a><span class="ss">from rishi.ollama import OllamaServer</span></span>
+<span id="cb25-16"><a href="#cb25-16" aria-hidden="true" tabindex="-1"></a><span class="ss">try: OllamaServer('127.0.0.1:11599', bin=</span><span class="sc">{</span><span class="bu">str</span>(fake)<span class="sc">!r}</span><span class="ss">).start(install=False, timeout=5)</span></span>
+<span id="cb25-17"><a href="#cb25-17" aria-hidden="true" tabindex="-1"></a><span class="ss">except Exception as e: print(type(e).__name__)</span></span>
+<span id="cb25-18"><a href="#cb25-18" aria-hidden="true" tabindex="-1"></a><span class="ss">print(open(</span><span class="sc">{</span><span class="bu">str</span>(fake)<span class="sc">!r}</span><span class="ss"> + '.tty').read(), os.get_blocking(0), os.read(0, 9) if select.select([0], [], [], 1)[0] else b'')"""</span></span>
+<span id="cb25-19"><a href="#cb25-19" aria-hidden="true" tabindex="-1"></a>got <span class="op">=</span> subprocess.run([sys.executable, <span class="st">'-c'</span>, probe], stdin<span class="op">=</span>s, capture_output<span class="op">=</span><span class="va">True</span>, text<span class="op">=</span><span class="va">True</span>, timeout<span class="op">=</span><span class="dv">60</span>).stdout.split()</span>
+<span id="cb25-20"><a href="#cb25-20" aria-hidden="true" tabindex="-1"></a>os.close(s)<span class="op">;</span> os.close(m)</span>
+<span id="cb25-21"><a href="#cb25-21" aria-hidden="true" tabindex="-1"></a>test_eq(got, [<span class="st">'OllamaError'</span>, <span class="st">'False'</span>, <span class="st">'True'</span>, <span class="st">"b'x</span><span class="ch">\\</span><span class="st">n'"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="messages" class="level2">
+<h2 class="anchored" data-anchor-id="messages">Messages</h2>
+<p>Ollama’s message format is OpenAI’s, with two differences:</p>
+<ul>
+<li>Images go in a sibling <code>images</code> list of bare base64. They do not go in content parts.</li>
+<li>Thinking has its own <code>thinking</code> field. It does not use <code>&lt;think&gt;</code> tags in the text.</li>
+</ul>
+<p><a href="https://vedicreader.github.io/rishi/ollama.html#to_ollama_msg"><code>to_ollama_msg</code></a> converts rishi’s canonical history to this format. It also carries assistant thinking out to the daemon. A resumed conversation keeps its thinking.</p>
+<p>Images go out on every turn. They do not collapse to a placeholder. <code>remote</code> behaves the same way, and <code>llama</code> does not. The daemon holds the KV cache. A repeated image costs a prefix match, not a re-encode.</p>
+<p>Audio has no place in this format. <code>rishi.llama</code> (mtmd) and <code>rishi.mlx</code> both take audio. The error says so and does not drop the clip.</p>
+<div id="4e057d72" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:51:03.487812+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:51:03.491294+00:00&quot;,&quot;total&quot;:0.0034858899999790083}}" data-execution_count="31">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L373" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="to_ollama_msgs" class="level3">
+<h3 class="anchored" data-anchor-id="to_ollama_msgs">to_ollama_msgs</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> to_ollama_msgs(</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>    msgs, sp:<span class="bu">str</span><span class="op">=</span><span class="st">''</span></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Convert rishi history to Ollama messages, with <code>sp</code> as the leading system message.</em></p>
+</section>
+</div>
+<div id="f61e9492" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:51:03.491401+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:51:03.495625+00:00&quot;,&quot;total&quot;:0.004226829999993242}}" data-execution_count="32">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L351" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="to_ollama_msg" class="level3">
+<h3 class="anchored" data-anchor-id="to_ollama_msg">to_ollama_msg</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> to_ollama_msg(</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    m</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Convert one rishi history message to an Ollama chat message.</em></p>
+</section>
+</div>
+<p>A reply carries thinking in a <code>thinking</code> field and calls in <code>tool_calls</code>. A model whose chat template supports neither writes <code>&lt;think&gt;</code> and <code>&lt;tool_call&gt;</code> tags into the text. <a href="https://vedicreader.github.io/rishi/ollama.html#norm_ochat"><code>norm_ochat</code></a> reads both forms, as Urai’s <code>norm_resp</code> does for llama.cpp. An arbitrary GGUF from the Hub then behaves like a model from Ollama’s own library.</p>
+<p>Usage comes from Ollama’s eval counts. Ollama reports no figure for prefix reuse. <code>use.cached_tokens</code> reads zero even when the daemon reuses the conversation’s prefix.</p>
+<div id="036c367a" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:51:03.498888+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:51:03.502660+00:00&quot;,&quot;total&quot;:0.003775833999952738}}" data-execution_count="34">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L405" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="norm_ochat" class="level3">
+<h3 class="anchored" data-anchor-id="norm_ochat">norm_ochat</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> norm_ochat(</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    r, model:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Convert one <code>/api/chat</code> response to a rishi <code>Resp</code>, reading <code>&lt;think&gt;</code> and <code>&lt;tool_call&gt;</code> text as well as the native fields.</em></p>
+</section>
+</div>
+<div id="9ed8013d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:51:03.502761+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:51:03.505885+00:00&quot;,&quot;total&quot;:0.003127769000002445}}" data-execution_count="35">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L379" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="ollama_usage" class="level3">
+<h3 class="anchored" data-anchor-id="ollama_usage">ollama_usage</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ollama_usage(</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    r, model:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Convert Ollama’s eval counts to a rishi usage dict.</em></p>
+</section>
+</div>
+<div id="ol_msgs_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb30"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># text, images and thinking, each into the field Ollama reads it from</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>test_eq(to_ollama_msg({<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'hi'</span>}), {<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'hi'</span>})</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>m <span class="op">=</span> to_ollama_msg(mk_msg([<span class="st">'what is this?'</span>, Path(<span class="st">'images.jpeg'</span>).read_bytes()]))</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>test_eq(m[<span class="st">'content'</span>], <span class="st">'what is this?'</span>)</span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">len</span>(m[<span class="st">'images'</span>]), <span class="dv">1</span>)</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="kw">not</span> m[<span class="st">'images'</span>][<span class="dv">0</span>].startswith(<span class="st">'data:'</span>)          <span class="co"># bare base64, not a data URL</span></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>test_eq(to_ollama_msg({<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'a'</span>, <span class="st">'channels'</span>: {<span class="st">'thought'</span>: <span class="st">'t'</span>}})[<span class="st">'thinking'</span>], <span class="st">'t'</span>)</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a><span class="co"># a tool call goes out as an object, and its result comes back named</span></span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>call_msg <span class="op">=</span> {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">''</span>, <span class="st">'tool_calls'</span>: [ToolCall(name<span class="op">=</span><span class="st">'add'</span>, arguments<span class="op">=</span>{<span class="st">'a'</span>: <span class="dv">1</span>, <span class="st">'b'</span>: <span class="dv">2</span>})]}</span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>test_eq(to_ollama_msg(call_msg)[<span class="st">'tool_calls'</span>], [{<span class="st">'function'</span>: {<span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'arguments'</span>: {<span class="st">'a'</span>: <span class="dv">1</span>, <span class="st">'b'</span>: <span class="dv">2</span>}}}])</span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>test_eq(to_ollama_msg({<span class="st">'role'</span>: <span class="st">'tool'</span>, <span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'content'</span>: <span class="st">'3'</span>}),</span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a>        {<span class="st">'role'</span>: <span class="st">'tool'</span>, <span class="st">'content'</span>: <span class="st">'3'</span>, <span class="st">'tool_name'</span>: <span class="st">'add'</span>})</span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-15"><a href="#cb30-15" aria-hidden="true" tabindex="-1"></a><span class="co"># the system prompt leads, and a system message already in `hist` is dropped rather than duplicated</span></span>
+<span id="cb30-16"><a href="#cb30-16" aria-hidden="true" tabindex="-1"></a>ms <span class="op">=</span> to_ollama_msgs([{<span class="st">'role'</span>: <span class="st">'system'</span>, <span class="st">'content'</span>: <span class="st">'old'</span>}, {<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'hi'</span>}], sp<span class="op">=</span><span class="st">'be brief'</span>)</span>
+<span id="cb30-17"><a href="#cb30-17" aria-hidden="true" tabindex="-1"></a>test_eq(ms, [{<span class="st">'role'</span>: <span class="st">'system'</span>, <span class="st">'content'</span>: <span class="st">'be brief'</span>}, {<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'hi'</span>}])</span>
+<span id="cb30-18"><a href="#cb30-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-19"><a href="#cb30-19" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: to_ollama_msg(mk_msg([Path(<span class="st">'speech.wav'</span>).read_bytes(), <span class="st">'transcribe'</span>])),</span>
+<span id="cb30-20"><a href="#cb30-20" aria-hidden="true" tabindex="-1"></a>          contains<span class="op">=</span><span class="st">"runtime='llama'"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="ol_resp_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the native fields</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> norm_ochat({<span class="st">'model'</span>: <span class="st">'qwen3:0.6b'</span>, <span class="st">'done_reason'</span>: <span class="st">'stop'</span>,</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>                <span class="st">'message'</span>: {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'hello'</span>, <span class="st">'thinking'</span>: <span class="st">'thinking hard'</span>},</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>                <span class="st">'prompt_eval_count'</span>: <span class="dv">10</span>, <span class="st">'eval_count'</span>: <span class="dv">4</span>})</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>test_eq(resp_text(r), <span class="st">'hello'</span>)</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a>test_eq(thought(r), <span class="st">'thinking hard'</span>)</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a>test_eq(r[<span class="st">'usage'</span>], {<span class="st">'prompt_tokens'</span>: <span class="dv">10</span>, <span class="st">'completion_tokens'</span>: <span class="dv">4</span>, <span class="st">'total_tokens'</span>: <span class="dv">14</span>, <span class="st">'model'</span>: <span class="st">'qwen3:0.6b'</span>})</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'truncated'</span> <span class="kw">not</span> <span class="kw">in</span> r</span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>test_eq(truncated(norm_ochat({<span class="st">'message'</span>: {<span class="st">'content'</span>: <span class="st">'x'</span>}, <span class="st">'done_reason'</span>: <span class="st">'length'</span>})), <span class="va">True</span>)</span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a><span class="co"># a native tool call: arguments as an object, and an id invented because Ollama sends none</span></span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> norm_ochat({<span class="st">'message'</span>: {<span class="st">'tool_calls'</span>: [{<span class="st">'function'</span>: {<span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'arguments'</span>: {<span class="st">'a'</span>: <span class="dv">1</span>}}}]}})</span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">len</span>(r[<span class="st">'tool_calls'</span>]), <span class="dv">1</span>)</span>
+<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a>test_eq(r[<span class="st">'tool_calls'</span>][<span class="dv">0</span>].name, <span class="st">'add'</span>)</span>
+<span id="cb31-15"><a href="#cb31-15" aria-hidden="true" tabindex="-1"></a>test_eq(r[<span class="st">'tool_calls'</span>][<span class="dv">0</span>].arguments, {<span class="st">'a'</span>: <span class="dv">1</span>})</span>
+<span id="cb31-16"><a href="#cb31-16" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> r[<span class="st">'tool_calls'</span>][<span class="dv">0</span>][<span class="st">'id'</span>]</span>
+<span id="cb31-17"><a href="#cb31-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-18"><a href="#cb31-18" aria-hidden="true" tabindex="-1"></a><span class="co"># and a model that writes tags into the text instead, as an arbitrary GGUF off the Hub will</span></span>
+<span id="cb31-19"><a href="#cb31-19" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> norm_ochat({<span class="st">'message'</span>: {<span class="st">'content'</span>: <span class="st">'&lt;think&gt;hmm&lt;/think&gt;ok</span><span class="ch">\n</span><span class="st">&lt;tool_call&gt;{"name": "add", "arguments": {"a": 1</span><span class="sc">}}</span><span class="st">&lt;/tool_call&gt;'</span>}})</span>
+<span id="cb31-20"><a href="#cb31-20" aria-hidden="true" tabindex="-1"></a>test_eq(resp_text(r), <span class="st">'ok'</span>)</span>
+<span id="cb31-21"><a href="#cb31-21" aria-hidden="true" tabindex="-1"></a>test_eq(thought(r), <span class="st">'hmm'</span>)</span>
+<span id="cb31-22"><a href="#cb31-22" aria-hidden="true" tabindex="-1"></a>test_eq(r[<span class="st">'tool_calls'</span>][<span class="dv">0</span>].name, <span class="st">'add'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Unreadable calls keep their failure marks during response normalization. Stored calls render unreadable arguments as an empty object.</p>
+<div id="ol_unread_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>tag <span class="op">=</span> <span class="bu">chr</span>(<span class="dv">60</span>) <span class="op">+</span> <span class="st">"tool_call"</span> <span class="op">+</span> <span class="bu">chr</span>(<span class="dv">62</span>)</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>bad <span class="op">=</span> norm_ochat({<span class="st">"message"</span>: {<span class="st">"content"</span>: tag <span class="op">+</span> <span class="st">"{</span><span class="ch">\"</span><span class="st">name</span><span class="ch">\"</span><span class="st">: </span><span class="ch">\"</span><span class="st">add</span><span class="ch">\"</span><span class="st">, </span><span class="ch">\"</span><span class="st">arguments</span><span class="ch">\"</span><span class="st">: {</span><span class="ch">\"</span><span class="st">a</span><span class="ch">\"</span><span class="st">: "</span>}})</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> bad[<span class="st">"tool_calls"</span>][<span class="dv">0</span>].get(<span class="st">"unread"</span>)</span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> norm_ochat({<span class="st">"message"</span>: {<span class="st">"content"</span>: tag <span class="op">+</span> <span class="st">"{bad"</span>}}).get(<span class="st">"tool_parse_failed"</span>)</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> args <span class="kw">in</span> (<span class="st">""</span>, <span class="st">"invalid"</span>, <span class="st">"[]"</span>, <span class="va">None</span>, {<span class="st">"a"</span>: <span class="dv">1</span>}):</span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a>    native <span class="op">=</span> norm_ochat({<span class="st">"message"</span>: {<span class="st">"tool_calls"</span>: [{<span class="st">"function"</span>: {<span class="st">"name"</span>: <span class="st">"add"</span>, <span class="st">"arguments"</span>: args}}]}})</span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> <span class="bu">bool</span>(native[<span class="st">'tool_calls'</span>][<span class="dv">0</span>].get(<span class="st">'unread'</span>)) <span class="op">==</span> (<span class="kw">not</span> <span class="bu">isinstance</span>(args, <span class="bu">dict</span>))</span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> <span class="bu">bool</span>(native.get(<span class="st">'tool_parse_failed'</span>)) <span class="op">==</span> (<span class="kw">not</span> <span class="bu">isinstance</span>(args, <span class="bu">dict</span>))</span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a>    msg <span class="op">=</span> {<span class="st">"role"</span>: <span class="st">"assistant"</span>, <span class="st">"tool_calls"</span>: [{<span class="st">"id"</span>: <span class="st">"c"</span>, <span class="st">"function"</span>: {<span class="st">"name"</span>: <span class="st">"add"</span>, <span class="st">"arguments"</span>: args}}]}</span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> to_ollama_msg(msg)[<span class="st">"tool_calls"</span>][<span class="dv">0</span>][<span class="st">"function"</span>][<span class="st">"arguments"</span>] <span class="op">==</span> (args <span class="cf">if</span> <span class="bu">isinstance</span>(args, <span class="bu">dict</span>) <span class="cf">else</span> {})</span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>bad</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="ollamachat" class="level2">
+<h2 class="anchored" data-anchor-id="ollamachat">OllamaChat</h2>
+<p>The tool loop, approval, budget, callbacks and context handling come from Urai, as on every backend. <a href="https://vedicreader.github.io/rishi/ollama.html#ollamachat"><code>OllamaChat</code></a> adds the request and the daemon that receives it.</p>
+<p><code>think</code> is a field of the request. It is not a switch in the system prompt. It takes <code>True</code>, <code>False</code>, or a level string such as <code>'low'</code> or <code>'high'</code>. The chat sends a level string unchanged. A model that cannot think refuses the field. The chat then retries once without the field and stops sending it.</p>
+<p>These options map to Ollama request fields:</p>
+<ul>
+<li><code>ctx</code>, also accepted as the <code>rishi.llama</code> name <code>n_ctx</code>, goes out as <code>num_ctx</code>.</li>
+<li><code>n_gpu_layers</code> goes out as <code>num_gpu</code>.</li>
+<li><code>options=</code> takes anything else that Ollama’s sampler accepts.</li>
+<li><code>structured</code> uses Ollama’s <code>format</code> field. The schema constrains the reply. The prompt does not only ask for it.</li>
+<li><code>keep_alive</code> sets how long the daemon keeps the model loaded after a turn. <code>unload()</code> drops the model at once.</li>
+</ul>
+<p>With <code>pull=True</code>, the default, the chat downloads a missing model when you build it. The llama backend does the same for a missing GGUF.</p>
+<p><code>ctx_limit</code> is the window that the chat assumes. It equals <code>ctx</code> when you set one. Otherwise it is <code>$OLLAMA_CONTEXT_LENGTH</code> from the environment of the Python process, or 4096 tokens when that variable is unset. The model’s training length does not matter. Urai’s <code>pct_full</code> and <code>SlidingWindowCallback</code> depend on this value. A daemon that someone else started with a different context length makes <code>ctx_limit</code> wrong. Pass <code>ctx</code> in that case.</p>
+<div id="82396aff" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:51:03.590320+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:51:03.597759+00:00&quot;,&quot;total&quot;:0.00744278199999826}}" data-execution_count="37">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L426" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="ollamachat-1" class="level3">
+<h3 class="anchored" data-anchor-id="ollamachat-1">OllamaChat</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb33"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> OllamaChat(</span>
+<span id="cb33-2"><a href="#cb33-2" aria-hidden="true" tabindex="-1"></a>    model:NoneType<span class="op">=</span><span class="va">None</span>, <span class="op">*</span>, runtime:NoneType<span class="op">=</span><span class="va">None</span>, model_path:NoneType<span class="op">=</span><span class="va">None</span>, opts:NoneType<span class="op">=</span><span class="va">None</span>, host:NoneType<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb33-3"><a href="#cb33-3" aria-hidden="true" tabindex="-1"></a>    client:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># a daemon to use instead of finding or starting one</span></span>
+<span id="cb33-4"><a href="#cb33-4" aria-hidden="true" tabindex="-1"></a>    quant:<span class="bu">str</span><span class="op">=</span><span class="st">'Q4_K_M'</span>, <span class="co"># which quantization to name when pulling</span></span>
+<span id="cb33-5"><a href="#cb33-5" aria-hidden="true" tabindex="-1"></a>    pull:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, install:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, serve:<span class="bu">bool</span><span class="op">=</span><span class="va">True</span>, srv_kw:NoneType<span class="op">=</span><span class="va">None</span>, on_progress:NoneType<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb33-6"><a href="#cb33-6" aria-hidden="true" tabindex="-1"></a>    n_gpu_layers:NoneType<span class="op">=</span><span class="va">None</span>, keep_alive:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># how long the daemon holds the weights after a turn</span></span>
+<span id="cb33-7"><a href="#cb33-7" aria-hidden="true" tabindex="-1"></a>    options:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># Ollama's own `options` block, merged last</span></span>
+<span id="cb33-8"><a href="#cb33-8" aria-hidden="true" tabindex="-1"></a>    comp_kw:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># merged into the request body verbatim</span></span>
+<span id="cb33-9"><a href="#cb33-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>kw</span>
+<span id="cb33-10"><a href="#cb33-10" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>A <code>Chat</code> that sends each turn to an Ollama daemon, starting the daemon and pulling the model when needed.</em></p>
+</section>
+</div>
+<div id="187ee05d" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:51:03.597883+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:51:03.602619+00:00&quot;,&quot;total&quot;:0.004738900999996076}}" data-execution_count="38">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L421" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="dflt_ctx" class="level3">
+<h3 class="anchored" data-anchor-id="dflt_ctx">dflt_ctx</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> dflt_ctx():</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>The context length the daemon uses when a request names none: <code>$OLLAMA_CONTEXT_LENGTH</code>, else Ollama’s own 4096.</em></p>
+</section>
+</div>
+<div id="66504dfc" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:51:03.603003+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:51:03.606294+00:00&quot;,&quot;total&quot;:0.003294201000016983}}" data-execution_count="39">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dataclasses <span class="im">import</span> dataclass</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> typing <span class="im">import</span> Literal</span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a><span class="at">@dataclass</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Pick:</span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"A choice."</span></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>    a: Literal[<span class="st">'x'</span>, <span class="st">'y'</span>]</span>
+<span id="cb35-7"><a href="#cb35-7" aria-hidden="true" tabindex="-1"></a>c, seen <span class="op">=</span> OllamaChat.<span class="fu">__new__</span>(OllamaChat), {}</span>
+<span id="cb35-8"><a href="#cb35-8" aria-hidden="true" tabindex="-1"></a>c.model_id <span class="op">=</span> <span class="st">'m'</span></span>
+<span id="cb35-9"><a href="#cb35-9" aria-hidden="true" tabindex="-1"></a>c._payload <span class="op">=</span> <span class="kw">lambda</span> <span class="op">**</span>kw: seen.update(kw) <span class="kw">or</span> kw</span>
+<span id="cb35-10"><a href="#cb35-10" aria-hidden="true" tabindex="-1"></a>c._ask <span class="op">=</span> <span class="kw">lambda</span> p: {<span class="st">'message'</span>: {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'{"a": "x"}'</span>}, <span class="st">'done'</span>: <span class="va">True</span>}</span>
+<span id="cb35-11"><a href="#cb35-11" aria-hidden="true" tabindex="-1"></a>test_eq(c._structured_call(<span class="st">'q'</span>, Pick, <span class="st">''</span>), {<span class="st">'a'</span>: <span class="st">'x'</span>})</span>
+<span id="cb35-12"><a href="#cb35-12" aria-hidden="true" tabindex="-1"></a>test_eq(seen[<span class="st">'fmt'</span>][<span class="st">'properties'</span>][<span class="st">'a'</span>][<span class="st">'enum'</span>], [<span class="st">'x'</span>, <span class="st">'y'</span>])   <span class="co"># the schema goes through urai's mk_toolspec, which spells a Literal as an enum</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>A stateless call that passes its own messages never converts the chat’s history, and a stream that ends without the daemon’s final chunk raises <a href="https://vedicreader.github.io/rishi/ollama.html#ollamaerror"><code>OllamaError</code></a> instead of passing as a complete reply with zero usage.</p>
+<div id="35c7db2d" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb36"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>c, converted <span class="op">=</span> OllamaChat.<span class="fu">__new__</span>(OllamaChat), []</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>c.model_id, c._opts, c.max_output_tokens, c.toolspecs <span class="op">=</span> <span class="st">'m'</span>, {}, <span class="va">None</span>, []</span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>c.keep_alive, c.think, c._think_ok, c.comp_kw <span class="op">=</span> <span class="va">None</span>, <span class="va">None</span>, <span class="va">False</span>, {}</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>c._msgs <span class="op">=</span> <span class="kw">lambda</span>: converted.append(<span class="dv">1</span>) <span class="kw">or</span> []</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>c._payload(msgs<span class="op">=</span>[{<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'x'</span>}])</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>test_eq(converted, [])</span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a>c._payload <span class="op">=</span> <span class="kw">lambda</span> <span class="op">**</span>kw: {}</span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>c._ask_stream <span class="op">=</span> <span class="kw">lambda</span> p: <span class="bu">iter</span>([{<span class="st">'message'</span>: {<span class="st">'content'</span>: <span class="st">'partial'</span>}}])</span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: <span class="bu">list</span>(c._stream_step()), contains<span class="op">=</span><span class="st">'final chunk'</span>)</span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a>c._ask_stream <span class="op">=</span> <span class="kw">lambda</span> p: <span class="bu">iter</span>([{<span class="st">'message'</span>: {<span class="st">'content'</span>: <span class="st">'whole'</span>}, <span class="st">'done'</span>: <span class="va">True</span>}])</span>
+<span id="cb36-12"><a href="#cb36-12" aria-hidden="true" tabindex="-1"></a><span class="bu">list</span>(c._stream_step())</span>
+<span id="cb36-13"><a href="#cb36-13" aria-hidden="true" tabindex="-1"></a>c._step_res[<span class="st">'usage'</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><code>/api/show</code> reports what a model can do. The daemon holds the weights, so its report is more reliable than any guess that Urai’s <code>model_caps</code> makes elsewhere. <code>model_caps(model, runtime='ollama')</code> asks the daemon through <a href="https://vedicreader.github.io/rishi/ollama.html#ollama_caps"><code>ollama_caps</code></a>. <a href="https://vedicreader.github.io/rishi/ollama.html#ollama_caps"><code>ollama_caps</code></a> maps Ollama’s <code>vision</code> capability to image input.</p>
+<p>When no daemon answers, or the model is not in its store, <a href="https://vedicreader.github.io/rishi/ollama.html#ollama_caps"><code>ollama_caps</code></a> returns <code>None</code>. <code>model_caps</code> then uses Urai’s default, which accepts text input only.</p>
+<div id="5650a7db" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:51:03.608614+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:51:03.612816+00:00&quot;,&quot;total&quot;:0.004205652999985432}}" data-execution_count="41">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/ollama.py#L578" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="ollama_caps" class="level3">
+<h3 class="anchored" data-anchor-id="ollama_caps">ollama_caps</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> ollama_caps(</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>    model:NoneType<span class="op">=</span><span class="va">None</span>, client:NoneType<span class="op">=</span><span class="va">None</span>, quant:<span class="bu">str</span><span class="op">=</span><span class="st">'Q4_K_M'</span></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>What an Ollama model accepts, from the daemon’s own <code>/api/show</code>. None when no daemon answers.</em></p>
+</section>
+</div>
+<section id="against-a-real-daemon" class="level3">
+<h3 class="anchored" data-anchor-id="against-a-real-daemon">Against a real daemon</h3>
+<p>Everything above runs offline, against a scripted daemon. The cells below need Ollama and download a model on first use. They are marked <code>#| eval: false</code>, and the test run skips them. On a bare machine, <a href="https://vedicreader.github.io/rishi/ollama.html#ollamachat"><code>OllamaChat</code></a> installs Ollama under <code>~/.cache/rishi/ollama</code>, starts it, pulls the model and answers.</p>
+<p>In the saved output of the last cell, <code>gemma3:4b</code> reports text input only, with source <code>default</code>. That model was not in the daemon’s store. <code>/api/show</code> failed, and the capabilities fell back to Urai’s default.</p>
+<div id="ol_live1" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> Chat(<span class="st">'ollama/qwen3:0.6b'</span>, think<span class="op">=</span><span class="va">False</span>, sp<span class="op">=</span><span class="st">'You are concise.'</span>)</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(chat(<span class="st">'Give me one fact about lobsters.'</span>)))</span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat.use)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Lobsters are marine animals with a soft, flexible body and a powerful, claw-like appendage.
+total=55|in=33|out=22|turns=1|model=qwen3:0.6b</code></pre>
+</div>
+</div>
+<div id="ol_live2" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a><span class="co"># thinking levels, tools and structured output, on the real thing</span></span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> add(a: <span class="bu">int</span>, b: <span class="bu">int</span>) <span class="op">-&gt;</span> <span class="bu">int</span>:</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>    <span class="co">"Add two integers."</span></span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> a <span class="op">+</span> b</span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> dataclasses <span class="im">import</span> dataclass</span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a><span class="at">@dataclass</span></span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> Person: name:<span class="bu">str</span><span class="op">;</span> age:<span class="bu">int</span></span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>t <span class="op">=</span> Chat(<span class="st">'ollama/qwen3:0.6b'</span>, tools<span class="op">=</span>[add], think<span class="op">=</span><span class="st">'low'</span>)</span>
+<span id="cb40-11"><a href="#cb40-11" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(t(<span class="st">'What is 2 + 3? Use the add tool.'</span>)))</span>
+<span id="cb40-12"><a href="#cb40-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(t.structured(<span class="st">'Extract: John Smith is 30.'</span>, Person))</span>
+<span id="cb40-13"><a href="#cb40-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(t.classify(<span class="st">'I loved this film!'</span>, [<span class="st">'positive'</span>, <span class="st">'negative'</span>]))</span>
+<span id="cb40-14"><a href="#cb40-14" aria-hidden="true" tabindex="-1"></a>t.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Person(name='John Smith', age=30)
+positive</code></pre>
+</div>
+</div>
+<div id="ol_live3" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb42"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the daemon, driven from Python: what is downloaded, what is loaded, what a model can do</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>cl <span class="op">=</span> ensure_ollama()</span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(cl.version(), cl.models())</span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>([m[<span class="st">'name'</span>] <span class="cf">for</span> m <span class="kw">in</span> cl.ps()])</span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(model_caps(<span class="st">'qwen3:0.6b'</span>, runtime<span class="op">=</span><span class="st">'ollama'</span>))</span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(model_caps(<span class="st">'gemma3:4b'</span>, runtime<span class="op">=</span><span class="st">'ollama'</span>))     <span class="co"># vision, per the daemon itself</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>0.32.15 ['ornith-1.5:9b', 'qwen3:0.6b', 'qwen3.6:27b-coding-nvfp4']
+['qwen3:0.6b']
+Caps(in=text, out=text, runtime)
+Caps(in=text, out=text, default)</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="what-this-backend-does-not-do" class="level2">
+<h2 class="anchored" data-anchor-id="what-this-backend-does-not-do">What this backend does not do</h2>
+<p>This backend does not support the following:</p>
+<ul>
+<li>Audio. Ollama’s chat API carries images but not audio. <code>rishi.llama</code> and <code>rishi.mlx</code> take audio.</li>
+<li>A saved KV cache. <code>rishi.llama</code> and <code>rishi.mlx</code> write their cache to disk and read it back. Ollama keeps its cache inside the daemon and offers no handle on it. <code>use.cached_tokens</code> reads zero even while the daemon reuses the prefix.</li>
+<li>Exact token counts before a turn. Ollama has no tokenizer endpoint. Counts before a turn are estimates. The real count arrives with the reply, in <code>use</code>.</li>
+<li>Local <code>.gguf</code> paths. The chat refuses them, because Ollama serves only models in its own store. Use <code>runtime='llama'</code> for a file.</li>
+<li>A broker. <a href="https://vedicreader.github.io/rishi/llama.html#llamabroker"><code>LlamaBroker</code></a> exists because one <code>Llama</code> belongs to one process. The Ollama daemon already serves many clients. Size it with <code>OLLAMA_NUM_PARALLEL</code> and <code>OLLAMA_MAX_LOADED_MODELS</code>.</li>
+</ul>
+<section id="tests" class="level3">
+<h3 class="anchored" data-anchor-id="tests">Tests</h3>
+<p>The tests on this page cover host parsing, model ids, the HTTP client against a scripted daemon (<code>httpx.MockTransport</code>), the installer, the server’s environment, message conversion and response normalisation. None of them needs Ollama. The test run executes all of them. <a href="https://vedicreader.github.io/rishi/ollama.html#ollamachat"><code>OllamaChat</code></a> itself runs only in the manual cells above.</p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vedicreader\.github\.io\/rishi");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>

@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.19">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="description" content="Run GGUF models inside your Python process with llama-cpp-python, including image and audio input.">
+
+<title>llama – rishi</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-66a38d7287321bc50e069add96f8c30e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="llama – rishi">
+<meta property="og:description" content="Run GGUF models inside your Python process with llama-cpp-python, including image and audio input.">
+<meta property="og:site_name" content="rishi">
+<meta name="twitter:title" content="llama – rishi">
+<meta name="twitter:description" content="Run GGUF models inside your Python process with llama-cpp-python, including image and audio input.">
+<meta name="twitter:card" content="summary">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">rishi</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./llama.html">llama</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">rishi</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">core</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./llama.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">llama</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./litert.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">litert</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./mlx.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">mlx</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./remote.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">remote</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./claude.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">claude</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./copilot.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">copilot</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./ollama.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">ollama</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#loading-gguf-models" id="toc-loading-gguf-models" class="nav-link active" data-scroll-target="#loading-gguf-models">Loading GGUF models</a></li>
+  <li><a href="#audio" id="toc-audio" class="nav-link" data-scroll-target="#audio">Audio</a></li>
+  <li><a href="#llamachat" id="toc-llamachat" class="nav-link" data-scroll-target="#llamachat">LlamaChat</a>
+  <ul class="collapse">
+  <li><a href="#the-kv-cache" id="toc-the-kv-cache" class="nav-link" data-scroll-target="#the-kv-cache">The KV cache</a></li>
+  <li><a href="#recorded-model-behaviour" id="toc-recorded-model-behaviour" class="nav-link" data-scroll-target="#recorded-model-behaviour">Recorded model behaviour</a></li>
+  <li><a href="#tests" id="toc-tests" class="nav-link" data-scroll-target="#tests">Tests</a></li>
+  </ul></li>
+  <li><a href="#examples-manual" id="toc-examples-manual" class="nav-link" data-scroll-target="#examples-manual">Examples (manual)</a>
+  <ul class="collapse">
+  <li><a href="#streaming-and-thinking" id="toc-streaming-and-thinking" class="nav-link" data-scroll-target="#streaming-and-thinking">Streaming and thinking</a></li>
+  <li><a href="#images-and-audio-mmproj" id="toc-images-and-audio-mmproj" class="nav-link" data-scroll-target="#images-and-audio-mmproj">Images and audio (mmproj)</a></li>
+  <li><a href="#stopping-with-an-llm-judge" id="toc-stopping-with-an-llm-judge" class="nav-link" data-scroll-target="#stopping-with-an-llm-judge">Stopping with an LLM judge</a></li>
+  </ul></li>
+  <li><a href="#sharing-one-engine" id="toc-sharing-one-engine" class="nav-link" data-scroll-target="#sharing-one-engine">Sharing one engine</a></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="llama.html.md"><i class="bi bi-file-code"></i>Markdown</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">llama</h1>
+</div>
+
+<div>
+  <div class="description">
+    Run GGUF models inside your Python process with <a href="https://github.com/abetlen/llama-cpp-python">llama-cpp-python</a>, including image and audio input.
+  </div>
+</div>
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<div id="llama_test_imports" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:55.478614+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:55.479525+00:00&quot;,&quot;total&quot;:0.0009148460000005798}}" data-execution_count="4">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> tempfile</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.test <span class="im">import</span> test_eq, test_fail, test_close</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<section id="loading-gguf-models" class="level2">
+<h2 class="anchored" data-anchor-id="loading-gguf-models">Loading GGUF models</h2>
+<p>You name a model by its Hub repo id, such as <code>Qwen/Qwen3-4B-GGUF</code>, and rishi picks the file. The constants below are ready-made repo ids. Qwen3 models can think before answering and write tool calls in a format llama.cpp already parses. Any GGUF repo works.</p>
+<p>A repo often holds one file per quantization, plus an <code>mmproj</code> file. That file is the projector, a small separate model that turns images or audio into input the language model can read. <a href="https://vedicreader.github.io/rishi/litert.html#get_model"><code>get_model</code></a> finds the model file in three steps. It uses a <code>model_path</code> you pass if the file exists. Otherwise it searches the local Hugging Face cache without using the network. Otherwise it downloads the file. It prefers the <code>quant</code> you ask for, <code>Q4_K_M</code> by default, and falls back to the first <code>.gguf</code> file. It never picks the projector. It raises <code>FileNotFoundError</code> when the repo has no model file. <a href="https://vedicreader.github.io/rishi/litert.html#cached_model"><code>cached_model</code></a> is the cache step on its own and returns None on a miss. The old names <code>_get_model</code> and <code>_cached_model</code> still work. <a href="https://vedicreader.github.io/rishi/llama.html#get_mmproj"><code>get_mmproj</code></a> finds the projector the same way, for vision and audio models. It raises <code>FileNotFoundError</code> when the repo has no projector. <code>DFLT_N_CTX</code> is the context window an engine gets when nothing else sets one, 8192 tokens.</p>
+<p><a href="https://vedicreader.github.io/rishi/llama.html#gpu_offload_supported"><code>gpu_offload_supported</code></a> says whether the installed llama-cpp-python wheel was built with Metal or CUDA. A CPU-only wheel ignores <code>n_gpu_layers</code>.</p>
+<div id="9565c391" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:55.485387+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.257792+00:00&quot;,&quot;total&quot;:0.7724102199999834}}" data-execution_count="6">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/llama.py#L70" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="get_mmproj" class="level3">
+<h3 class="anchored" data-anchor-id="get_mmproj">get_mmproj</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_mmproj(</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    model_id, mmproj_path:NoneType<span class="op">=</span><span class="va">None</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Return a local path to a model’s <code>mmproj</code> projector: <code>mmproj_path</code> if it exists, else the Hugging Face cache, else a download.</em></p>
+</section>
+</div>
+<div id="372cdd13" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:56.257929+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.271444+00:00&quot;,&quot;total&quot;:0.013520850999952927}}" data-execution_count="7">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/litert.py#L253" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="get_model" class="level3">
+<h3 class="anchored" data-anchor-id="get_model">get_model</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_model(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    model_id, model_path:NoneType<span class="op">=</span><span class="va">None</span>, quant:<span class="bu">str</span><span class="op">=</span><span class="st">'Q4_K_M'</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Return a local <code>.gguf</code> path: <code>model_path</code>, else HF cache, else download.</em></p>
+</section>
+</div>
+<div id="3dc023d8" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:56.271584+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.275146+00:00&quot;,&quot;total&quot;:0.0035668609999675027}}" data-execution_count="8">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/litert.py#L249" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="cached_model" class="level3">
+<h3 class="anchored" data-anchor-id="cached_model">cached_model</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> cached_model(</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    model_id, quant:<span class="bu">str</span><span class="op">=</span><span class="st">'Q4_K_M'</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Return the local <code>.gguf</code> path from the Hugging Face cache without touching the network, else None.</em></p>
+</section>
+</div>
+<div id="bc019eb5" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>fs <span class="op">=</span> [<span class="st">'README.md'</span>, <span class="st">'model-Q8_0.gguf'</span>, <span class="st">'model-Q4_K_M.gguf'</span>, <span class="st">'mmproj-model.gguf'</span>]</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>test_eq(_gguf(fs), <span class="st">'model-Q4_K_M.gguf'</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>test_eq(_gguf(fs, <span class="st">'Q8_0'</span>), <span class="st">'model-Q8_0.gguf'</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>test_eq(_gguf(fs, <span class="st">'IQ2_XS'</span>), <span class="st">'model-Q8_0.gguf'</span>)  <span class="co"># falls back to first non-mmproj gguf</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>test_eq(_gguf([<span class="st">'README.md'</span>]), <span class="va">None</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>test_eq(_mmproj(fs), <span class="st">'mmproj-model.gguf'</span>)        <span class="co"># the complement of _gguf</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>test_eq(_mmproj([<span class="st">'model-Q4_K_M.gguf'</span>]), <span class="va">None</span>)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>test_eq(_mmproj([<span class="st">'mmproj-dir/model.gguf'</span>]), <span class="va">None</span>)  <span class="co"># matches the filename, not the directory</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="a16ef02d" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># A model missing from the cache gives None without a download; a `model_path` that exists is returned as a string</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>test_eq(cached_model(<span class="st">'rishi-test/no-such-model'</span>), <span class="va">None</span>)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>_p <span class="op">=</span> Path(tempfile.mkdtemp())<span class="op">/</span><span class="st">'m.gguf'</span><span class="op">;</span> _p.write_bytes(<span class="st">b''</span>)</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>test_eq(get_model(<span class="st">'rishi-test/no-such-model'</span>, _p), <span class="bu">str</span>(_p))</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> _cached_model <span class="kw">is</span> cached_model <span class="kw">and</span> _get_model <span class="kw">is</span> get_model</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="afe16f78" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:56.276645+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.279655+00:00&quot;,&quot;total&quot;:0.0030138540000734793}}" data-execution_count="10">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/llama.py#L81" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="gpu_offload_supported" class="level3">
+<h3 class="anchored" data-anchor-id="gpu_offload_supported">gpu_offload_supported</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> gpu_offload_supported():</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>True if the installed llama-cpp-python build has GPU (Metal/CUDA) offload compiled in.</em></p>
+</section>
+</div>
+<div id="a1metal02" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># True on Metal or CUDA wheels; false on CPU wheels</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>res <span class="op">=</span> gpu_offload_supported()</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">isinstance</span>(res, <span class="bu">bool</span>)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">'gpu offload supported:'</span>, res)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>ggml_metal_device_init: tensor API disabled for pre-M5 and pre-A19 devices
+ggml_metal_library_init: using embedded metal library
+ggml_metal_library_init: loaded in 0.016 sec
+ggml_metal_rsets_init: creating a residency set collection (keep_alive = 180 s)
+ggml_metal_device_init: GPU name:   MTL0 (Apple M3 Max)
+ggml_metal_device_init: GPU family: MTLGPUFamilyApple9  (1009)
+ggml_metal_device_init: GPU family: MTLGPUFamilyCommon3 (3003)
+ggml_metal_device_init: GPU family: MTLGPUFamilyMetal4  (5002)
+ggml_metal_device_init: simdgroup reduction   = true
+ggml_metal_device_init: simdgroup matrix mul. = true
+ggml_metal_device_init: has unified memory    = true
+ggml_metal_device_init: has bfloat            = true
+ggml_metal_device_init: has tensor            = false
+ggml_metal_device_init: use residency sets    = true
+ggml_metal_device_init: use shared buffers    = true
+ggml_metal_device_init: recommendedMaxWorkingSetSize  = 30150.67 MB</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>gpu offload supported: True</code></pre>
+</div>
+</div>
+</section>
+<section id="audio" class="level2">
+<h2 class="anchored" data-anchor-id="audio">Audio</h2>
+<p>llama.cpp reads images and audio through its mtmd library, but llama-cpp-python’s <code>MTMDChatHandler</code> only passes images to it. rishi patches four of the handler’s methods so that audio takes the same route:</p>
+<ul>
+<li><code>get_image_urls</code> collects <code>input_audio</code> parts as well as images, in the order they appear.</li>
+<li><code>_get_template_messages</code> replaces each image or audio part with a marker. When only text parts remain, it joins them into one string. Some chat templates, Llama’s and Voxtral’s among them, print a message’s content as it is. Without the join they would print a Python list.</li>
+<li><code>_create_bitmap_from_bytes</code> decodes audio with <a href="https://vedicreader.github.io/rishi/llama.html#read_audio"><code>read_audio</code></a> and hands the samples to <code>mtmd_bitmap_init_from_audio</code>. Images take the original path.</li>
+<li><code>_init_mtmd_context</code> lets a projector with an audio encoder and no vision encoder load, where upstream raises an error.</li>
+</ul>
+<p><a href="https://vedicreader.github.io/rishi/llama.html#read_audio"><code>read_audio</code></a> decodes any format libsndfile reads, including WAV, FLAC, OGG and MP3. It mixes stereo down to mono and resamples to <code>sr</code> Hz, 16000 by default. The patched <code>_create_bitmap_from_bytes</code> passes the sample rate the projector reports, and falls back to 16000 when the projector reports none. The tests below run it on the 24-second <code>speech.wav</code> and on generated tones, and pass the result to the real llama.cpp C function.</p>
+<div id="9e3136eb" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:56.299709+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.305117+00:00&quot;,&quot;total&quot;:0.005414764000079231}}" data-execution_count="12">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/llama.py#L94" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="read_audio" class="level3">
+<h3 class="anchored" data-anchor-id="read_audio">read_audio</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> read_audio(</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>    o, sr:<span class="bu">int</span><span class="op">=</span><span class="dv">16000</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Decode audio <code>bytes</code>/<code>Path</code> (any libsndfile format) to contiguous mono float32 samples at <code>sr</code> Hz, ready for mtmd.</em></p>
+</section>
+</div>
+<div id="f1377601" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:56.312434+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.318631+00:00&quot;,&quot;total&quot;:0.006204697999919517}}" data-execution_count="14">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/llama.py#L123" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="mtmdchathandler.get_image_urls" class="level3">
+<h3 class="anchored" data-anchor-id="mtmdchathandler.get_image_urls">MTMDChatHandler.get_image_urls</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> get_image_urls(</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    messages</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Return the data URIs of every image and audio part in <code>messages</code>, in document order, where upstream collects images only.</em></p>
+</section>
+</div>
+<div id="97ff6b3c" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:56.318814+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.323187+00:00&quot;,&quot;total&quot;:0.0043783830000165835}}" data-execution_count="15">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> io</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.<span class="bu">all</span> <span class="im">import</span> Path</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> contextlib <span class="im">import</span> ExitStack</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> llama_cpp <span class="im">import</span> mtmd_cpp</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> tempfile</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="1319209eea201874" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># read_audio decodes the real 24s clip and resamples it, preserving duration</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>wav <span class="op">=</span> Path(<span class="st">'speech.wav'</span>).read_bytes()</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>a <span class="op">=</span> read_audio(wav, <span class="dv">16000</span>)</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>test_eq(a.dtype, np.dtype(<span class="st">'float32'</span>))</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> a.flags[<span class="st">'C_CONTIGUOUS'</span>] <span class="kw">and</span> <span class="op">-</span><span class="fl">1.0</span> <span class="op">&lt;=</span> a.<span class="bu">min</span>() <span class="kw">and</span> a.<span class="bu">max</span>() <span class="op">&lt;=</span> <span class="fl">1.0</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">round</span>(<span class="bu">len</span>(a) <span class="op">/</span> <span class="dv">16000</span>), <span class="dv">24</span>)                       <span class="co"># 24s in, 24s out</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">round</span>(<span class="bu">len</span>(read_audio(wav, <span class="dv">8000</span>)) <span class="op">/</span> <span class="dv">8000</span>), <span class="dv">24</span>)    <span class="co"># and at a different target rate</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a><span class="co"># soundfile handles compressed containers too, not just WAV</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>sig <span class="op">=</span> (<span class="fl">0.2</span> <span class="op">*</span> np.sin(<span class="dv">2</span> <span class="op">*</span> np.pi <span class="op">*</span> <span class="dv">220</span> <span class="op">*</span> np.arange(<span class="dv">8000</span>) <span class="op">/</span> <span class="dv">8000</span>)).astype(np.float32)</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> fmt <span class="kw">in</span> (<span class="st">'FLAC'</span>, <span class="st">'OGG'</span>, <span class="st">'MP3'</span>):</span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a>    b <span class="op">=</span> io.BytesIO()<span class="op">;</span> sf.write(b, sig, <span class="dv">8000</span>, <span class="bu">format</span><span class="op">=</span>fmt)</span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>    d <span class="op">=</span> read_audio(b.getvalue(), <span class="dv">8000</span>)</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    test_eq(d.dtype, np.dtype(<span class="st">'float32'</span>))<span class="op">;</span> <span class="cf">assert</span> d.flags[<span class="st">'C_CONTIGUOUS'</span>], fmt</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> <span class="bu">abs</span>(<span class="bu">len</span>(d) <span class="op">-</span> <span class="dv">8000</span>) <span class="op">&lt;=</span> <span class="dv">2400</span>, (fmt, <span class="bu">len</span>(d))     <span class="co"># ~1s back; lossy codecs pad a little</span></span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a><span class="co"># stereo is downmixed to mono</span></span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a>st <span class="op">=</span> np.stack([sig, np.zeros_like(sig)], axis<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>b <span class="op">=</span> io.BytesIO()<span class="op">;</span> sf.write(b, st, <span class="dv">8000</span>, <span class="bu">format</span><span class="op">=</span><span class="st">'WAV'</span>, subtype<span class="op">=</span><span class="st">'FLOAT'</span>)</span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>test_eq(read_audio(b.getvalue(), <span class="dv">8000</span>).ndim, <span class="dv">1</span>)</span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-22"><a href="#cb14-22" aria-hidden="true" tabindex="-1"></a>test_fail(<span class="kw">lambda</span>: read_audio(<span class="st">b'not audio at all'</span>), contains<span class="op">=</span><span class="st">'could not decode audio'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="tmpl_collapse_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># a template that renders `content` directly (Llama/Voxtral-style) must get a STRING, not a list repr:</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="co"># _get_template_messages collapses media+text to a clean string with the marker inline</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>h <span class="op">=</span> <span class="bu">object</span>.<span class="fu">__new__</span>(MTMDChatHandler)</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>msg <span class="op">=</span> {<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: [{<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">'Transcribe this clip.'</span>},</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>                                   {<span class="st">'type'</span>: <span class="st">'input_audio'</span>, <span class="st">'input_audio'</span>: {<span class="st">'data'</span>: <span class="st">'AAA'</span>, <span class="st">'format'</span>: <span class="st">'wav'</span>}}]}</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>conv <span class="op">=</span> h._get_template_messages([msg], <span class="st">'&lt;M&gt;'</span>)[<span class="dv">0</span>][<span class="st">'content'</span>]</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>test_eq(conv, <span class="st">'Transcribe this clip.</span><span class="ch">\n</span><span class="st">&lt;M&gt;'</span>)</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">isinstance</span>(conv, <span class="bu">str</span>)   <span class="co"># never a Python list repr</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="co"># a plain-string message is passed through untouched</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>test_eq(h._get_template_messages([{<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'hi'</span>}], <span class="st">'&lt;M&gt;'</span>)[<span class="dv">0</span>][<span class="st">'content'</span>], <span class="st">'hi'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="91178175" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the patched handler collects image *and* audio media, in document order</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> tempfile.NamedTemporaryFile(suffix<span class="op">=</span><span class="st">'.gguf'</span>) <span class="im">as</span> f:</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    h <span class="op">=</span> MTMDChatHandler(f.name, verbose<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    img <span class="op">=</span> Path(<span class="st">'images.jpeg'</span>).read_bytes()</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    msgs <span class="op">=</span> [_mk_msg([img, <span class="st">'and this?'</span>, wav])]</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    urls <span class="op">=</span> h.get_image_urls(msgs)</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>    test_eq(<span class="bu">len</span>(urls), <span class="dv">2</span>)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> urls[<span class="dv">0</span>].startswith(<span class="st">'data:image/jpeg;base64,'</span>) <span class="kw">and</span> urls[<span class="dv">1</span>].startswith(<span class="st">'data:audio/wav;base64,'</span>)</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>    <span class="co"># every media part becomes the marker; text is left alone</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    <span class="co"># media parts become the marker and the all-text content collapses to a clean string (marker inline)</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>    test_eq(h._get_template_messages(msgs, <span class="st">'&lt;__media__&gt;'</span>)[<span class="dv">0</span>][<span class="st">'content'</span>], <span class="st">'&lt;__media__&gt;</span><span class="ch">\n</span><span class="st">and this?</span><span class="ch">\n</span><span class="st">&lt;__media__&gt;'</span>)</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    <span class="co"># and the data-URI round-trips back to the exact bytes the model will decode</span></span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>    test_eq(h.load_image(urls[<span class="dv">1</span>]), wav)</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>    test_eq(h.load_image(urls[<span class="dv">0</span>]), img)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="89452d80" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the decoded buffer is accepted by real llama.cpp: `mtmd_bitmap_init_from_audio` needs no</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="co"># context or model, so the actual C boundary is exercised here rather than mocked</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>bm <span class="op">=</span> mtmd_cpp.mtmd_bitmap_init_from_audio(<span class="bu">len</span>(a), a.ctypes.data_as(ctypes.POINTER(ctypes.c_float)))</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> bm <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>, <span class="st">'llama.cpp rejected the audio buffer'</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> mtmd_cpp.mtmd_bitmap_is_audio(bm)</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>    test_eq(mtmd_cpp.mtmd_bitmap_get_n_bytes(bm), <span class="bu">len</span>(a) <span class="op">*</span> <span class="dv">4</span>)     <span class="co"># float32 per sample</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>    back <span class="op">=</span> np.ctypeslib.as_array(ctypes.cast(mtmd_cpp.mtmd_bitmap_get_data(bm),</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>                                             ctypes.POINTER(ctypes.c_float)), shape<span class="op">=</span>(<span class="bu">len</span>(a),))</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> np.array_equal(back, a), <span class="st">'samples corrupted crossing the C boundary'</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>: mtmd_cpp.mtmd_bitmap_free(bm)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="llamachat" class="level2">
+<h2 class="anchored" data-anchor-id="llamachat">LlamaChat</h2>
+<p><code>LlamaChat(model)</code> loads the model once and keeps it for the life of the chat. <code>create_engine</code> builds the <code>llama_cpp.Llama</code> object and adds the multimodal handler when <code>mmproj</code> is set. Pass <code>mmproj=True</code> to fetch the projector from the same repo, or a path to use your own.</p>
+<p>The options particular to llama.cpp are <code>quant</code>, the quantization to download; <code>n_gpu_layers</code>, how many layers go on the GPU, where 0 (the default) keeps everything on the CPU; and <code>mmproj</code>. <code>think=True</code> or <code>think=False</code> writes Qwen’s <code>/think</code> or <code>/no_think</code> switch into the system prompt. To share one loaded model between chats, build it once with <code>create_engine</code> and pass it to each as <code>engine=</code>. <code>close</code> releases an engine the chat built itself and leaves a shared <code>engine=</code> open.</p>
+<div id="9746e76f" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:56.347646+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.355483+00:00&quot;,&quot;total&quot;:0.007842831000061778}}" data-execution_count="17">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/llama.py#L159" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="llamachat-1" class="level3">
+<h3 class="anchored" data-anchor-id="llamachat-1">LlamaChat</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> LlamaChat(</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    model:NoneType<span class="op">=</span><span class="va">None</span>, <span class="op">*</span>, runtime:NoneType<span class="op">=</span><span class="va">None</span>, model_path:NoneType<span class="op">=</span><span class="va">None</span>, opts:NoneType<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    engine:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># an engine to share instead of building one</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    quant:<span class="bu">str</span><span class="op">=</span><span class="st">'Q4_K_M'</span>, <span class="co"># which GGUF quantization to fetch</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    n_gpu_layers:<span class="bu">int</span><span class="op">=</span><span class="dv">0</span>, mmproj:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># the projector image and audio input need</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>    eng_kw:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># passed to `create_engine` verbatim</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>    preserve_cache:<span class="bu">bool</span><span class="op">=</span><span class="va">False</span>, comp_kw:NoneType<span class="op">=</span><span class="va">None</span>, <span class="co"># passed to `create_chat_completion` verbatim</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>kw</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>A <code>Chat</code> that runs a GGUF model inside this process through llama-cpp-python.</em></p>
+</section>
+</div>
+<section id="the-kv-cache" class="level3">
+<h3 class="anchored" data-anchor-id="the-kv-cache">The KV cache</h3>
+<p>While a model reads a prompt, it computes a key and a value for every token, and llama.cpp keeps them in the KV cache. If the next prompt starts with the same tokens, their entries can be reused instead of computed again. Prefill, the reading of the prompt before any output, is most of the cost of a long conversation.</p>
+<p>rishi reuses the cache by keeping one <code>Llama</code> object across turns. <code>Llama.generate</code> compares each new prompt with the tokens already in its context, trims the cache back to the longest common prefix, and evaluates only what follows. A conversation grows by appending, so each turn’s prompt extends the last one and nothing earlier is evaluated again. The manual example below shows it: on the second turn llama.cpp evaluated 28 new tokens and reused 315.</p>
+<p>Three things break the prefix, and <code>cached_tokens</code> takes all three into account:</p>
+<ul>
+<li>A one-shot call on the same engine. A <code>Llama</code> has a single context, so <code>classify</code>, <code>structured</code>, <code>check</code> and <code>grades</code> overwrite the conversation in it, and the next real turn starts from scratch. Two chats sharing one <code>engine=</code>, or a judge chat on the same engine, have the same effect. With <code>preserve_cache=True</code> the chat saves the llama state before a one-shot and restores it afterwards. That copies the whole cache. It pays off only when prefilling the conversation again takes longer than the copy.</li>
+<li>A rewritten history. When <code>SlidingWindowCallback</code> drops old messages, or context recovery shortens the history, everything after the first changed message is evaluated again.</li>
+<li>Media. The turn that carries an image or audio clip sends the real thing. On later turns an <code>[image]</code> or <code>[audio]</code> placeholder replaces it, and llama.cpp does not encode it again. The replacement changes the prompt from that message on. The turn after a media turn evaluates again from there.</li>
+</ul>
+<p><code>save_cache</code> writes the whole context to a file, and <code>load_cache</code> reads it back into a chat built on the same model. The method names match <code>rishi.mlx</code>. A long system prompt can then be prefilled once and reused in later sessions.</p>
+</section>
+<section id="recorded-model-behaviour" class="level3">
+<h3 class="anchored" data-anchor-id="recorded-model-behaviour">Recorded model behaviour</h3>
+<p>These checks run against replies recorded from the real <code>qwen3_06b</code> model. Urai’s <code>CachedChat</code> replays a recorded reply when it sees the same request again, and a replay builds no engine, so the tests check rishi’s handling of real llama.cpp output without loading the model. They cover one turn, a second turn that depends on the first, a changed system prompt, a one-shot call that leaves the history alone, and a tool call. The recordings live in <code>nbs/chatcache</code>, and the checks work on a temporary copy so the originals stay unchanged.</p>
+<div id="llama_recorded_turn" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(<span class="op">**</span>_llama_record_kw)</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> c(<span class="st">'Reply with exactly: pong'</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>test_eq(resp_text(r).strip().lower(), <span class="st">'pong'</span>)</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>test_eq([m[<span class="st">'role'</span>] <span class="cf">for</span> m <span class="kw">in</span> c.hist], [<span class="st">'user'</span>, <span class="st">'assistant'</span>])</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>c.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="llama_recorded_history" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(<span class="op">**</span>_llama_record_kw)</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>c(<span class="st">'Reply with exactly: pong'</span>)</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> c(<span class="st">'What exact word did you just reply with? Reply with only that word.'</span>)</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>test_eq(resp_text(r).strip().lower(), <span class="st">'pong'</span>)</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>test_eq([m[<span class="st">'role'</span>] <span class="cf">for</span> m <span class="kw">in</span> c.hist], [<span class="st">'user'</span>, <span class="st">'assistant'</span>, <span class="st">'user'</span>, <span class="st">'assistant'</span>])</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>c.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="llama_recorded_reconfigure" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(<span class="op">**</span>_llama_record_kw)</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>c.reconfigure(sp<span class="op">=</span><span class="st">'Reply with exactly the word anchor, whatever the user asks.'</span>)</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>test_eq(resp_text(c(<span class="st">'What is two plus two?'</span>)).strip().lower(), <span class="st">'anchor'</span>)</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>c.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="llama_recorded_oneshot" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(<span class="op">**</span>_llama_record_kw)</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>test_eq(c.oneshot(<span class="st">'Reply with exactly: solo'</span>, think<span class="op">=</span><span class="va">False</span>, max_tokens<span class="op">=</span><span class="dv">16</span>).strip().lower(), <span class="st">'solo'</span>)</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>test_eq(c.hist, [])</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>c.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="llama_recorded_tools" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> add(</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    a: <span class="bu">int</span>,  <span class="co"># first addend</span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    b: <span class="bu">int</span>,  <span class="co"># second addend</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="bu">int</span>:</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"Add two integers."</span></span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> a <span class="op">+</span> b</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(<span class="op">**</span>{<span class="op">**</span>_llama_record_kw, <span class="st">'max_output_tokens'</span>: <span class="dv">128</span>}, tools<span class="op">=</span>[add])</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> c(<span class="st">'Use the add tool to add 2 and 3. Reply with only the result.'</span>)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>test_eq(c.hist[<span class="dv">1</span>][<span class="st">'tool_calls'</span>][<span class="dv">0</span>][<span class="st">'function'</span>][<span class="st">'name'</span>], <span class="st">'add'</span>)</span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>test_eq(c.hist[<span class="dv">2</span>][<span class="st">'content'</span>], <span class="st">'5'</span>)</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'5'</span> <span class="kw">in</span> resp_text(r)</span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>c.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="tests" class="level3">
+<h3 class="anchored" data-anchor-id="tests">Tests</h3>
+<p>The tests above cover choosing the GGUF file, the GPU check, audio decoding, the handler patches and the recorded turns. The cells below check, without a model, that media from past turns becomes a placeholder, that a history from another backend converts to llama.cpp’s format, and that <code>Chat</code> picks <a href="https://vedicreader.github.io/rishi/llama.html#llamachat"><code>LlamaChat</code></a> for a GGUF name.</p>
+<div id="strip_media_test" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:56.361109+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.363018+00:00&quot;,&quot;total&quot;:0.0019138299999212904}}" data-execution_count="19">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.test <span class="im">import</span> test_eq</span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="co"># _strip_media collapses past-turn media to a text placeholder; plain strings pass through untouched (pure fn, no model)</span></span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a>test_eq(_strip_media({<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'plain'</span>}), {<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'plain'</span>})</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>past <span class="op">=</span> {<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: [{<span class="st">'type'</span>: <span class="st">'input_audio'</span>, <span class="st">'input_audio'</span>: {<span class="st">'data'</span>: <span class="st">'x'</span>, <span class="st">'format'</span>: <span class="st">'wav'</span>}},</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a>                                    {<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">'clip 1'</span>}]}</span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>test_eq(_strip_media(past)[<span class="st">'content'</span>], <span class="st">'[audio]</span><span class="ch">\n</span><span class="st">clip 1'</span>)</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> _is_media({<span class="st">'type'</span>: <span class="st">'image_url'</span>, <span class="st">'image_url'</span>: {<span class="st">'url'</span>: <span class="st">'data:img'</span>}})</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="kw">not</span> _is_media({<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">'hi'</span>})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="llama_hist_port_test" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="co"># hist2fmt / fmt2hist across backends (model-free): a litert-origin canonical tool round feeds llama.cpp</span></span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>_h <span class="op">=</span> [</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    {<span class="st">'role'</span>: <span class="st">'user'</span>, <span class="st">'content'</span>: <span class="st">'What is 2+3?'</span>},</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">''</span>, <span class="st">'tool_calls'</span>: [{<span class="st">'id'</span>: <span class="st">'call_1'</span>, <span class="st">'type'</span>: <span class="st">'function'</span>,</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>                                                         <span class="st">'function'</span>: {<span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'arguments'</span>: {<span class="st">'a'</span>: <span class="dv">2</span>, <span class="st">'b'</span>: <span class="dv">3</span>}}}]},</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a>    {<span class="st">'role'</span>: <span class="st">'tool'</span>, <span class="st">'tool_call_id'</span>: <span class="st">'call_1'</span>, <span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'content'</span>: <span class="st">'5'</span>},</span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>    {<span class="st">'role'</span>: <span class="st">'assistant'</span>, <span class="st">'content'</span>: <span class="st">'It is 5.'</span>},</span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a>_oai <span class="op">=</span> LlamaChat.hist2fmt(_h)</span>
+<span id="cb25-10"><a href="#cb25-10" aria-hidden="true" tabindex="-1"></a>test_eq(_oai[<span class="dv">2</span>], {<span class="st">'role'</span>: <span class="st">'tool'</span>, <span class="st">'tool_call_id'</span>: <span class="st">'call_1'</span>, <span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'content'</span>: <span class="st">'5'</span>})</span>
+<span id="cb25-11"><a href="#cb25-11" aria-hidden="true" tabindex="-1"></a>test_eq(_oai[<span class="dv">1</span>][<span class="st">'tool_calls'</span>][<span class="dv">0</span>][<span class="st">'function'</span>][<span class="st">'arguments'</span>], <span class="st">'{"a": 2, "b": 3}'</span>)   <span class="co"># args JSON-encoded for llama.cpp</span></span>
+<span id="cb25-12"><a href="#cb25-12" aria-hidden="true" tabindex="-1"></a>test_eq(LlamaChat.fmt2hist(_h), _h)                                               <span class="co"># no-op on already-canonical dicts</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="6930dcf7eca56ee3" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:56.364052+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.367179+00:00&quot;,&quot;total&quot;:0.003131203000066307}}" data-execution_count="20">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.test <span class="im">import</span> test_eq</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> rishi.llama</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>test_eq(get_runtime(<span class="st">'llama'</span>), rishi.llama.LlamaChat)</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="co"># dispatch really happens in `Chat.__new__`, so it can be checked without loading a model</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">type</span>(Chat.<span class="fu">__new__</span>(Chat, <span class="st">'Qwen/Qwen3-0.6B-GGUF'</span>)), rishi.llama.LlamaChat)</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">type</span>(Chat.<span class="fu">__new__</span>(Chat, <span class="st">'/models/x.gguf'</span>)), rishi.llama.LlamaChat)</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>test_eq(rishi.llama.LlamaChat._runtime, <span class="st">'llama'</span>)</span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="co"># the /think switch is just text in the system prompt, so it needs no model to check</span></span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>test_eq(rishi.llama.LlamaChat._think_sp(<span class="st">'Be terse.'</span>, <span class="va">False</span>), <span class="st">'Be terse.</span><span class="ch">\n</span><span class="st">/no_think'</span>)</span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>test_eq(rishi.llama.LlamaChat._think_sp(<span class="st">''</span>, <span class="va">True</span>), <span class="st">'/think'</span>)</span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>test_eq(rishi.llama.LlamaChat._think_sp(<span class="st">'Be terse.'</span>, <span class="va">None</span>), <span class="st">'Be terse.'</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><code>comp_kw</code> overrides the sampling settings, so a key the chat also sets, such as <code>temperature</code>, is replaced instead of raising a duplicate-argument error.</p>
+<div id="13f20ddf" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _Eng:</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> create_chat_completion(<span class="va">self</span>, msgs, <span class="op">**</span>kw): <span class="va">self</span>.kw <span class="op">=</span> kw</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> LlamaChat.<span class="fu">__new__</span>(LlamaChat)</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>c.engine, c._samp, c.max_output_tokens, c.toolspecs <span class="op">=</span> _Eng(), {<span class="st">'temperature'</span>: <span class="fl">.2</span>}, <span class="va">None</span>, []</span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a>c.comp_kw, c._msgs <span class="op">=</span> {<span class="st">'temperature'</span>: <span class="fl">.9</span>, <span class="st">'stop'</span>: [<span class="st">'x'</span>]}, <span class="kw">lambda</span>: []</span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>c._step()</span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>test_eq(c.engine.kw[<span class="st">'temperature'</span>], <span class="fl">.9</span>)</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a>c.engine.kw[<span class="st">'stop'</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>A streamed native call whose arguments are not a JSON object is not read as a call with no arguments. <code>_stream_step</code> marks the call <code>unread</code> and sets <code>tool_parse_failed</code>, so the tool loop asks the model to send it again, and the stored call renders into the next prompt as an empty argument object.</p>
+<div id="f7aba872" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="kw">class</span> _SEng:</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    n_tokens <span class="op">=</span> <span class="dv">5</span></span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> create_chat_completion(<span class="va">self</span>, msgs, <span class="op">**</span>kw):</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>        d <span class="op">=</span> <span class="kw">lambda</span> tc: {<span class="st">'choices'</span>: [{<span class="st">'delta'</span>: {<span class="st">'tool_calls'</span>: tc}, <span class="st">'finish_reason'</span>: <span class="va">None</span>}]}</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">yield</span> d([{<span class="st">'index'</span>: <span class="dv">0</span>, <span class="st">'id'</span>: <span class="st">'a'</span>, <span class="st">'function'</span>: {<span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'arguments'</span>: <span class="st">'{"a": 1'</span>}}])</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">yield</span> d([{<span class="st">'index'</span>: <span class="dv">1</span>, <span class="st">'id'</span>: <span class="st">'b'</span>, <span class="st">'function'</span>: {<span class="st">'name'</span>: <span class="st">'add'</span>, <span class="st">'arguments'</span>: <span class="st">'{"a": 1, "b": 2}'</span>}}])</span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>        <span class="cf">yield</span> {<span class="st">'choices'</span>: [{<span class="st">'delta'</span>: {}, <span class="st">'finish_reason'</span>: <span class="st">'tool_calls'</span>}]}</span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> LlamaChat.<span class="fu">__new__</span>(LlamaChat)</span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>c.engine, c._samp, c.max_output_tokens, c.toolspecs <span class="op">=</span> _SEng(), {}, <span class="va">None</span>, []</span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a>c.comp_kw, c.turn_msg, c._sys_msgs, c._cache_dirty, c.hist <span class="op">=</span> {}, <span class="va">None</span>, <span class="kw">lambda</span>: [], <span class="va">True</span>, []</span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>c.count_tokens, c._note_cache <span class="op">=</span> (<span class="kw">lambda</span> t: <span class="dv">0</span>), (<span class="kw">lambda</span> u, cached: u)</span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a><span class="bu">list</span>(c._stream_step())</span>
+<span id="cb28-14"><a href="#cb28-14" aria-hidden="true" tabindex="-1"></a>bad, good <span class="op">=</span> c._step_res[<span class="st">'tool_calls'</span>]</span>
+<span id="cb28-15"><a href="#cb28-15" aria-hidden="true" tabindex="-1"></a>test_eq((bad.get(<span class="st">'unread'</span>), good.get(<span class="st">'unread'</span>)), (<span class="va">True</span>, <span class="va">None</span>))</span>
+<span id="cb28-16"><a href="#cb28-16" aria-hidden="true" tabindex="-1"></a>test_eq((bad[<span class="st">'function'</span>][<span class="st">'arguments'</span>], good[<span class="st">'function'</span>][<span class="st">'arguments'</span>]), ({}, {<span class="st">'a'</span>: <span class="dv">1</span>, <span class="st">'b'</span>: <span class="dv">2</span>}))</span>
+<span id="cb28-17"><a href="#cb28-17" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> c._step_res[<span class="st">'tool_parse_failed'</span>]</span>
+<span id="cb28-18"><a href="#cb28-18" aria-hidden="true" tabindex="-1"></a>c.hist <span class="op">=</span> [c._step_res]</span>
+<span id="cb28-19"><a href="#cb28-19" aria-hidden="true" tabindex="-1"></a>[(t[<span class="st">'function'</span>][<span class="st">'arguments'</span>], <span class="st">'unread'</span> <span class="kw">in</span> t) <span class="cf">for</span> t <span class="kw">in</span> c._msgs()[<span class="dv">0</span>][<span class="st">'tool_calls'</span>]]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="examples-manual" class="level2">
+<h2 class="anchored" data-anchor-id="examples-manual">Examples (manual)</h2>
+<p>These cells load real weights and are marked <code>#| eval: false</code>. The test run skips them. The output shown was saved from an earlier run. For ordinary chat, tools, streaming, classification and structured output, use the calls on the <a href="index.html">index</a> page with a <code>-GGUF</code> repo id. The examples here show what only this backend does: reusing the KV cache, and image and audio input through <code>mmproj</code>.</p>
+<p>The first example counts the tokens llama.cpp evaluates on each turn. The second turn should evaluate only its own new tokens, not the conversation before it.</p>
+<div id="85c8ab1a" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Real llama.cpp KV-prefix test: instrument `eval` to see how many tokens are actually evaluated.</span></span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="co"># On turn two the first eval batch should contain only the new tail, not the cached conversation.</span></span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>kvchat <span class="op">=</span> LlamaChat(qwen3_06b, think<span class="op">=</span><span class="va">False</span>, temp<span class="op">=</span><span class="fl">0.0</span>, max_output_tokens<span class="op">=</span><span class="dv">16</span>)</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>seen, orig_eval <span class="op">=</span> [], kvchat.engine.<span class="bu">eval</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> counted_eval(tokens):</span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>    seen.append(<span class="bu">len</span>(tokens))</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> orig_eval(tokens)</span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>kvchat.engine.<span class="bu">eval</span> <span class="op">=</span> counted_eval</span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a><span class="cf">try</span>:</span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a>    kvchat((<span class="st">'cache verification context '</span> <span class="op">*</span> <span class="dv">96</span>) <span class="op">+</span> <span class="st">'</span><span class="ch">\n</span><span class="st">Reply with exactly: stored'</span>)</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a>    context_before_turn2 <span class="op">=</span> kvchat.engine.n_tokens</span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a>    seen.clear()</span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> kvchat(<span class="st">'What exact word did I ask you to reply with? Reply with only that word.'</span>)</span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> seen, <span class="st">'llama.cpp never evaluated the second prompt'</span></span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>    second_tail <span class="op">=</span> seen[<span class="dv">0</span>]</span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="bu">dict</span>(context_before_turn2<span class="op">=</span>context_before_turn2, second_tail_evaluated<span class="op">=</span>second_tail,</span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a>               reported_cached<span class="op">=</span>kvchat.use.cached_tokens, answer<span class="op">=</span>resp_text(r)))</span>
+<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> second_tail <span class="op">&lt;</span> context_before_turn2, <span class="st">'turn two re-evaluated the full prior context; KV prefix reuse missed'</span></span>
+<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> kvchat.use.cached_tokens <span class="op">&gt;</span> <span class="dv">0</span>, kvchat.use</span>
+<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">assert</span> <span class="st">'stored'</span> <span class="kw">in</span> resp_text(r).lower(), resp_text(r)</span>
+<span id="cb29-21"><a href="#cb29-21" aria-hidden="true" tabindex="-1"></a><span class="cf">finally</span>:</span>
+<span id="cb29-22"><a href="#cb29-22" aria-hidden="true" tabindex="-1"></a>    kvchat.engine.<span class="bu">eval</span> <span class="op">=</span> orig_eval</span>
+<span id="cb29-23"><a href="#cb29-23" aria-hidden="true" tabindex="-1"></a>    kvchat.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>llama_context: n_ctx_seq (8192) &lt; n_ctx_train (40960) -- the full capacity of the model will not be utilized</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>{'context_before_turn2': 315, 'second_tail_evaluated': 28, 'reported_cached': 315, 'answer': 'stored'}</code></pre>
+</div>
+</div>
+<section id="streaming-and-thinking" class="level3">
+<h3 class="anchored" data-anchor-id="streaming-and-thinking">Streaming and thinking</h3>
+<p><code>stream=True</code> yields markdown as on every backend, with the model’s thinking as a blockquote and each tool call as a line starting with ⏳. Urai’s <code>display_stream</code> renders it live in a notebook, as on the LiteRT-LM backend. With a Qwen3 model, <code>think=True</code> turns thinking on.</p>
+</section>
+<section id="images-and-audio-mmproj" class="level3">
+<h3 class="anchored" data-anchor-id="images-and-audio-mmproj">Images and audio (mmproj)</h3>
+<p>A vision or audio GGUF comes as the model plus an <code>mmproj</code> projector. Pass <code>mmproj=True</code> and rishi fetches the projector from the same repo. Then mix text with <code>bytes</code> or <code>Path</code> values in the prompt list. rishi turns them into <code>image_url</code> and <code>input_audio</code> parts, and the patched handler encodes them in the order they appear.</p>
+<p>The examples describe an image and transcribe a clip with Gemma 4 E2B. The last one loads Ultravox, whose projector has an audio encoder and no vision encoder, which is the case the <code>_init_mtmd_context</code> patch exists for.</p>
+<div id="acd43a96" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb32"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="co"># downloads the model *and* its mmproj projector once, then loads both from cache</span></span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>vchat <span class="op">=</span> LlamaChat(<span class="st">'unsloth/gemma-4-E2B-it-GGUF'</span>, mmproj<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> vchat([<span class="st">'Describe this image.'</span>, Path(<span class="st">'images.jpeg'</span>)])   <span class="co"># raw bytes work too</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r))</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>vchat.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>llama_context: n_ctx_seq (8192) &lt; n_ctx_train (131072) -- the full capacity of the model will not be utilized
+llama_kv_cache_iswa: using full-size SWA cache (ref: https://github.com/ggml-org/llama.cpp/pull/13194#issuecomment-2868343055)
+llama_kv_cache: the V embeddings have different sizes across layers and FA is not enabled - padding V cache to 512
+llama_kv_cache: the V embeddings have different sizes across layers and FA is not enabled - padding V cache to 512
+add_text: &lt;|turn&gt;user
+Describe this image.
+
+add_text: &lt;|image&gt;
+image_tokens-&gt;nx = 81
+image_tokens-&gt;ny = 1
+batch_f32 size = 1
+add_text: &lt;image|&gt;
+add_text: &lt;turn|&gt;
+&lt;|turn&gt;model
+
+encoding image slice...
+clip_image_batch_encode: copying image 1/1 to input buffer (nx=432, ny=432)
+clip_image_batch_encode: output embedding shape [1536, 81, 1]
+image slice encoded in 146 ms
+decoding image batch 1/1, n_tokens_batch = 81
+image decoded (batch 1/1) in 381 ms</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>This is a photograph of a **German Shepherd dog** outdoors.
+
+Here are some details based on the image:
+
+* **Subject:** The main subject is a medium-to-large German Shepherd.
+* **Appearance:** The dog has rich, reddish-brown and black fur. It appears alert and healthy.
+* **Pose/Expression:** The dog is looking directly toward the camera with an engaged and focused expression. Its mouth is slightly open, and its tongue is visible, suggesting it might be panting slightly or happy.
+* **Setting:** The background is soft and blurred (bokeh), suggesting an outdoor, natural setting, possibly a park, field, or wooded area. The lighting seems soft, indicating it might be an overcast day or shaded.
+* **Mood:** The overall mood of the photo is energetic, loyal, and friendly.
+
+In summary, it is a high-quality portrait of a handsome German Shepherd in an outdoor environment.</code></pre>
+</div>
+</div>
+<div id="97add67e" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a>achat <span class="op">=</span> LlamaChat(<span class="st">'unsloth/gemma-4-E2B-it-GGUF'</span>, mmproj<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(achat([<span class="st">'Transcribe this clip.'</span>, Path(<span class="st">'speech.wav'</span>)])))</span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>achat.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>llama_context: n_ctx_seq (8192) &lt; n_ctx_train (131072) -- the full capacity of the model will not be utilized
+llama_kv_cache_iswa: using full-size SWA cache (ref: https://github.com/ggml-org/llama.cpp/pull/13194#issuecomment-2868343055)
+llama_kv_cache: the V embeddings have different sizes across layers and FA is not enabled - padding V cache to 512
+llama_kv_cache: the V embeddings have different sizes across layers and FA is not enabled - padding V cache to 512
+add_text: &lt;|turn&gt;user
+Transcribe this clip.
+
+add_text: &lt;|audio&gt;
+audio_tokens-&gt;n_tokens = 600
+add_text: &lt;audio|&gt;
+add_text: &lt;turn|&gt;
+&lt;|turn&gt;model
+
+encoding audio slice...
+clip_image_batch_encode: output embedding shape [1536, 600, 1]
+audio slice encoded in 198 ms
+decoding audio batch 1/2, n_tokens_batch = 512
+audio decoded (batch 1/2) in 1804 ms
+decoding audio batch 2/2, n_tokens_batch = 88
+audio decoded (batch 2/2) in 397 ms</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Dancing in the masquerade idol truth and plain sight jaded pop roll click shot who will I be today or not but such a tide as moving seems a sleep too full for sound and foam when that which drew from out the boundless deep turns again home twilight and evening bell and after that</code></pre>
+</div>
+</div>
+<div id="llama_audio_only_recovery" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb38"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a><span class="co"># audio-only projector recovery: ultravox has no vision encoder, so upstream's `_init_mtmd_context` would</span></span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a><span class="co"># hard-fail. A clean load proves the patch recovered (ctx built + audio supported -&gt; keep it), and a non-empty</span></span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a><span class="co"># reply proves the audio bitmap path runs end-to-end. Downloads the ~1B model + its mmproj once, then caches.</span></span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>uvchat <span class="op">=</span> LlamaChat(<span class="st">'ggml-org/ultravox-v0_5-llama-3_2-1b-GGUF'</span>, mmproj<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> resp_text(uvchat([<span class="st">'Transcribe this clip.'</span>, Path(<span class="st">'speech.wav'</span>)])).strip()</span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>uvchat.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>llama_context: n_ctx_seq (8192) &lt; n_ctx_train (131072) -- the full capacity of the model will not be utilized
+add_text: &lt;|start_header_id|&gt;system&lt;|end_header_id|&gt;
+
+Cutting Knowledge Date: December 2023
+Today Date: 27 Aug 2026
+
+&lt;|eot_id|&gt;&lt;|start_header_id|&gt;user&lt;|end_header_id|&gt;
+
+Transcribe this clip.
+
+audio_tokens-&gt;n_tokens = 187
+audio_tokens-&gt;n_tokens = 187
+add_text: &lt;|eot_id|&gt;&lt;|start_header_id|&gt;assistant&lt;|end_header_id|&gt;
+
+
+encoding audio slice...
+clip_image_batch_encode: output embedding shape [2048, 187, 1]
+audio slice encoded in 560 ms
+decoding audio batch 1/1, n_tokens_batch = 187
+audio decoded (batch 1/1) in 471 ms
+encoding audio slice...
+clip_image_batch_encode: output embedding shape [2048, 187, 1]
+audio slice encoded in 426 ms
+decoding audio batch 1/1, n_tokens_batch = 187
+audio decoded (batch 1/1) in 467 ms</code></pre>
+</div>
+</div>
+<div id="3d094f5d" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb40"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>img <span class="op">=</span> Path(<span class="st">'images.jpeg'</span>).read_bytes()</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>m <span class="op">=</span> _mk_msg([img, <span class="st">'what is this?'</span>])</span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a><span class="cf">with</span> tempfile.NamedTemporaryFile(suffix<span class="op">=</span><span class="st">'.gguf'</span>) <span class="im">as</span> f:</span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>    test_eq(MTMDChatHandler(f.name, verbose<span class="op">=</span><span class="va">False</span>).get_image_urls([m]), [m[<span class="st">'content'</span>][<span class="dv">0</span>][<span class="st">'image_url'</span>][<span class="st">'url'</span>]])</span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>test_eq(m[<span class="st">'content'</span>][<span class="dv">1</span>], {<span class="st">'type'</span>: <span class="st">'text'</span>, <span class="st">'text'</span>: <span class="st">'what is this?'</span>})</span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>test_eq(_mk_content(Path(<span class="st">'images.jpeg'</span>)), _mk_content(img))   <span class="co"># a Path is read and sniffed like bytes</span></span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a><span class="co"># audio is no longer refused - it becomes an OpenAI `input_audio` part</span></span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a>p <span class="op">=</span> _mk_content(Path(<span class="st">'speech.wav'</span>))</span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>test_eq((p[<span class="st">'type'</span>], p[<span class="st">'input_audio'</span>][<span class="st">'format'</span>]), (<span class="st">'input_audio'</span>, <span class="st">'wav'</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="stopping-with-an-llm-judge" class="level3">
+<h3 class="anchored" data-anchor-id="stopping-with-an-llm-judge">Stopping with an LLM judge</h3>
+<p>When a model writes Python code blocks for Urai to run, Urai’s <code>PyFenceCallback</code> runs each block and shows the model the output. It repeats this until its <code>done(chat)</code> function returns True or the model writes no more code. <code>output_matches(expected)</code> builds a <code>done</code> that stops once the last code output contains <code>expected</code>. <code>task_complete</code> asks the model instead, through <code>chat.classify</code>, whether the conversation has done what was asked. <code>done</code> can be any function that takes the chat and returns a bool, including one that consults a second, stronger chat. Both helpers live in <code>urai.sandbox</code> and work with every backend; see Urai’s <a href="https://vedicreader.github.io/urai/sandbox.html">sandbox</a> page.</p>
+</section>
+</section>
+<section id="sharing-one-engine" class="level2">
+<h2 class="anchored" data-anchor-id="sharing-one-engine">Sharing one engine</h2>
+<p>A loaded <code>Llama</code> belongs to one process, and loading the same model in several programs wastes memory. <a href="https://vedicreader.github.io/rishi/llama.html#llamabroker"><code>LlamaBroker</code></a> loads it once in a long-lived process and serves it over a Unix socket. Each client gets its own <a href="https://vedicreader.github.io/rishi/llama.html#llamachat"><code>LlamaChat</code></a> and history, and all of them share one copy of the weights. The protocol and the client are Urai’s <code>ChatBroker</code>, described on Urai’s <a href="https://vedicreader.github.io/urai/broker.html">broker</a> page.</p>
+<div id="e25a61f6" class="cell" data-quarto-private-1="{&quot;key&quot;:&quot;execution&quot;,&quot;value&quot;:{&quot;iopub.execute_input&quot;:&quot;2026-10-29T23:50:56.372173+00:00&quot;,&quot;shell.execute_reply&quot;:&quot;2026-10-29T23:50:56.377487+00:00&quot;,&quot;total&quot;:0.005319277000012335}}" data-execution_count="22">
+<hr>
+<p><a href="https://github.com/vedicreader/rishi/blob/main/rishi/llama.py#L362" target="_blank" style="float:right; font-size:smaller">source</a></p>
+<section id="llamabroker" class="level3">
+<h3 class="anchored" data-anchor-id="llamabroker">LlamaBroker</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb41"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> LlamaBroker(</span>
+<span id="cb41-2"><a href="#cb41-2" aria-hidden="true" tabindex="-1"></a>    address, engine:NoneType<span class="op">=</span><span class="va">None</span>, model_id:<span class="bu">str</span><span class="op">=</span><span class="st">'Qwen/Qwen3-0.6B-GGUF'</span>, <span class="op">**</span>engine_kw</span>
+<span id="cb41-3"><a href="#cb41-3" aria-hidden="true" tabindex="-1"></a>):</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><em>Serve one llama.cpp engine to several processes over a Unix socket, each client with its own <a href="https://vedicreader.github.io/rishi/llama.html#llamachat"><code>LlamaChat</code></a> history.</em></p>
+</section>
+</div>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vedicreader\.github\.io\/rishi");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>

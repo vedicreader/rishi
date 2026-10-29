@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.19">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>mlx – rishi</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-66a38d7287321bc50e069add96f8c30e.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "navbar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "end",
+  "type": "overlay",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+<link rel="stylesheet" href="styles.css">
+<meta property="og:title" content="mlx – rishi">
+<meta property="og:description" content="fast local llm driver with tools">
+<meta property="og:site_name" content="rishi">
+<meta name="twitter:title" content="mlx – rishi">
+<meta name="twitter:description" content="fast local llm driver with tools">
+<meta name="twitter:card" content="summary">
+</head>
+
+<body class="nav-sidebar floating nav-fixed quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+    <nav class="navbar navbar-expand-lg " data-bs-theme="dark">
+      <div class="navbar-container container-fluid">
+      <div class="navbar-brand-container mx-auto">
+    <a class="navbar-brand" href="./index.html">
+    <span class="navbar-title">rishi</span>
+    </a>
+  </div>
+        <div class="quarto-navbar-tools tools-end">
+</div>
+          <div id="quarto-search" class="" title="Search"></div>
+      </div> <!-- /container-fluid -->
+    </nav>
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./mlx.html">mlx</a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article page-navbar">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">rishi</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./core.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">core</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./llama.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">llama</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./litert.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">litert</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./mlx.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text">mlx</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./remote.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">remote</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./claude.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">claude</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./copilot.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">copilot</span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./ollama.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">ollama</span></a>
+  </div>
+</li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">On this page</h2>
+   
+  <ul>
+  <li><a href="#mlx" id="toc-mlx" class="nav-link active" data-scroll-target="#mlx">mlx</a>
+  <ul class="collapse">
+  <li><a href="#loading-models" id="toc-loading-models" class="nav-link" data-scroll-target="#loading-models">Loading models</a></li>
+  <li><a href="#the-prompt-cache" id="toc-the-prompt-cache" class="nav-link" data-scroll-target="#the-prompt-cache">The prompt cache</a></li>
+  <li><a href="#mlxchat" id="toc-mlxchat" class="nav-link" data-scroll-target="#mlxchat">MlxChat</a></li>
+  <li><a href="#vision-and-audio" id="toc-vision-and-audio" class="nav-link" data-scroll-target="#vision-and-audio">Vision and audio</a>
+  <ul class="collapse">
+  <li><a href="#tests" id="toc-tests" class="nav-link" data-scroll-target="#tests">Tests</a></li>
+  <li><a href="#recorded-model-behaviour" id="toc-recorded-model-behaviour" class="nav-link" data-scroll-target="#recorded-model-behaviour">Recorded model behaviour</a></li>
+  </ul></li>
+  <li><a href="#examples-manual" id="toc-examples-manual" class="nav-link" data-scroll-target="#examples-manual">Examples (manual)</a>
+  <ul class="collapse">
+  <li><a href="#images-and-audio" id="toc-images-and-audio" class="nav-link" data-scroll-target="#images-and-audio">Images and audio</a></li>
+  </ul></li>
+  <li><a href="#sharing-one-engine" id="toc-sharing-one-engine" class="nav-link" data-scroll-target="#sharing-one-engine">Sharing one engine</a></li>
+  </ul></li>
+  </ul>
+<div class="toc-actions"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div><div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="mlx.html.md"><i class="bi bi-file-code"></i>Markdown</a></li></ul></div></nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">mlx</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<!-- WARNING: THIS FILE WAS AUTOGENERATED! DO NOT EDIT! -->
+<section id="mlx" class="level1">
+<h1>mlx</h1>
+<blockquote class="blockquote">
+<p>Run models on Apple Silicon with <a href="https://github.com/ml-explore/mlx-lm">mlx-lm</a>, with a prompt cache rishi manages itself, speculative decoding, a quantized KV cache, and vision and audio through mlx-vlm.</p>
+</blockquote>
+<p>MLX is Apple’s array framework for its own chips, and mlx-lm runs language models on it. This backend needs an Apple Silicon Mac and <code>pip install 'rishi[mlx]'</code>. The notebook is marked <code>skip_exec</code>, so the automated tests and the docs build do not run it, and the output shown was saved on a Mac. Behaviour shared with every backend is on the <a href="index.html">index</a> page and in <a href="https://vedicreader.github.io/urai">Urai</a>.</p>
+<div id="df471fe81f1910f6" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> fastcore.test <span class="im">import</span> test_eq, test_fail, test_close</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<section id="loading-models" class="level2">
+<h2 class="anchored" data-anchor-id="loading-models">Loading models</h2>
+<p>MLX models are Hugging Face repos of quantized weights, most of them under <a href="https://huggingface.co/mlx-community">mlx-community</a>. A LiteRT-LM model is one <code>.litertlm</code> file and a llama.cpp model one <code>.gguf</code> file, but an MLX model is a whole directory. <code>mlx_lm.load</code> takes the repo id and downloads and caches it itself, so there is no file to pick.</p>
+<p>Two things have to be known before loading, and both come from the repo’s <code>config.json</code>, which <a href="https://vedicreader.github.io/rishi/mlx.html#read_config"><code>read_config</code></a> reads from a local directory or the Hub. It returns <code>{}</code> when the file cannot be read. One is the context window, which <a href="https://vedicreader.github.io/rishi/mlx.html#ctx_len"><code>ctx_len</code></a> reads, 8192 when the config does not give one. The other is whether the model has a vision or audio tower, a second network that encodes pictures or sound for the language model; <a href="https://vedicreader.github.io/rishi/mlx.html#is_vlm"><code>is_vlm</code></a> checks for one. A model with a tower needs mlx-vlm instead of mlx-lm. <a href="https://vedicreader.github.io/rishi/mlx.html#cached_models"><code>cached_models</code></a> lists the repos in the local Hugging Face cache whose ids contain <code>mlx</code>, without using the network. <a href="https://vedicreader.github.io/rishi/mlx.html#mlxengine"><code>MlxEngine</code></a> holds a loaded model, its tokenizer and an optional draft model.</p>
+<div id="785056d399389b0b" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>test_eq(ctx_len({<span class="st">'max_position_embeddings'</span>: <span class="dv">40960</span>}), <span class="dv">40960</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>test_eq(ctx_len({<span class="st">'text_config'</span>: {<span class="st">'max_position_embeddings'</span>: <span class="dv">128000</span>}}), <span class="dv">128000</span>)   <span class="co"># VLMs nest it</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>test_eq(ctx_len({}), <span class="dv">8192</span>)                                                       <span class="co"># fallback</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> is_vlm(<span class="va">None</span>, cfg<span class="op">=</span>{<span class="st">'vision_config'</span>: {}})</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> is_vlm(<span class="va">None</span>, cfg<span class="op">=</span>{<span class="st">'audio_config'</span>: {}})</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="kw">not</span> is_vlm(<span class="va">None</span>, cfg<span class="op">=</span>{<span class="st">'hidden_size'</span>: <span class="dv">2048</span>})</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>test_eq(read_config(<span class="st">'/definitely/not/a/model'</span>), {})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="the-prompt-cache" class="level2">
+<h2 class="anchored" data-anchor-id="the-prompt-cache">The prompt cache</h2>
+<p>The KV cache holds the keys and values computed for tokens the model has already read, so a prompt that starts the same way as the last one does not have to be read again. LiteRT-LM keeps that state inside its conversation object, and llama.cpp finds the longest matching prefix on its own. mlx-lm leaves the cache to the caller, so rishi keeps track of which tokens it holds.</p>
+<p>On each turn the chat renders the whole conversation to token ids with the model’s chat template, and compares them with <code>_cache_ids</code>, the tokens the cache holds, using <code>common_prefix_len</code>. Everything up to the first difference is already cached and is skipped. Everything after it is stale. The chat trims it off the end of the cache with <code>trim_prompt_cache</code> before generating. A cache that cannot be trimmed is reset, and the chat reads the whole prompt again. mlx-lm’s own server reuses a cache between requests the same way.</p>
+<p>Stale tokens do turn up. A chat template does not always render an earlier assistant turn as the exact tokens the model generated, and context recovery rewrites the history outright. Comparing tokens instead of trusting the cache handles both cases. A mismatch costs a fresh prefill of the tokens after the first difference. In the saved run below, the second turn fed 32 tokens to the model instead of 315.</p>
+</section>
+<section id="mlxchat" class="level2">
+<h2 class="anchored" data-anchor-id="mlxchat">MlxChat</h2>
+<p><a href="https://vedicreader.github.io/rishi/mlx.html#mlxchat"><code>MlxChat</code></a> has the same interface as every other backend. <code>max_output_tokens</code> defaults to <code>DFLT_MAX_TOKENS</code>, 1024. When the repo’s config declares a vision or audio tower, <code>MlxChat(...)</code> returns an <a href="https://vedicreader.github.io/rishi/mlx.html#mlxvlmchat"><code>MlxVlmChat</code></a>. Pass <code>vlm=True</code> or <code>vlm=False</code> to override that check. Its own options are these:</p>
+<ul>
+<li><code>kv_bits</code> stores the KV cache quantized to that many bits. This saves memory on long contexts. Quantization starts after the first <code>quantized_kv_start</code> tokens, and <code>kv_group_size</code> sets the group size, 64 by default.</li>
+<li><code>draft_model</code> names a small model for speculative decoding. The draft model guesses several tokens ahead and the main model checks them in one pass, which is faster when the guesses are good. The chat then keeps a cache for both models.</li>
+<li><code>adapter_path</code> applies a LoRA adapter.</li>
+<li><code>prompt_cache=False</code> turns the cache off, and <code>max_kv_size</code> caps its size.</li>
+<li><code>min_p</code> sets a sampling threshold. <code>tmpl_kw</code>, <code>gen_kw</code> and <code>eng_kw</code> pass extra keyword arguments to <code>apply_chat_template</code>, <code>stream_generate</code> and <code>create_engine</code>.</li>
+</ul>
+<p><code>save_cache</code> and <code>load_cache</code> write the cache to a file and read it back. <code>save_cache</code> raises <code>ValueError</code> when <code>prompt_cache=False</code>. <code>load_cache</code> raises <code>ValueError</code> for a file made with a different model or different cache settings, and for a file that rishi did not write. <code>chat.use.cached_tokens</code> reports how many prompt tokens each turn reused.</p>
+</section>
+<section id="vision-and-audio" class="level2">
+<h2 class="anchored" data-anchor-id="vision-and-audio">Vision and audio</h2>
+<p>mlx-lm reads text only. Images and audio go through <a href="https://github.com/Blaizzy/mlx-vlm">mlx-vlm</a>, which builds on mlx-lm and adds the vision and audio towers. Install it with <code>pip install 'rishi[mlx-vlm]'</code>.</p>
+<p>You do not have to pick the class. <code>MlxChat(repo)</code> reads the repo’s <code>config.json</code> and returns an <a href="https://vedicreader.github.io/rishi/mlx.html#mlxvlmchat"><code>MlxVlmChat</code></a> when it finds a vision or audio tower. <code>Chat('mlx-community/Qwen3-VL-4B-Instruct-4bit')</code> works as it is. Pass <code>vlm=True</code> or <code>vlm=False</code> to decide yourself.</p>
+<p><a href="https://vedicreader.github.io/rishi/mlx.html#mlxvlmchat"><code>MlxVlmChat</code></a> changes only loading, prompt building and the generate call, and inherits the history, callbacks and tool loop. It has two limits. mlx-vlm has no per-model tool-call parsers. Tool calls work only with models that write <code>&lt;tool_call&gt;</code> tags, and not every vision model does. mlx-vlm also keeps its own cache of image features instead of a token KV cache. Prompt reuse between turns is off on this path. Images must be bytes or local files. A remote image URL raises <code>ValueError</code>.</p>
+<p>Audio takes the same path. Give a <code>Path</code> or bytes to a model with an audio tower, and mlx-vlm decodes it and resamples it to the rate the model expects. One setting is rishi’s rather than mlx-vlm’s: thinking. By default mlx-vlm asks the chat template for <code>enable_thinking=False</code>, which inserts an empty <code>&lt;think&gt;&lt;/think&gt;</code> block. A model told it has finished thinking can end its turn at once. Qwen3-Omni then transcribes nothing. rishi passes its own <code>think</code> setting instead. With the default <code>think=None</code>, the model’s chat template decides.</p>
+<section id="tests" class="level3">
+<h3 class="anchored" data-anchor-id="tests">Tests</h3>
+<p>The automated test run skips this notebook. On a Mac with the weights downloaded, the cells below check recorded turns, the cache layout with a draft model, media handling, and which class <code>Chat</code> picks for an MLX name. The <code>#| eval: false</code> cells further down load real models.</p>
+</section>
+<section id="recorded-model-behaviour" class="level3">
+<h3 class="anchored" data-anchor-id="recorded-model-behaviour">Recorded model behaviour</h3>
+<p>These checks run against replies recorded from the real <code>qwen3_06b</code> MLX model. Urai’s <code>CachedChat</code> replays a recorded reply when it sees the same request again, without loading the model, and the checks work on a temporary copy of <code>nbs/chatcache</code>.</p>
+<div id="mlx_recorded_turn" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(<span class="op">**</span>_mlx_record_kw)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> c(<span class="st">'Reply with exactly: pong'</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'pong'</span> <span class="kw">in</span> resp_text(r).lower()</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>test_eq([m[<span class="st">'role'</span>] <span class="cf">for</span> m <span class="kw">in</span> c.hist], [<span class="st">'user'</span>, <span class="st">'assistant'</span>])</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>c.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="mlx_recorded_history" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(<span class="op">**</span>_mlx_record_kw)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>c(<span class="st">'Reply with exactly: pong'</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> c(<span class="st">'What exact word did you just reply with? Reply with only that word.'</span>)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'pong'</span> <span class="kw">in</span> resp_text(r).lower()</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>test_eq([m[<span class="st">'role'</span>] <span class="cf">for</span> m <span class="kw">in</span> c.hist], [<span class="st">'user'</span>, <span class="st">'assistant'</span>, <span class="st">'user'</span>, <span class="st">'assistant'</span>])</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>c.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="mlx_recorded_reconfigure" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(<span class="op">**</span>_mlx_record_kw)</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>c.reconfigure(sp<span class="op">=</span><span class="st">'Reply with exactly the word anchor, whatever the user asks.'</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> c(<span class="st">'What is two plus two?'</span>)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> resp_text(r).strip()</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>c.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="mlx_recorded_oneshot" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(<span class="op">**</span>_mlx_record_kw)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> c.oneshot(<span class="st">'Reply with exactly: solo'</span>, think<span class="op">=</span><span class="va">False</span>, max_tokens<span class="op">=</span><span class="dv">16</span>).strip()</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>test_eq(c.hist, [])</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>c.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="mlx_recorded_tools" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> add(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    a: <span class="bu">int</span>,  <span class="co"># first addend</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    b: <span class="bu">int</span>,  <span class="co"># second addend</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>) <span class="op">-&gt;</span> <span class="bu">int</span>:</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="co">"Add two integers."</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> a <span class="op">+</span> b</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>c <span class="op">=</span> CachedChat(<span class="op">**</span>_mlx_record_kw, tools<span class="op">=</span>[add])</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> c(<span class="st">'Use the add tool to add 2 and 3. Reply with only the result.'</span>)</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>test_eq(c.hist[<span class="dv">1</span>][<span class="st">'tool_calls'</span>][<span class="dv">0</span>][<span class="st">'function'</span>][<span class="st">'name'</span>], <span class="st">'add'</span>)</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>test_eq(c.hist[<span class="dv">2</span>][<span class="st">'content'</span>], <span class="st">'5'</span>)</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'5'</span> <span class="kw">in</span> resp_text(r)</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>c.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="examples-manual" class="level2">
+<h2 class="anchored" data-anchor-id="examples-manual">Examples (manual)</h2>
+<p><code>qwen3_4b</code>, about 2.5 GB, is a good default unless you need vision or audio. The examples cover cache reuse, thinking, a quantized KV cache, speculative decoding, saving and loading the cache, a conversation handed over from llama.cpp, and the vision class.</p>
+<div id="bb6f037669177e59" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>chat <span class="op">=</span> MlxChat(qwen3_06b, sp<span class="op">=</span><span class="st">'You are concise.'</span>, think<span class="op">=</span><span class="va">False</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Fetching 9 files:   0%|                                                                                                                 | 0/9 [00:00&lt;?, ?it/s]
+Fetching 9 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00&lt;00:00, 3432.33it/s]</code></pre>
+</div>
+</div>
+<div id="13be9935528db9cb" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">'Reply with exactly: pong'</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'pong'</span> <span class="kw">in</span> resp_text(r).lower(), resp_text(r)</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>r</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<p>pong</p>
+</div>
+</div>
+<div id="72cbc59fe84a0ac2" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># multi-turn: the second turn must actually remember the first</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>chat(<span class="st">'My favourite number is 17. Remember it.'</span>)</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> chat(<span class="st">'What is my favourite number? Reply with just the number.'</span>)</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'17'</span> <span class="kw">in</span> resp_text(r), resp_text(r)</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(chat.use)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>total=75|in=72|out=3|turns=1|cached=44</code></pre>
+</div>
+</div>
+<div id="cb5f3dd4f9200af5" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Real MLX KV-cache test: capture the exact token tail handed to mlx-lm on each turn.</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> time</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>chat2 <span class="op">=</span> MlxChat(qwen3_06b, sp<span class="op">=</span><span class="st">'You are concise.'</span>, think<span class="op">=</span><span class="va">False</span>, max_output_tokens<span class="op">=</span><span class="dv">16</span>)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>fed, orig_generate <span class="op">=</span> [], chat2._generate</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> counted_generate(ids, <span class="op">**</span>kwargs):</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    fed.append(<span class="bu">len</span>(ids))</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> orig_generate(ids, <span class="op">**</span>kwargs)</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>chat2._generate <span class="op">=</span> counted_generate</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>t0 <span class="op">=</span> time.time()<span class="op">;</span> chat2((<span class="st">'cache verification context '</span> <span class="op">*</span> <span class="dv">96</span>) <span class="op">+</span> <span class="st">'</span><span class="ch">\n</span><span class="st">Reply with exactly: stored'</span>)<span class="op">;</span> t1 <span class="op">=</span> time.time() <span class="op">-</span> t0</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>u1, first_feed <span class="op">=</span> chat2.use, fed[<span class="op">-</span><span class="dv">1</span>]</span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>t0 <span class="op">=</span> time.time()<span class="op">;</span> r <span class="op">=</span> chat2(<span class="st">'What exact word did I ask you to reply with? Reply with only that word.'</span>)<span class="op">;</span> t2 <span class="op">=</span> time.time() <span class="op">-</span> t0</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>u2, second_feed <span class="op">=</span> chat2.use, fed[<span class="op">-</span><span class="dv">1</span>]</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">dict</span>(turn1_seconds<span class="op">=</span><span class="bu">round</span>(t1, <span class="dv">2</span>), turn2_seconds<span class="op">=</span><span class="bu">round</span>(t2, <span class="dv">2</span>), first_feed<span class="op">=</span>first_feed,</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a>           second_feed<span class="op">=</span>second_feed, cached<span class="op">=</span>u2.cached_tokens, answer<span class="op">=</span>resp_text(r)))</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> u1.cached_tokens <span class="op">==</span> <span class="dv">0</span>, <span class="st">'first turn has nothing to reuse'</span></span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> u2.cached_tokens <span class="op">&gt;</span> <span class="dv">0</span>, <span class="st">'second turn should have reused the cache'</span></span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> second_feed <span class="op">&lt;</span> first_feed, <span class="st">'turn two re-prefilled the full old prompt'</span></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> chat2.cached_tokens <span class="op">&gt;</span> <span class="dv">0</span></span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'stored'</span> <span class="kw">in</span> resp_text(r).lower(), resp_text(r)</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>chat2.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Fetching 9 files:   0%|                                                                                                                 | 0/9 [00:00&lt;?, ?it/s]
+Fetching 9 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00&lt;00:00, 3300.29it/s]</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>{'turn1_seconds': 0.47, 'turn2_seconds': 0.1, 'first_feed': 315, 'second_feed': 32, 'cached': 311, 'answer': 'stored'}</code></pre>
+</div>
+</div>
+<div id="b61b58ad1fbf0a00" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># and with the cache off, nothing is ever reported as cached</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>plain <span class="op">=</span> MlxChat(qwen3_4b, prompt_cache<span class="op">=</span><span class="va">False</span>, think<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>plain(<span class="st">'Say hi.'</span>)<span class="op">;</span> plain(<span class="st">'Say hi again.'</span>)</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>test_eq(plain.use.cached_tokens, <span class="dv">0</span>)</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>plain.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Fetching 9 files:   0%|                                                                                                                 | 0/9 [00:00&lt;?, ?it/s]
+Fetching 9 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00&lt;00:00, 2629.84it/s]</code></pre>
+</div>
+</div>
+<div id="1a89825685c93f3c" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># streaming, with thinking rendered as a blockquote</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>thinker <span class="op">=</span> MlxChat(qwen3_4b, think<span class="op">=</span><span class="va">True</span>, max_output_tokens<span class="op">=</span><span class="dv">512</span>)</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>md <span class="op">=</span> display_stream(thinker(<span class="st">'Briefly: why is the sky blue?'</span>, stream<span class="op">=</span><span class="va">True</span>))</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> thought(thinker.turn_res), <span class="st">'expected a &lt;think&gt; block from a thinking model'</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>thinker.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Fetching 9 files:   0%|                                                                                                                 | 0/9 [00:00&lt;?, ?it/s]
+Fetching 9 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00&lt;00:00, 2682.54it/s]</code></pre>
+</div>
+<div class="cell-output cell-output-display cell-output-markdown">
+<blockquote class="blockquote">
+<p><strong>🧠 Thinking</strong></p>
+<p>Okay, the user is asking why the sky is blue. I need to explain this in a brief way. Let me recall the scientific explanation. The sky appears blue because of Rayleigh scattering. The atmosphere scatters sunlight, and shorter wavelengths (blue) are scattered more than longer ones (red). So when we look up, the blue light is scattered in all directions, making the sky appear blue. But wait, I should make sure I get the details right. Also, mention that the sun’s light is white, but the scattering makes it look blue. Maybe add that the reason is the way the atmosphere interacts with sunlight. Keep it simple and concise. Avoid jargon. Maybe start with the main point, then the reason, then the effect. That should cover it.</p>
+</blockquote>
+<p>The sky appears blue because sunlight scatters more in the atmosphere when it interacts with the gases and particles in the air. Shorter wavelengths (blue light) are scattered more than longer wavelengths (red light), so when we look up, the scattered blue light dominates, giving the sky its blue color.</p>
+</div>
+</div>
+<div id="mlx_real_kv" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="co"># quantized KV cache: same answer, less memory for long contexts</span></span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>q <span class="op">=</span> MlxChat(qwen3_4b, kv_bits<span class="op">=</span><span class="dv">4</span>, quantized_kv_start<span class="op">=</span><span class="dv">256</span>, think<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(q(<span class="st">'Name three primes.'</span>)))</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>q.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Fetching 9 files:   0%|                                                                                                                 | 0/9 [00:00&lt;?, ?it/s]
+Fetching 9 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00&lt;00:00, 2659.49it/s]</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Sure! Here are three prime numbers: **2, 3, and 5**. 
+
+A prime number is a number greater than 1 that has no positive divisors other than 1 and itself.</code></pre>
+</div>
+</div>
+<div id="mlx_real_spec" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># speculative decoding: a small draft model proposes, the big one verifies</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> time</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>spec <span class="op">=</span> MlxChat(qwen3_8b, draft_model<span class="op">=</span>qwen3_06b, think<span class="op">=</span><span class="va">False</span>, max_output_tokens<span class="op">=</span><span class="dv">256</span>)</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>t0 <span class="op">=</span> time.time()<span class="op">;</span> spec(<span class="st">'Write two sentences about monsoons.'</span>)<span class="op">;</span> <span class="bu">print</span>(<span class="ss">f'</span><span class="sc">{</span>time<span class="sc">.</span>time()<span class="op">-</span>t0<span class="sc">:.1f}</span><span class="ss">s'</span>, spec.use)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>spec.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Fetching 9 files:   0%|                                                                                                                 | 0/9 [00:00&lt;?, ?it/s]
+Fetching 9 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00&lt;00:00, 1657.46it/s]
+
+Fetching 9 files:   0%|                                                                                                                 | 0/9 [00:00&lt;?, ?it/s]
+Fetching 9 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00&lt;00:00, 1413.55it/s]</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>2.3s total=60|in=20|out=40|turns=1</code></pre>
+</div>
+</div>
+<div id="mlx_real_savecache" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb26"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="co"># a warmed cache can be saved and reloaded, so a long system prompt is prefilled once, ever</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> tempfile</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>warm <span class="op">=</span> MlxChat(qwen3_4b, sp<span class="op">=</span><span class="st">'You are a terse assistant.'</span>, think<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>warm(<span class="st">'Remember the codeword: albatross.'</span>)</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a>fn <span class="op">=</span> Path(tempfile.mkdtemp())<span class="op">/</span><span class="st">'warm.safetensors'</span></span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a>warm.save_cache(fn)</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a>n <span class="op">=</span> warm.cached_tokens</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a>warm.close()</span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a>again <span class="op">=</span> MlxChat(qwen3_4b, sp<span class="op">=</span><span class="st">'You are a terse assistant.'</span>, think<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a>again.load_cache(fn)</span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a>test_eq(again.cached_tokens, n)</span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a>again.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Fetching 9 files:   0%|                                                                                                                 | 0/9 [00:00&lt;?, ?it/s]
+Fetching 9 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00&lt;00:00, 2803.68it/s]
+
+Fetching 9 files:   0%|                                                                                                                 | 0/9 [00:00&lt;?, ?it/s]
+Fetching 9 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00&lt;00:00, 2662.86it/s]</code></pre>
+</div>
+</div>
+<div id="mlx_real_hop" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># the point of a shared history format: carry a conversation from one backend to another</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> rishi.llama <span class="im">import</span> LlamaChat, qwen3_17b <span class="im">as</span> llama_qwen</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>lc <span class="op">=</span> LlamaChat(llama_qwen, n_ctx<span class="op">=</span><span class="dv">4096</span>)</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>lc(<span class="st">'My name is Karthik. Remember it.'</span>)</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>hist <span class="op">=</span> lc.hist                      <span class="co"># canonical rishi history, backend-independent</span></span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a>lc.close()</span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb28-9"><a href="#cb28-9" aria-hidden="true" tabindex="-1"></a>mc <span class="op">=</span> MlxChat(qwen3_4b, messages<span class="op">=</span>hist, think<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb28-10"><a href="#cb28-10" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> mc(<span class="st">'What is my name? Reply with just the name.'</span>)</span>
+<span id="cb28-11"><a href="#cb28-11" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'karthik'</span> <span class="kw">in</span> resp_text(r).lower(), resp_text(r)</span>
+<span id="cb28-12"><a href="#cb28-12" aria-hidden="true" tabindex="-1"></a>mc.close()</span>
+<span id="cb28-13"><a href="#cb28-13" aria-hidden="true" tabindex="-1"></a>resp_text(r)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>llama_context: n_ctx_seq (4096) &lt; n_ctx_train (40960) -- the full capacity of the model will not be utilized
+
+Fetching 9 files:   0%|                                                                                                                 | 0/9 [00:00&lt;?, ?it/s]
+Fetching 9 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:00&lt;00:00, 3025.22it/s]</code></pre>
+</div>
+<div class="cell-output cell-output-display">
+<pre><code>'Karthik'</code></pre>
+</div>
+</div>
+<section id="images-and-audio" class="level3">
+<h3 class="anchored" data-anchor-id="images-and-audio">Images and audio</h3>
+<p>These need <code>pip install 'rishi[mlx-vlm]'</code> and a vision or audio model. <a href="https://vedicreader.github.io/rishi/mlx.html#mlxchat"><code>MlxChat</code></a> picks <a href="https://vedicreader.github.io/rishi/mlx.html#mlxvlmchat"><code>MlxVlmChat</code></a> from the repo’s config.</p>
+<div id="mlx_real_image" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>vchat <span class="op">=</span> MlxChat(qwen3vl_4b, max_output_tokens<span class="op">=</span><span class="dv">256</span>)</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>test_eq(<span class="bu">type</span>(vchat), MlxVlmChat)              <span class="co"># routed automatically from the repo's config.json</span></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>img <span class="op">=</span> Path(<span class="st">'images.jpeg'</span>).read_bytes()</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> vchat([img, <span class="st">'What is in this image? One sentence.'</span>])</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r))</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> resp_text(r).strip()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Fetching 14 files:   0%|                                                                                                               | 0/14 [00:00&lt;?, ?it/s]
+Fetching 14 files: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████| 14/14 [00:00&lt;00:00, 3771.61it/s]
+[transformers] Kwargs passed to `processor.__call__` have to be in `processor_kwargs` dict, not in `**kwargs`</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>A happy German Shepherd dog with its tongue out, standing on a gravel path outdoors.</code></pre>
+</div>
+</div>
+<div id="26f46b27" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb34"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a><span class="co"># an omni build (audio tower) transcribes; gemma-4-e4b does vision *and* audio in about 5GB</span></span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>achat <span class="op">=</span> MlxChat(gemma4_e4b, max_output_tokens<span class="op">=</span><span class="dv">256</span>)</span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> achat([Path(<span class="st">'speech.wav'</span>), <span class="st">'Transcribe this audio.'</span>])</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(resp_text(r))</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'masquerade'</span> <span class="kw">in</span> resp_text(r).lower()</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a><span class="co"># mlx-vlm's own default is `enable_thinking=False`, which prefills an empty `&lt;think&gt;&lt;/think&gt;` block</span></span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a><span class="co"># into the reply. rishi passes `think` through instead: with the block, `qwen3omni_30b` ends the turn</span></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a><span class="co"># without transcribing anything at all.</span></span>
+<span id="cb34-10"><a href="#cb34-10" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="st">'&lt;/think&gt;'</span> <span class="kw">not</span> <span class="kw">in</span> achat._prompt([], [<span class="st">'speech.wav'</span>])</span>
+<span id="cb34-11"><a href="#cb34-11" aria-hidden="true" tabindex="-1"></a>achat.close()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>
+Fetching 8 files:   0%|                                                                                                                 | 0/8 [00:00&lt;?, ?it/s]
+Fetching 8 files: 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████| 8/8 [00:00&lt;00:00, 2439.61it/s]
+/Users/71293/code/personal/orgs/rishi/.venv/lib/python3.13/site-packages/transformers/audio_utils.py:723: UserWarning: At least one mel filter has all zero values. The value for `num_mel_filters` (128) may be set too high. Or, the value for `num_frequency_bins` (257) may be set too low.
+  warnings.warn(</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Dancing in the masquerade, idol truth in plain sight jaded. Pop, roll, click, shot. Buhulabi today or not? But such a tide as moving seems asleep, too full for sound and foam. When that which drew from out the boundless deep turns again home, twilight and evening bell, and after that.</code></pre>
+</div>
+</div>
+<div id="mlx_real_close" class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> c <span class="kw">in</span> (chat, vchat):</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span>: c.close()</span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">except</span> <span class="pp">Exception</span>: <span class="cf">pass</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="sharing-one-engine" class="level2">
+<h2 class="anchored" data-anchor-id="sharing-one-engine">Sharing one engine</h2>
+<p><a href="https://vedicreader.github.io/rishi/mlx.html#mlxbroker"><code>MlxBroker</code></a> keeps one loaded MLX model in a long-lived process and serves an <a href="https://vedicreader.github.io/rishi/mlx.html#mlxchat"><code>MlxChat</code></a> to each client over a Unix socket. All clients share the weights, and each has its own prompt cache. The protocol is Urai’s <code>ChatBroker</code>, described on Urai’s <a href="https://vedicreader.github.io/urai/broker.html">broker</a> page.</p>
+
+
+</section>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp("https:\/\/vedicreader\.github\.io\/rishi");
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+<footer class="footer"><div class="nav-footer"><div class="nav-footer-center"><div class="toc-actions d-sm-block d-md-none"><ul><li><a href="https://github.com/vedicreader/rishi/issues/new" class="toc-action"><i class="bi bi-github"></i>Report an issue</a></li></ul></div></div></div></footer></body></html>
