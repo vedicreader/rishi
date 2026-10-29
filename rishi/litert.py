@@ -196,13 +196,19 @@ class ChatToolHandler(ToolEventHandler):
     def approve_tool_call(self, tool_call):
         c = self.chat
         c.turn_tc = tool_call
+        # calls of one response come one after another with no send between, so the token count has not moved
+        rd, new = getattr(c, '_litert_round', None), False
+        if hasattr(c, '_litert_round_start') and (rd is None or rd['tc'] is None or rd['tc'] != c._litert_round_tc()):
+            rd, new = c._litert_round_start(), True
+        self._litert_name = tool_call.get('function', {}).get('name', '')   # litert runs the call by the name it read before asking
         for _ in run_cbs(c, 'before_tool_calls'): pass
         over = c._budget_exceeded or (c.max_steps is not None and c._steps >= c.max_steps)
         ok = False if over else (c.approve(tool_call) if c.approve else True)
         if ok: c._steps += 1; c._hold.let_go()   # the engine idles while the tool runs: let another chat in
         else: c._budget_exceeded = c._budget_exceeded or over
         fn = tool_call.get('function', {}); self._tcid = _call_id()
-        c.hist.append({'role': 'assistant', 'content': '',
+        # what the model said in this step before calling, kept beside the call rather than folded into the final reply
+        c.hist.append({'role': 'assistant', 'content': rd['text'] if new else '',
             'tool_calls': [{'id': self._tcid, 'type': 'function',
                             'function': {'name': fn.get('name', ''), 'arguments': fn.get('arguments', {})}}]})
         if not ok: c.hist.append({'role': 'tool', 'tool_call_id': self._tcid, 'name': fn.get('name', ''),
@@ -217,6 +223,7 @@ class ChatToolHandler(ToolEventHandler):
         self.chat.hist.append({'role': 'tool', 'tool_call_id': getattr(self, '_tcid', None),
                                'name': tc_name(self.chat.turn_tc), 'content': str(tool_response)})
         for _ in run_cbs(self.chat, 'after_tool_calls'): pass
+        if (rec := getattr(self.chat, '_litert_round_result', None)): rec(getattr(self, '_litert_name', ''), tool_response)
         return tool_response
 
 
@@ -285,7 +292,8 @@ def _merge_chunks(chunks):
     if th: r['channels'] = {'thought': th}
     return Resp(r)
 
-#: How litert says the window is full: before litert-lm 0.19, and from it with history plus input, and with one input alone
+#: How litert says the window is full: before litert-lm 0.19, and from it with history plus input, and with one input alone.
+#: 'available state entries' also covers 'Chosen prefill work group size exceeds available state entries (82)'.
 _litert_full = ('available state entries', 'not enough space left in the context window', 'input token ids are too long')
 def _litert_too_long(e):
     "Whether litert refused one input for being longer than the whole window, which evicting history cannot fix."
@@ -374,6 +382,7 @@ class LitertChat(Chat):
         self._constrain = constrain
         self._conv_kw, self.tools, self.conv = cvk, L(o.tools), None
         self.tool_handler, self._hold = ChatToolHandler(self), EngineHold(self)
+        self._litert_turn_reset()
         self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in listify(o.messages)])
         self.ctx_limit = o.ctx or None
         self._setup(model, o)
@@ -438,13 +447,61 @@ class LitertChat(Chat):
         self._tc0 = self.conv.token_count            # the rebuilt cache is a new baseline for usage
         return len(dropped)
 
-    def _litert_send_once(self, turn):
-        "Yield litert's whole reply to `turn_msg` as one item, so `_send` goes through `_litert_evict_retry` as `_stream` does."
-        yield self.conv.send_message(self.turn_msg, **self._turn_kw(turn))
+    # One turn can be several model steps inside one litert send: litert runs the tool loop itself, so
+    # text, a tool call, the tool's result prefilled, and more text all come from one `send_message_async`.
+    # A step is the model's work between two tool rounds. The window can fill in any step's prefill.
+    def _litert_turn_reset(self):
+        "Forget the step state of the last turn: no tool round yet, nothing yielded in this step."
+        self._litert_round, self._litert_rounds, self._litert_step_n, self._litert_step_text = None, 0, 0, []
 
-    def _litert_stream_once(self, turn):
-        "Yield litert's chunks for `turn_msg`, cancelling the native generation if the stream stops early."
-        it, done = self.conv.send_message_async(self.turn_msg, **self._turn_kw(turn)), False
+    def _litert_round_tc(self):
+        "The conversation's token count, or `None` when litert cannot say."
+        try: return self.conv.token_count
+        except Exception: return None
+
+    def _litert_round_start(self):
+        "Start the record of a tool round: where its calls begin in `hist`, the token count that tells its calls from the next round's, the step's text, and the results litert will send."
+        tc = self._litert_round_tc()
+        self._litert_round = {'at': len(self.hist), 'tc': tc, 'text': ''.join(self._litert_step_text),
+                              'parts': None if tc is None else []}   # `None`: this round's results cannot be told from another's
+        self._litert_rounds += 1
+        return self._litert_round
+
+    def _litert_round_result(self, name, resp):
+        "Record one result as litert sends it, and start the next step, which has yielded nothing yet."
+        if (rd := self._litert_round) is not None and rd['parts'] is not None:
+            rd['parts'].append({'type': 'tool_response', 'name': name, 'response': resp})
+        self._litert_step_n, self._litert_step_text = 0, []
+
+    def _litert_evict_step(self, err, rd, keep_first=2, keep_last=6):
+        "For a step after tool round `rd` that filled the window: evict history from before the turn, else the turn's earlier tool rounds, rebuild `conv` up to the round's results, and return how many messages left and the result to send again. Tools do not run again."
+        if not rd['parts']: raise ContextWindowExceededError(
+            f"context window filled after a tool round whose results could not be told from another round's, "
+            f"so the step was not sent again: {err}") from err
+        h, cut, at = self.hist, self._litert_turn_start(), rd['at']
+        kept, dropped = evict_middle(h[:cut], keep_first, keep_last)
+        if not dropped: kept, dropped = [], h[:cut]
+        if dropped: h[:] = kept + h[cut:]
+        elif at > cut + 1: dropped, h[:] = h[cut+1:at], h[:cut+1] + h[at:]   # nothing before the turn: its earlier tool rounds leave
+        else: raise ContextWindowExceededError(
+            f"context window full and nothing left to evict: the turn's message and its latest tool round fill it alone: {err}") from err
+        rd['at'], rd['tc'] = at - len(dropped), -1   # a rebuilt conversation counts tokens afresh
+        self.evicted = getattr(self, 'evicted', 0) + len(dropped)
+        # the round's calls as litert's conversation held them: one model message with the step's text and every call
+        calls = {'role': 'assistant', 'content': rd['text'],
+                 'tool_calls': [tc for m in h[rd['at']:] if m['role'] == 'assistant' for tc in m.get('tool_calls') or []]}
+        self._mk_conv(self._sys_pre + [_to_litert_msg(m) for m in h[:rd['at']] + [calls]])
+        self._tc0 = self.conv.token_count
+        # the results go as one tool message, one part per call: litert-lm 0.19's own shape, and 0.16's for a single call
+        return len(dropped), {'role': 'tool', 'content': list(rd['parts'])}
+
+    def _litert_send_once(self, turn, msg=None):
+        "Yield litert's whole reply to `msg` (default `turn_msg`) as one item, so `_send` goes through `_litert_evict_retry` as `_stream` does."
+        yield self.conv.send_message(ifnone(msg, self.turn_msg), **self._turn_kw(turn))
+
+    def _litert_stream_once(self, turn, msg=None):
+        "Yield litert's chunks for `msg` (default `turn_msg`), cancelling the native generation if the stream stops early."
+        it, done = self.conv.send_message_async(ifnone(msg, self.turn_msg), **self._turn_kw(turn)), False
         try:
             for o in it: yield o
             done = True
@@ -452,31 +509,38 @@ class LitertChat(Chat):
             if not done: self.conv.cancel_process()   # a stream closed early would otherwise keep generating natively
             it.close()
 
-    def _litert_try_once(self, call, turn):
-        "Yield what `call(turn)` yields. Return litert's full-window error if it came before the first item; raise `ContextWindowExceededError` if it came after one, or if the input alone is longer than the window."
-        n, g = 0, call(turn)
+    def _litert_try_once(self, call, turn, msg=None):
+        "Yield what `call(turn, msg)` yields. Return litert's full-window error if it came before the step that filled the window yielded anything; raise `ContextWindowExceededError` if that step had yielded, or if the input alone is longer than the window."
+        self._litert_step_n, g = 0, call(turn, msg)
         try:
-            for o in g: n += 1; yield o
+            for o in g:
+                self._litert_step_n += 1; self._litert_step_text.append(resp_text(o) or '')
+                yield o
         except RuntimeError as e:
             if isinstance(e, ContextWindowExceededError): raise
             if not (is_ctx_error(self, e) or any(m in str(e).lower() for m in _litert_full)): raise
             if _litert_too_long(e): raise ContextWindowExceededError(
                 f"this message alone is longer than the {f'{self.ctx_limit}-token ' if self.ctx_limit else ''}context window, "
                 f"so evicting history cannot make room for it; it was not sent: {e}") from e
-            if n: raise ContextWindowExceededError(f"context window filled after {n} chunks of the reply "
-                                                   f"were already yielded, so the turn was not sent again: {e}") from e
+            if (n := self._litert_step_n): raise ContextWindowExceededError(
+                f"context window filled after {n} chunks of this step's reply were already yielded, "
+                f"so the step was not sent again: {e}") from e
             return e
         finally: g.close()
 
     def _litert_evict_retry(self, call, turn, err=None, keep_first=2, keep_last=6):
-        "Run one turn through `call` (`_litert_send_once` or `_litert_stream_once`). If the window fills before anything was yielded, evict the middle of `hist` and run it once more. Given `err`, the window already filled, so start by evicting. A turn that still fails on the window leaves `hist` and `conv` as they were before it, so later turns work."
+        "Run one turn through `call` (`_litert_send_once` or `_litert_stream_once`). If a step fills the window before it yielded anything, evict and run that step once more: the first step resends the turn message, a later one resends only the last tool round's results, so earlier steps are not repeated and tools do not run again. Given `err`, the window already filled, so start by evicting. A turn that still fails on the window leaves `hist` and `conv` as they were before it, so later turns work."
         try:
             if err is None:
                 err = yield from self._litert_try_once(call, turn)
                 if err is None: return
-            n = self._litert_evict(err, keep_first, keep_last)
-            if (again := (yield from self._litert_try_once(call, turn))) is not None:
-                raise ContextWindowExceededError(f"could not recover after evicting {n} messages: {err}") from again
+            while True:
+                step, rd = self._litert_rounds, self._litert_round
+                n, msg = (self._litert_evict(err, keep_first, keep_last), None) if rd is None else self._litert_evict_step(err, rd, keep_first, keep_last)
+                if (again := (yield from self._litert_try_once(call, turn, msg))) is None: return
+                if self._litert_rounds == step:
+                    raise ContextWindowExceededError(f"could not recover after evicting {n} messages: {err}") from again
+                err = again   # a later step filled the window: it gets its own retry
         except ContextWindowExceededError:
             self._litert_drop_turn(); raise
 
@@ -511,6 +575,7 @@ class LitertChat(Chat):
         'Send one message through the callback pipeline, evicting and retrying once if the window fills.'
         self.turn_msg = _mk_msg(msg)
         self._turn_msg_recorded = False
+        self._litert_turn_reset()
         for _ in run_cbs(self, 'before_send'): pass
         self._tc0 = self.conv.token_count      # after the callbacks: one may have rebuilt `conv`
         with self._hold: r, = self._litert_evict_retry(self._litert_send_once, kw)
@@ -523,13 +588,15 @@ class LitertChat(Chat):
         try:
             self.turn_msg = _mk_msg(msg)
             self._turn_msg_recorded = False
+            self._litert_turn_reset()
             for _ in run_cbs(self, 'before_send'): pass
             self._tc0 = self.conv.token_count   # after the callbacks: one may have rebuilt `conv`
             fmt, chunks = StreamFormatter(), []
             with self._hold, closing(self._litert_evict_retry(self._litert_stream_once, kw)) as rs:   # a caller closing early reaches `_litert_stream_once`'s cancel
                 for o in rs:
-                    chunks.append(o); yield self._emit(o, fmt)
-            self.turn_res = _merge_chunks(chunks)
+                    chunks.append((self._litert_rounds, o)); yield self._emit(o, fmt)
+            # the reply is the last step's, as from `_send`: text before a tool call already sits beside the call in `hist`
+            self.turn_res = _merge_chunks([o for r, o in chunks if r == self._litert_rounds])
             yield from run_cbs(self, 'after_response')
             return self.turn_res   # stream's final Resp, captured by SaveReturn / AsyncChat `.value`
         finally: self._streaming = prev; self.remove_cbs(added)
