@@ -285,6 +285,12 @@ def _merge_chunks(chunks):
     if th: r['channels'] = {'thought': th}
     return Resp(r)
 
+#: How litert says the window is full: before litert-lm 0.19, and from it with history plus input, and with one input alone
+_litert_full = ('available state entries', 'not enough space left in the context window', 'input token ids are too long')
+def _litert_too_long(e):
+    "Whether litert refused one input for being longer than the whole window, which evicting history cannot fix."
+    return 'input token ids are too long' in str(e).lower()
+
 _dflt_cbs = [_HistoryCallback, _UsageCallback, _ToolReminderCallback, SlidingWindowCallback]
 
 class LitertChat(Chat):
@@ -399,16 +405,30 @@ class LitertChat(Chat):
 
     def recover_context(self, err, **kw):
         "Recover a full context by evicting the middle of history and sending the current message again."
-        r, = self._evict_retry(self._send_turn, kw, err)
+        r, = self._litert_evict_retry(self._litert_send_once, kw, err)
         return r
 
-    def _evict_turn(self, err, keep_first=2, keep_last=6):
+    def _litert_turn_start(self):
+        "Index in `hist` of this turn's recorded outgoing message, the last user entry, else the end of `hist`."
+        h = self.hist
+        return next((i for i in range(len(h)-1, -1, -1) if h[i]['role'] == 'user'), len(h)) if self._turn_msg_recorded else len(h)
+
+    def _litert_drop_turn(self):
+        "Forget a turn the window could not take, and rebuild `conv` from the history before it: after a full-window error litert's conversation fails every later send ('INTERNAL: Task failed with state: 7')."
+        del self.hist[self._litert_turn_start():]
+        self._turn_msg_recorded = False
+        self._recreate_conv()
+        self._tc0 = self.conv.token_count
+
+    def _litert_evict(self, err, keep_first=2, keep_last=6):
         "Evict the middle of `hist` for a turn that filled the window, rebuild `conv`, and return how many messages left. Raises `ContextWindowExceededError` when nothing can leave."
         h = self.hist
         # A recorded outgoing message is the last user entry. The engine will rerun the tool rounds
         # that follow it, so they leave the history and the message is sent again, not preloaded.
-        cut = next((i for i in range(len(h)-1, -1, -1) if h[i]['role'] == 'user'), len(h)) if self._turn_msg_recorded else len(h)
+        cut = self._litert_turn_start()
         kept, dropped = evict_middle(h[:cut], keep_first, keep_last)
+        # too short to have a middle: the current message comes first, so all earlier history leaves (the system prompt stays)
+        if not dropped: kept, dropped = [], h[:cut]
         partial = max(len(h) - cut - 1, 0)
         if not dropped and not partial:
             raise ContextWindowExceededError(f"context window full and nothing left to evict: {err}") from err
@@ -418,11 +438,11 @@ class LitertChat(Chat):
         self._tc0 = self.conv.token_count            # the rebuilt cache is a new baseline for usage
         return len(dropped)
 
-    def _send_turn(self, turn):
-        "Yield litert's whole reply to `turn_msg` as one item, so `_send` goes through `_evict_retry` as `_stream` does."
+    def _litert_send_once(self, turn):
+        "Yield litert's whole reply to `turn_msg` as one item, so `_send` goes through `_litert_evict_retry` as `_stream` does."
         yield self.conv.send_message(self.turn_msg, **self._turn_kw(turn))
 
-    def _stream_turn(self, turn):
+    def _litert_stream_once(self, turn):
         "Yield litert's chunks for `turn_msg`, cancelling the native generation if the stream stops early."
         it, done = self.conv.send_message_async(self.turn_msg, **self._turn_kw(turn)), False
         try:
@@ -432,26 +452,33 @@ class LitertChat(Chat):
             if not done: self.conv.cancel_process()   # a stream closed early would otherwise keep generating natively
             it.close()
 
-    def _try_turn(self, call, turn):
-        "Yield what `call(turn)` yields. Return litert's full-window error if it came before the first item; raise `ContextWindowExceededError` if it came after one."
+    def _litert_try_once(self, call, turn):
+        "Yield what `call(turn)` yields. Return litert's full-window error if it came before the first item; raise `ContextWindowExceededError` if it came after one, or if the input alone is longer than the window."
         n, g = 0, call(turn)
         try:
             for o in g: n += 1; yield o
         except RuntimeError as e:
-            if not is_ctx_error(self, e): raise
+            if isinstance(e, ContextWindowExceededError): raise
+            if not (is_ctx_error(self, e) or any(m in str(e).lower() for m in _litert_full)): raise
+            if _litert_too_long(e): raise ContextWindowExceededError(
+                f"this message alone is longer than the {f'{self.ctx_limit}-token ' if self.ctx_limit else ''}context window, "
+                f"so evicting history cannot make room for it; it was not sent: {e}") from e
             if n: raise ContextWindowExceededError(f"context window filled after {n} chunks of the reply "
                                                    f"were already yielded, so the turn was not sent again: {e}") from e
             return e
         finally: g.close()
 
-    def _evict_retry(self, call, turn, err=None, keep_first=2, keep_last=6):
-        "Run one turn through `call` (`_send_turn` or `_stream_turn`). If the window fills before anything was yielded, evict the middle of `hist` and run it once more. Given `err`, the window already filled, so start by evicting."
-        if err is None:
-            err = yield from self._try_turn(call, turn)
-            if err is None: return
-        n = self._evict_turn(err, keep_first, keep_last)
-        if (again := (yield from self._try_turn(call, turn))) is not None:
-            raise ContextWindowExceededError(f"could not recover after evicting {n} messages: {err}") from again
+    def _litert_evict_retry(self, call, turn, err=None, keep_first=2, keep_last=6):
+        "Run one turn through `call` (`_litert_send_once` or `_litert_stream_once`). If the window fills before anything was yielded, evict the middle of `hist` and run it once more. Given `err`, the window already filled, so start by evicting. A turn that still fails on the window leaves `hist` and `conv` as they were before it, so later turns work."
+        try:
+            if err is None:
+                err = yield from self._litert_try_once(call, turn)
+                if err is None: return
+            n = self._litert_evict(err, keep_first, keep_last)
+            if (again := (yield from self._litert_try_once(call, turn))) is not None:
+                raise ContextWindowExceededError(f"could not recover after evicting {n} messages: {err}") from again
+        except ContextWindowExceededError:
+            self._litert_drop_turn(); raise
 
     @property
     def token_count(self): return self.conv.token_count
@@ -486,7 +513,7 @@ class LitertChat(Chat):
         self._turn_msg_recorded = False
         for _ in run_cbs(self, 'before_send'): pass
         self._tc0 = self.conv.token_count      # after the callbacks: one may have rebuilt `conv`
-        with self._hold: r, = self._evict_retry(self._send_turn, kw)
+        with self._hold: r, = self._litert_evict_retry(self._litert_send_once, kw)
         self.turn_res = Resp(r)
         for _ in run_cbs(self, 'after_response'): pass
         return self.turn_res
@@ -499,7 +526,7 @@ class LitertChat(Chat):
             for _ in run_cbs(self, 'before_send'): pass
             self._tc0 = self.conv.token_count   # after the callbacks: one may have rebuilt `conv`
             fmt, chunks = StreamFormatter(), []
-            with self._hold, closing(self._evict_retry(self._stream_turn, kw)) as rs:   # a caller closing early reaches `_stream_turn`'s cancel
+            with self._hold, closing(self._litert_evict_retry(self._litert_stream_once, kw)) as rs:   # a caller closing early reaches `_litert_stream_once`'s cancel
                 for o in rs:
                     chunks.append(o); yield self._emit(o, fmt)
             self.turn_res = _merge_chunks(chunks)
