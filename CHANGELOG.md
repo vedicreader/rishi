@@ -2,6 +2,14 @@
 
 <!-- do not remove -->
 
+## 0.1.58
+
+- A LiteRT stream recovers from a full context window, as a plain send already did. Both paths use one helper: it drops older turns and sends the turn again once. Before, a full window in a stream raised a bare `RuntimeError`, and every later turn failed with `INTERNAL: Task failed with state: 7`.
+- A full window that comes after part of the reply was already shown is not sent again, so no text repeats. It raises `ContextWindowExceededError` instead.
+- The full-window messages of litert-lm 0.19 (`RESOURCE_EXHAUSTED` and `INVALID_ARGUMENT`) count as a full window, as well as the older `FAILED_PRECONDITION`.
+- A message that alone is longer than the whole window is not sent. It raises `ContextWindowExceededError` that says so, and the next turn works.
+- A turn that could not be sent leaves the history, so it does not fill the window again on the next turn. When the history is too short to trim, all earlier turns are dropped and the system prompt stays.
+
 ## 0.1.57
 
 - A failed Claude Code turn keeps its cost. `ClaudeError` has `usage`, and the chat adds that usage to `use` before the error goes up. Before, a failed run was paid for but not counted.
