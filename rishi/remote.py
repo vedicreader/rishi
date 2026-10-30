@@ -424,7 +424,7 @@ class RemoteChat(RishiToolLoop, Chat):
 
     def _oneshot_args(self, prompt, sp, max_tokens):
         "The messages and `acomplete` options of a stateless call with no history and no tools."
-        return ([to_msg({'role': 'user', 'content': prompt})],
+        return ([to_msg(mk_msg(prompt))],
                 {**self._kw(max_output_tokens=max_tokens), 'system': sp or None, 'tools': None, 'tool_choice': None})
 
     async def _until_cancelled(self, awaitable, began, ait=None, opens=False):

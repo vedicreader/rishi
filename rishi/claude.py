@@ -605,6 +605,7 @@ def anth_msgs(hist, ant, tags=False, prefix=''):
 def claude_prompt(prompt):
     "A turn's prompt for `query`: a string as it is, content blocks as the streaming-input shape."
     if isinstance(prompt, str): return prompt
+    if any(not isinstance(p, dict) for p in prompt): prompt = anth_blocks(mk_claude_msg(prompt)['content'])   # raw bytes or text, as `Agent.compose` gives
     async def _one():
         yield {'type': 'user', 'message': {'role': 'user', 'content': prompt},
                'parent_tool_use_id': None, 'session_id': 'default'}

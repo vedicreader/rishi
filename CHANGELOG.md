@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.64
+
+- A one-shot prompt that is a list, such as the picture bytes and the text that ramabana's `Agent.compose` gives, now reaches the model on remote and Claude backends. Before, a remote one-shot dropped each part that was not a dict, so the model got an empty message, and a Claude one-shot failed with "Object of type bytes is not JSON serializable".
+
 ## 0.1.63
 
 - A Claude one-shot sets `strict_mcp_config` only where no enterprise MCP config exists (new `managed_mcp()` and `MANAGED_MCP`). Claude Code refuses that flag on a machine with an enterprise config. In 0.1.62 every Claude one-shot failed there, so each `claude/*` one-shot answered nothing. The one-shot still names no tool and no MCP server.
