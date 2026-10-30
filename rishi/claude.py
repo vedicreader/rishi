@@ -10,9 +10,9 @@ __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'f
            'TOOL_PARSE_ERR', 'INTERRUPT_WAIT', 'CONT_PROMPT', 'STALL_PROMPT', 'STALL_TIMEOUT', 'RISHI_MCP',
            'MCP_PREFIX', 'MCP_NAME_MAX', 'NATIVE_ENV', 'NO_AUDIO', 'EMPTY_RESULT', 'claude_bin', 'claude_model',
            'claude_fallback', 'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError',
-           'claude_status', 'claude_tool_use', 'norm_claude', 'ClaudeStall', 'ClaudeMcpRefused', 'mk_claude_content',
-           'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id', 'tag_calls', 'anth_msgs',
-           'claude_prompt']
+           'claude_status', 'claude_tool_use', 'norm_claude', 'ClaudeStall', 'ClaudeDeadline', 'ClaudeMcpRefused',
+           'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id', 'tag_calls',
+           'anth_msgs', 'claude_prompt']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import asyncio, atexit, contextvars, json, os, re, shutil, subprocess, sys, time, uuid, warnings, weakref
@@ -26,7 +26,7 @@ from aidialog.msg_parts import data_url
 from fastcore.all import store_attr, patch, ifnone, listify, detect_mime
 from fastcore.aio import run_sync
 import rishi.core
-from .core import RishiToolLoop
+from .core import RishiToolLoop, usage_stats, OneShotCancelled, CLOSE_WAIT, read_or_cancel, shut_stream
 from urai.loop import _pic, max_media_
 from urai import (Chat, ChatOpts, ROLE_NAMES, UsageStats, Resp, StreamSplit, ToolCall, cancel_msg_, tool_media,
                   est_tokens, is_media, mk_content, parse_args, parse_tool_tags_ex, render_prompt, resp_text, split_runtime,
@@ -170,6 +170,13 @@ STALL_TIMEOUT = 240   #: seconds Claude Code may send nothing, not even a stream
 
 class ClaudeStall(TimeoutError):
     "Claude Code sent nothing for the chat's `timeout` seconds."
+
+class ClaudeDeadline(TimeoutError):
+    "A call outran its `deadline`. `elapsed` is the seconds it ran. `stopped` is True when the SDK stream closed within `CLOSE_WAIT`; when False the call may still finish and spend, and the caller must assume it does."
+    def __init__(self, elapsed, stopped):
+        self.elapsed, self.stopped = elapsed, stopped
+        super().__init__(f'Claude Code was still working after {elapsed:.1f}s, the deadline; ' +
+                         ('its stream is closed' if stopped else 'its stream did not close in time, so the call may still finish and spend'))
 
 RISHI_MCP = 'rishi'                  #: the in-process MCP server that carries rishi's tools when `tool_mode='native'`
 MCP_PREFIX = f'mcp__{RISHI_MCP}__'   #: what Claude Code calls one of those tools
@@ -334,8 +341,8 @@ class ClaudeChat(RishiToolLoop, Chat):
 
 # %% ../nbs/06_claude.ipynb #cl_sdk
 @patch
-def _opts(self:ClaudeChat, sp, resume=None, fork=False, mcp=True):
-    "Agent SDK options for one turn. No MCP server for a managed policy to refuse, unless native mode and `mcp` ask for rishi's own."
+def _opts(self:ClaudeChat, sp, resume=None, fork=False, mcp=True, tools=True):
+    "Agent SDK options for one turn. No MCP server for a managed policy to refuse, unless native mode and `mcp` ask for rishi's own. `tools=False` gives Claude Code no tool, whatever the chat's tool options or `set_opts` say: no built-in, no allowed tool and no MCP server, and `strict_mcp_config` is on so Claude Code reads none from its settings either."
     sdk = claude_agent_sdk
     cwd = self._cwd
     cwd.mkdir(parents=True, exist_ok=True)
@@ -353,8 +360,8 @@ def _opts(self:ClaudeChat, sp, resume=None, fork=False, mcp=True):
               env=env, cli_path=shutil.which(self.bin),      # None: the SDK's bundled copy
               disallowed_tools=list(self.claude_disallowed or ()))
     if own is not None or srv or mine: kw['allowed_tools'] = (own or []) + srv + mine
-    if srv: kw['tools'] = sorted(set((own or []) + srv))   # available: exactly these
-    elif own is None and self.toolspecs: kw['tools'] = []  # rishi's tools are the only channel
+    if own is not None or srv: kw['tools'] = sorted(set((own or []) + srv))   # available: exactly these
+    elif self.toolspecs: kw['tools'] = []  # rishi's tools are the only channel
     if nat:
         env.update(NATIVE_ENV)
         self._errlog = []
@@ -368,7 +375,9 @@ def _opts(self:ClaudeChat, sp, resume=None, fork=False, mcp=True):
         kw['fallback_model'] = claude_fallback(self.fallback)   # an overloaded model, not a failed turn
     if self.bare: kw.update(setting_sources=[], skills=[])    # no CLAUDE.md, plugins, hooks or skills
     if resume: kw.update(resume=resume, fork_session=fork)
-    return sdk.ClaudeAgentOptions(**{**kw, **self.opts_})
+    kw = {**kw, **self.opts_}
+    if not tools: kw.update(tools=[], allowed_tools=[], mcp_servers={}, strict_mcp_config=True)
+    return sdk.ClaudeAgentOptions(**kw)
 
 @patch
 def _result(self:ClaudeChat, res, text, server_tools=(), called=False):
@@ -378,10 +387,39 @@ def _result(self:ClaudeChat, res, text, server_tools=(), called=False):
             'subtype': g('subtype'), 'terminal_reason': g('terminal_reason'), 'cost': g('total_cost_usd'),
             'server_tools': list(server_tools), 'api_error_status': g('api_error_status')}
 
-async def _shut(ait):
-    "Close a stalled stream, so the SDK ends its query and the subprocess with it; a close that fails or hangs is let go."
-    try: await asyncio.wait_for(ait.aclose(), INTERRUPT_WAIT)
-    except Exception: pass
+async def _shut(ait, nxt=None):
+    "Cancel the pending read `nxt` and close the stream `ait`, so the SDK ends its query and the subprocess with it, within `CLOSE_WAIT` seconds in all. Return True when the read ended and the stream closed cleanly; a close that fails or outlasts the wait gives False. See `shut_stream`."
+    return await shut_stream(ait, nxt, CLOSE_WAIT)
+
+async def _cut(ait, nxt, began, exc):
+    "End a stream that outran its deadline or was cancelled and raise `exc(elapsed, stopped)`, `ClaudeDeadline` or `OneShotCancelled`. `stopped` says whether the stream closed. `elapsed` is read after the one close, so it includes the close."
+    stopped = await _shut(ait, nxt)
+    raise exc(time.monotonic() - began, stopped)
+
+def _see_usage(seen, ev):
+    "Fold the usage a `message_start` or `message_delta` stream event reports into the dict `seen`. It holds the counts of the latest API message."
+    t = ev.get('type')
+    u = (ev.get('message') or {}).get('usage') if t == 'message_start' else ev.get('usage') if t == 'message_delta' else None
+    seen.update({k: v for k, v in (u or {}).items() if isinstance(v, int)})
+
+def _unsent(full, streamed):
+    "`(new, left)`: the part of the block text `full` that the `streamed` deltas did not already carry, and the deltas still to match against later blocks."
+    if full.startswith(streamed): return full[len(streamed):], ''
+    if streamed.startswith(full): return '', streamed[len(full):]
+    return full, ''
+
+async def _closing(ait, agen, began=None):
+    "Yield from the async generator `agen`, then close the SDK stream `ait`, so the subprocess has ended when the consumer goes on. While `began` is given, a close that does not finish within `CLOSE_WAIT` raises `OneShotCancelled(stopped=False)`, whether the consumer stopped early or the stream ended. `_drain` has already closed the stream for a `ClaudeDeadline`, `ClaudeStall` or `OneShotCancelled`."
+    try:
+        async for x in agen: yield x
+    except (ClaudeDeadline, ClaudeStall, OneShotCancelled): raise
+    except GeneratorExit:
+        await agen.aclose()
+        if not await _shut(ait) and began is not None: raise OneShotCancelled(time.monotonic() - began, False)
+        raise
+    except BaseException:
+        await agen.aclose(); await _shut(ait); raise
+    if not await _shut(ait) and began is not None: raise OneShotCancelled(time.monotonic() - began, False)
 
 @patch
 def _stall_msg(self:ClaudeChat, again=False):
@@ -395,20 +433,29 @@ def _holds_call(text):
     return bool(tcs or failed)
 
 @patch
-async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended without a result'):
-    "Drive one Agent SDK message stream to `(kind, value)` pairs, then a final `result`; `ClaudeStall` after `timeout` seconds of silence with no native tool running."
+async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended without a result', until=None, began=None, deltas=False, seen=None, oneshot=False):
+    "Drive one Agent SDK message stream to `(kind, value)` pairs, then a final `result`; `ClaudeStall` after `timeout` seconds of silence with no native tool running, and `ClaudeDeadline` at `until`, a `time.monotonic()` time, even on a stream that never goes quiet. `elapsed` counts from `began`, default the start of the drain. With `deltas`, text goes out as the SDK's partial messages carry it and the whole block that follows adds only what they did not; `seen` collects the usage those messages report. With `oneshot`, a set cancel flag raises `OneShotCancelled` instead of ending the stream quietly, and ends a blocked read within `CANCEL_POLL` seconds."
     sdk, tags = claude_agent_sdk, not self._native
-    text, res, ran, called, cut, kept = [], None, [], False, False, False
+    text, res, ran, called, cut, kept, streamed = [], None, [], False, False, False, ''
+    began = ifnone(began, time.monotonic())
+    stop = self._cancel if oneshot else None
     while True:
-        if self._cancel.is_set(): break
+        if self._cancel.is_set():
+            if oneshot: await _cut(ait, None, began, OneShotCancelled)
+            break
+        if until is not None and time.monotonic() >= until: await _cut(ait, None, began, ClaudeDeadline)
         nxt = asyncio.ensure_future(ait.__anext__())
         try:
-            while not (await asyncio.wait({nxt}, timeout=self.timeout))[0] and self._tool_busy: pass
+            while True:
+                left = None if until is None else until - time.monotonic()
+                at_deadline = left is not None and left <= self.timeout   # the deadline, not the silence limit, ends this wait
+                await read_or_cancel(nxt, stop, left if at_deadline else self.timeout)
+                if nxt.done() or at_deadline or not self._tool_busy or (stop is not None and stop.is_set()): break
         except BaseException: nxt.cancel(); raise   # a read left pending would take messages off the shared stream
         if not nxt.done():
-            nxt.cancel()
-            with suppress(asyncio.CancelledError, Exception): await nxt
-            await _shut(ait)
+            if stop is not None and stop.is_set(): await _cut(ait, nxt, began, OneShotCancelled)
+            if at_deadline: await _cut(ait, nxt, began, ClaudeDeadline)
+            await _shut(ait, nxt)
             if not called: raise ClaudeStall(self._stall_msg()) from None
             self._stale = cut = True; break   # the call is whole: answer it rather than lose the turn
         try: m = nxt.result()
@@ -421,7 +468,9 @@ async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended with
                 if called: self._stale = True; continue   # past a call nobody answered: the model never saw what follows, and a live session must not keep it
                 if isinstance(b, sdk.ThinkingBlock) and b.thinking: yield 'thought', b.thinking
                 elif isinstance(b, sdk.TextBlock) and b.text:
-                    text.append(b.text); yield 'text', b.text
+                    text.append(b.text)
+                    new, streamed = _unsent(b.text, streamed)
+                    if new: yield 'text', new
                     called = tags and _holds_call(b.text)
                 elif (u := claude_tool_use(b, sdk)):
                     if not u['name'].startswith(MCP_PREFIX): ran.append(u); yield 'tool_use', u
@@ -429,16 +478,34 @@ async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended with
                         if (k := (u['name'][len(MCP_PREFIX):], u['input'])) in self._nat_missed: self._nat_missed.remove(k); kept = True   # its text stays in the reply
                         else: self._nat_uses.append((u, ''.join(text))); text = []   # the text before it files with the call
                         yield 'call', u
+        elif deltas and isinstance(m, sdk.StreamEvent) and not m.parent_tool_use_id:
+            if seen is not None: _see_usage(seen, m.event)
+            d = m.event.get('delta') or {}
+            if m.event.get('type') == 'content_block_delta' and d.get('type') == 'text_delta' and d.get('text'):
+                streamed += d['text']; yield 'text', d['text']
         elif isinstance(m, sdk.ResultMessage): res = m
     if res is None and not cut: raise RuntimeError(err)
     if after is not None and not cut: await after()   # a stalled session would not answer it either
     yield 'result', self._result(res, text, ran, called or kept)
 
+async def _one_reply(client, prompt):
+    "One prompt's messages from the `ClaudeSDKClient` `client`, which this generator disconnects when it ends or is closed. `disconnect` is awaited, so the Claude Code process has exited when `aclose` returns. `claude_agent_sdk.query` leaves that to the event loop's generator finalizer: its `aclose` returns while the process still runs."
+    try:
+        await client.connect()
+        await client.query(claude_prompt(prompt))
+        async for m in client.receive_response(): yield m
+    finally: await client.disconnect()
+
 @patch
-def _sdk_events(self:ClaudeChat, prompt, sp, resume=None, mcp=True):
-    "One `query` as `(kind, value)` pairs: `thought`, `text`, and one final `result` dict."
-    ait = claude_agent_sdk.query(prompt=claude_prompt(prompt), options=self._opts(sp, resume=resume, mcp=mcp)).__aiter__()
-    return sync_iter(lambda: self._drain(ait), stop=self._cancel)
+def _sdk_events(self:ClaudeChat, prompt, sp, resume=None, mcp=True, deadline=None, deltas=False, seen=None, oneshot=False):
+    "One `query` as `(kind, value)` pairs: `thought`, `text`, and one final `result` dict; `ClaudeDeadline` when it runs past `deadline` seconds. Closing the iterator closes the SDK stream. `deltas` and `seen` are `_drain`'s. A `oneshot` query has no tools and ends with `OneShotCancelled` when the cancel flag is set."
+    began = time.monotonic()
+    opts = self._opts(sp, resume=resume, mcp=mcp and not oneshot, tools=not oneshot)
+    ait = (_one_reply(claude_agent_sdk.ClaudeSDKClient(options=opts), prompt) if oneshot
+           else claude_agent_sdk.query(prompt=claude_prompt(prompt), options=opts)).__aiter__()
+    until = None if deadline is None else began + deadline
+    return sync_iter(lambda: _closing(ait, self._drain(ait, until=until, began=began, deltas=deltas, seen=seen, oneshot=oneshot), began if oneshot else None),
+                     stop=None if oneshot else self._cancel)
 
 
 # %% ../nbs/06_claude.ipynb #da4e0a44
@@ -884,9 +951,7 @@ def _norm(self:ClaudeChat, out):
     "`norm_claude` of a step's result. A failed run was still paid for, so its usage joins `use` before the error goes up."
     try: return norm_claude(out, self.model_id, self._reparse_asked, not self._native)
     except ClaudeError as e:
-        u = e.usage
-        if u: self.use += UsageStats(u.get('prompt_tokens', 0), u.get('completion_tokens', 0), u.get('total_tokens', 0), 1, cached_tokens=u.get('cached_tokens', 0),
-                                     model=u.get('model'), reasoning_tokens=u.get('reasoning_tokens', 0), cache_creation_tokens=u.get('cache_creation_tokens', 0), cost=u.get('cost', 0.0))
+        self.use += usage_stats(e.usage)
         raise
 
 @patch
@@ -913,9 +978,52 @@ def _stream_step(self:ClaudeChat, **kw):
     self._step_res = self._last_res = self._note_usage(self._norm(out))
 
 
+ClaudeChat.oneshot_stream_ok = ClaudeChat.oneshot_deadline_ok = True
+
 @patch
-def _oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None):
-    "Stateless one-shot text: no history to file and no session to keep."
-    out = next(v for k, v in self._sdk_events(prompt, sp, mcp=False) if k == 'result')
-    return resp_text(norm_claude(out, self.model_id, True))
+def _oneshot_run(self:ClaudeChat, prompt, sp, deadline, deltas):
+    "One stateless query as `('text', chunk)` pairs, then `('final', text)`. Before each chunk `oneshot_use` holds the usage the stream has reported so far, and at the end the result's, else what the stream reported before it stopped."
+    self.oneshot_use, seen, got = usage_stats(None), {}, False
+    snap = lambda: usage_stats(norm_claude_usage(seen, self.model_id))
+    ev = self._sdk_events(prompt, sp, deadline=deadline, deltas=deltas, seen=seen, oneshot=True)
+    try:
+        for k, v in ev:
+            if k == 'text': self.oneshot_use = snap(); yield k, v
+            elif k == 'result':
+                got = True
+                try: r = norm_claude(v, self.model_id, True)
+                except ClaudeError as e: self.oneshot_use = usage_stats(e.usage); raise
+                self.oneshot_use = usage_stats(r.get('usage'))
+                yield 'final', resp_text(r)
+    finally:
+        if not got: self.oneshot_use = snap()
+        ev.close()
+
+@patch
+def _oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None, deadline=None):
+    "Stateless one-shot text: no history to file and no session to keep. The stream is read to its end, so the Claude Code process has exited when this returns."
+    self._cancel.clear()   # a `cancel()` that ended an earlier call must not end this one
+    reply = None
+    for k, v in self._oneshot_run(prompt, sp, deadline, False):
+        if k == 'final': reply = v
+    return reply
+
+@patch
+def oneshot(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None, deadline=None):
+    "Return the text of one reply to `prompt`, without tools or history. `deadline` is the seconds the call may run; past it `ClaudeDeadline` is raised and nothing is retried. `cancel()` from any thread raises `OneShotCancelled`. When `stopped` is False on either the call may still finish and spend, and the caller must assume it does."
+    return self._oneshot(prompt, sp, think=think, max_tokens=max_tokens, deadline=deadline)
+
+def _texts(run):
+    "The text chunks of a `_oneshot_run`, which closes with the consumer."
+    try:
+        for k, v in run:
+            if k == 'text': yield v
+    finally: run.close()
+
+@patch
+def oneshot_stream(self:ClaudeChat, prompt, sp='', think=None, max_tokens=None, deadline=None):
+    "Yield the text of one reply to `prompt` as Claude Code sends it, without tools or history. Closing the iterator ends the Claude Code process. A `deadline`, `cancel()` or a silence past `timeout` raises after the text already yielded, and nothing is retried."
+    self._cancel.clear()
+    self.oneshot_use = usage_stats(None)
+    return _texts(self._oneshot_run(prompt, sp, deadline, True))
 

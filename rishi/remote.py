@@ -10,7 +10,8 @@ __all__ = ['NO_THINK_EFFORT', 'dflt_remote', 'DFLT_MAX_TOKENS', 'STREAM_ONLY', '
            'effort_refused', 'RemoteChat']
 
 # %% ../nbs/04_remote.ipynb #rm_imports
-import json
+import asyncio, json, time
+from contextlib import closing
 from urllib.parse import urlparse
 from base64 import b64decode
 from fastllm.acomplete import acomplete, split_vendor, vendor_mapping
@@ -18,7 +19,7 @@ from fastllm.types import Completion, infer_api_name
 from aidialog.msg_parts import (Msg, Part, PartType, Text, Thinking, ToolUse, ToolResult, data_url)
 from fastcore.all import store_attr, listify
 import rishi.core
-from .core import RishiToolLoop
+from .core import RishiToolLoop, usage_stats, OneShotCancelled, CLOSE_WAIT, read_or_cancel, shut_stream
 from fastllm.types import get_model_info
 from urai import (Chat, ChatOpts, Resp, StreamSplit, ToolCall, ToolCallError,
                   UsageStats, display_stream, extract_fence, mk_content, mk_msg, mk_msgs, mk_toolspec, parse_tool_tags, resp_text, run_coro, split_runtime,
@@ -419,17 +420,78 @@ class RemoteChat(RishiToolLoop, Chat):
         if comp is None: raise RuntimeError('stream ended without a final Completion')
         self._step_res = self._read(norm_completion(comp), kw)
 
+    oneshot_stream_ok = oneshot_max_tokens_ok = True   # a deadline is refused: nothing here can cut a request short
+
+    def _oneshot_args(self, prompt, sp, max_tokens):
+        "The messages and `acomplete` options of a stateless call with no history and no tools."
+        return ([to_msg({'role': 'user', 'content': prompt})],
+                {**self._kw(max_output_tokens=max_tokens), 'system': sp or None, 'tools': None, 'tool_choice': None})
+
+    async def _until_cancelled(self, awaitable, began, ait=None, opens=False):
+        "The result of `awaitable`. When `cancel()` comes first, its task is cancelled, the async iterator `ait` is closed, and `OneShotCancelled` is raised. With `opens`, `awaitable` returns a stream, and one that it returns despite the cancel is closed too, within the one `CLOSE_WAIT`."
+        task = asyncio.ensure_future(awaitable)
+        try: done = await read_or_cancel(task, self._cancel)
+        except BaseException: task.cancel(); raise
+        if done: return task.result()
+        t0 = time.monotonic()
+        stopped = await shut_stream(ait, task)
+        if opens and stopped and not task.cancelled(): stopped = await shut_stream(task.result(), wait=max(0, CLOSE_WAIT - (time.monotonic() - t0)))
+        raise OneShotCancelled(time.monotonic() - began, stopped)
+
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
-        "Stateless completion text, with no history and no tools. `think=False` asks for `NO_THINK_EFFORT`."
-        msgs = [to_msg({'role': 'user', 'content': prompt})]
-        kw = {**self._kw(max_output_tokens=max_tokens), 'system': sp or None,
-              'tools': None, 'tool_choice': None}
-        send = lambda k: resp_text(norm_completion(run_coro(self._collect(msgs, **k))))
+        "Stateless completion text, with no history and no tools. `think=False` asks for `NO_THINK_EFFORT`. `cancel()` ends it with `OneShotCancelled`."
+        msgs, kw = self._oneshot_args(prompt, sp, max_tokens)
+        self._cancel.clear()   # a `cancel()` that ended an earlier call must not end this one
+        self.oneshot_use, began = usage_stats(None), time.monotonic()
+        def send(k):
+            r = norm_completion(run_coro(self._until_cancelled(self._collect(msgs, **k), began)))
+            self.oneshot_use = usage_stats(r.get('usage'))
+            return resp_text(r)
         if think is not False: return send(kw)
         try: return send({**kw, 'reasoning_effort': NO_THINK_EFFORT})
         except Exception as e:
             if not effort_refused(e): raise
             return send(kw)   # a provider that spells the effort differently
+
+    async def _astream(self, msgs, kw, began):
+        "The parts and the final `Completion` of one streamed request. `cancel()` ends it with `OneShotCancelled`. Leaving early closes the provider's stream, and a close that does not finish within `CLOSE_WAIT` raises `OneShotCancelled(stopped=False)`."
+        agen = await self._until_cancelled(acomplete(msgs, self._wire_model, **{**kw, 'stream': True}), began, opens=True)
+        try:
+            while True:
+                try: o = await self._until_cancelled(agen.__anext__(), began, agen)
+                except StopAsyncIteration: break
+                yield o
+        except OneShotCancelled: raise   # `_until_cancelled` has closed the stream
+        except GeneratorExit:
+            if not await shut_stream(agen): raise OneShotCancelled(time.monotonic() - began, False)
+            raise
+        except BaseException:
+            await shut_stream(agen); raise
+        if not await shut_stream(agen): raise OneShotCancelled(time.monotonic() - began, False)
+
+    def _oneshot_chunks(self, msgs, kw, think):
+        "Text chunks of one streamed request. `think=False` sends `NO_THINK_EFFORT` and, when the provider refuses it before any text, sends again without. `oneshot_use` is set from the final `Completion`."
+        tries, began = [{**kw, 'reasoning_effort': NO_THINK_EFFORT}, kw] if think is False else [kw], time.monotonic()
+        for i, k in enumerate(tries):
+            n, comp = 0, None
+            try:
+                with closing(sync_iter(lambda: self._astream(msgs, k, began))) as it:
+                    for o in it:
+                        if isinstance(o, Completion): comp = o
+                        elif isinstance(o, Part) and o.type == PartType.text and o.text: n += 1; yield o.text
+            except Exception as e:
+                if n or i == len(tries) - 1 or not effort_refused(e): raise
+                continue
+            break
+        if comp is None: raise RuntimeError('stream ended without a final Completion')
+        self.oneshot_use = usage_stats(norm_completion(comp).get('usage'))
+
+    def oneshot_stream(self, prompt, sp='', think=None, max_tokens=None, deadline=None):
+        "Yield the text of one reply to `prompt` as the provider sends it, without tools or history. Closing the iterator closes the provider's stream. `cancel()` ends it with `OneShotCancelled`, also while it waits for a chunk. A `deadline` is refused with `ValueError` before any request is made, since the backend cannot cut a request short."
+        if deadline is not None: raise ValueError(f'{type(self).__name__} cannot bound a call with a deadline; pass deadline=None')
+        self._cancel.clear()
+        self.oneshot_use = usage_stats(None)
+        return self._oneshot_chunks(*self._oneshot_args(prompt, sp, max_tokens), think)
 
     def _structured_call(self, prompt, schema, sp):
         "Force the tool call for `schema` and return its arguments, falling back to JSON found in prose."
