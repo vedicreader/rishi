@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.61
+
+- Requires uraiyadal 0.0.20. A reply that keeps writing after its last tool call no longer passes that text on. The text came before any result existed, and it was often a result the model made up. Before, rishi dropped later message blocks but kept such text inside the block that held the call.
+
 ## 0.1.60
 
 - On a LiteRT model, a tool call runs as the approval function leaves it. An approval can rewrite the call in place: another tool, other arguments, or `user_steering` in place of a rejected call. Before, litert ran the call as the model sent it, so a rejected call still ran.

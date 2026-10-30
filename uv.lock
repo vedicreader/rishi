@@ -3313,7 +3313,7 @@ requires-dist = [
     { name = "soundfile", marker = "extra == 'dev'", specifier = ">=0.14.0" },
     { name = "soundfile", marker = "extra == 'llama'", specifier = ">=0.14.0" },
     { name = "truststore", specifier = ">=0.10" },
-    { name = "uraiyadal", specifier = "==0.0.19" },
+    { name = "uraiyadal", specifier = "==0.0.20" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'all'", specifier = ">=0.22" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'dev'", specifier = ">=0.22" },
     { name = "zstandard", marker = "python_full_version < '3.14' and sys_platform == 'linux' and extra == 'ollama'", specifier = ">=0.22" },
@@ -3827,7 +3827,7 @@ wheels = [
 
 [[package]]
 name = "uraiyadal"
-version = "0.0.19"
+version = "0.0.20"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aidialog" },
@@ -3838,9 +3838,9 @@ dependencies = [
     { name = "safepyrun" },
     { name = "truststore" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/dc/b2/1f99b8521a3d39c787f5e9db19d6671fe65517d55454b167f69bc1f6d295/uraiyadal-0.0.19.tar.gz", hash = "sha256:778cf3d5a9040ab6da5c75ca4bd20cddc7969faf08f31faf278594461e35c583", size = 51999, upload-time = "2026-10-24T20:38:54.08Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/67/68/d56218ac296ed18df4808c70157bbc30fe5a5d2d4c249f690da468a700c2/uraiyadal-0.0.20.tar.gz", hash = "sha256:7b204400de37e59861f6f98025f79e22b62a406683ca7170967d5bac944fa05e", size = 52070, upload-time = "2026-10-30T03:35:50.657Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c2/e4/0fa6f9f49de54c941dd34b9a3e996a21f360d7dddf387a7d5a22df2464aa/uraiyadal-0.0.19-py3-none-any.whl", hash = "sha256:a439e8211d20076e7786f16c5bdf2e2c30f01924bbfff01d7b085c2cc77467ef", size = 58843, upload-time = "2026-10-24T20:38:52.671Z" },
+    { url = "https://files.pythonhosted.org/packages/67/11/7e43e2c488af32470bdd66228aaa6fb2c39f263fd302e1ce53df7ff28eaf/uraiyadal-0.0.20-py3-none-any.whl", hash = "sha256:6dca1ef36c0beb73db83f488911636f254e40b548a95ba89a78cd13b7a7b1931", size = 58920, upload-time = "2026-10-30T03:35:49.218Z" },
 ]
 
 [[package]]
