@@ -13,7 +13,7 @@ import json, re, os, base64, uuid, warnings, threading
 from mimetypes import guess_type
 from contextlib import ExitStack, closing
 from litert_lm import (ActivationDataType, Engine, Backend, ConstrainedDecodingConfig, Conversation, Message, Contents, Content, Role, ToolCall,
-                       ToolEventHandler, SamplerConfig, Benchmark, set_min_log_severity)
+                       Tool, ToolEventHandler, SamplerConfig, Benchmark, set_min_log_severity, tool_from_function)
 from litert_lm._messages import Text, ImageBytes, ImageFile, AudioBytes, AudioFile, ToolResponse, normalize_message
 from huggingface_hub import hf_hub_download, list_repo_files
 from fastcore.all import Path, store_attr, patch, L, ifnone, detect_mime, first, listify, img_bytes, str2bool
@@ -192,21 +192,24 @@ _Hold = EngineHold
 
 class ChatToolHandler(ToolEventHandler):
     "Connect LiteRT-LM's built-in tool loop to the chat's callbacks, approval function, tool-call budget and history."
-    def __init__(self, chat): self.chat = chat
+    def __init__(self, chat): self.chat, self.approved = chat, None
     def approve_tool_call(self, tool_call):
         c = self.chat
-        c.turn_tc = tool_call
+        c.turn_tc, self.approved = tool_call, None
         # calls of one response come one after another with no send between, so the token count has not moved
         rd, new = getattr(c, '_litert_round', None), False
         if hasattr(c, '_litert_round_start') and (rd is None or rd['tc'] is None or rd['tc'] != c._litert_round_tc()):
             rd, new = c._litert_round_start(), True
-        self._litert_name = tool_call.get('function', {}).get('name', '')   # litert runs the call by the name it read before asking
         for _ in run_cbs(c, 'before_tool_calls'): pass
         over = c._budget_exceeded or (c.max_steps is not None and c._steps >= c.max_steps)
         ok = False if over else (c.approve(tool_call) if c.approve else True)
         if ok: c._steps += 1; c._hold.let_go()   # the engine idles while the tool runs: let another chat in
         else: c._budget_exceeded = c._budget_exceeded or over
+        # approval may rewrite the call in place. litert runs the name and arguments it read before asking,
+        # so `_ApprovedTool` runs this record instead, and the history and a retry name the call that ran
         fn = tool_call.get('function', {}); self._tcid = _call_id()
+        self._litert_name = fn.get('name', '')
+        if ok: self.approved = (self._litert_name, fn.get('arguments', {}))
         # what the model said in this step before calling, kept beside the call rather than folded into the final reply
         c.hist.append({'role': 'assistant', 'content': rd['text'] if new else '',
             'tool_calls': [{'id': self._tcid, 'type': 'function',
@@ -215,6 +218,7 @@ class ChatToolHandler(ToolEventHandler):
                                   'content': budget_msg_ if over else 'Denied by human operator'})
         return ok
     def process_tool_response(self, tool_response):
+        self.approved = None     # used, or never reached when litert did not know the model's name
         self.chat._hold.take()   # the tool is done; the engine is ours again for the reply
         mx = getattr(self.chat, 'tool_max_len', None)
         if mx and isinstance(tool_response, str) and len(tool_response) > mx:
@@ -225,6 +229,23 @@ class ChatToolHandler(ToolEventHandler):
         for _ in run_cbs(self.chat, 'after_tool_calls'): pass
         if (rec := getattr(self.chat, '_litert_round_result', None)): rec(getattr(self, '_litert_name', ''), tool_response)
         return tool_response
+
+class _ApprovedTool(Tool):
+    "Give litert `tool`, whose `execute` runs the call that `handler`'s approval left, found in `tools` by name: litert would run the call as the model sent it."
+    def __init__(self, tool, handler, tools): self.tool, self.handler, self.tools = tool, handler, tools
+    def get_tool_description(self): return self.tool.get_tool_description()
+    def execute(self, param):
+        rec, self.handler.approved = self.handler.approved, None
+        if rec is None: return self.tool.execute(param)
+        name, args = rec
+        if (t := self.tools.get(name)) is None: return f'Error: interfaces.Tool {name} not found'   # litert's words for an unknown tool
+        return t.execute(args)
+
+def _approved_tools(tools, handler):
+    "`tools` as litert's `Tool`s, indexed by name as `Engine.create_conversation` indexes them, each running the call `handler` approved."
+    ts = [t if isinstance(t, Tool) else tool_from_function(t) for t in tools]
+    by_name = {t.get_tool_description()['function']['name']: t for t in ts}
+    return [_ApprovedTool(t, handler, by_name) for t in ts]
 
 
 # %% ../nbs/02_litert.ipynb #6aa00146bc49f9c1
@@ -400,7 +421,7 @@ class LitertChat(Chat):
         kw = dict(self._conv_kw)
         if (cd := self._constrained()) is not None: kw['constrained_decoding_config'] = cd
         self.conv = self._conv_stack.enter_context(self.engine.create_conversation(
-            messages=messages or None, tools=list(self.tools) or None,
+            messages=messages or None, tools=_approved_tools(self.tools, self.tool_handler) or None,
             tool_event_handler=self.tool_handler, **kw))
         return self.conv
 
