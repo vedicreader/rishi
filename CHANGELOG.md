@@ -2,6 +2,12 @@
 
 <!-- do not remove -->
 
+## 0.1.60
+
+- On a LiteRT model, a tool call runs as the approval function leaves it. An approval can rewrite the call in place: another tool, other arguments, or `user_steering` in place of a rejected call. Before, litert ran the call as the model sent it, so a rejected call still ran.
+- The history and a retry after a full window name the tool that ran.
+- A rewrite to a tool that does not exist runs nothing and returns litert's error text.
+
 ## 0.1.59
 
 - A full LiteRT window is recovered per step, not per turn. A step is the model's work between two tool rounds. When a later step fills the window before it shows any text, rishi drops older history and sends that step's tool results again. Earlier text is not shown twice and tools do not run again. Before, text from an earlier step stopped the recovery with `ContextWindowExceededError`.
