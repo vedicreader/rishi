@@ -8,11 +8,11 @@ Docs: https://vedicreader.github.io/rishi/claude.html.md"""
 __all__ = ['CLAUDE_BIN', 'opus5', 'opus48', 'sonnet5', 'sonnet46', 'haiku45', 'fable5', 'CLAUDE_MODELS', 'CLAUDE_ALIASES',
            'CLAUDE_ENTRYPOINT', 'CLAUDE_DISALLOWED', 'CLAUDE_SERVER_TOOLS', 'CLAUDE_WORK_DIR', 'MAX_BUFFER', 'ABORTED',
            'TOOL_PARSE_ERR', 'INTERRUPT_WAIT', 'CONT_PROMPT', 'STALL_PROMPT', 'STALL_TIMEOUT', 'RISHI_MCP',
-           'MCP_PREFIX', 'MCP_NAME_MAX', 'NATIVE_ENV', 'NO_AUDIO', 'EMPTY_RESULT', 'claude_bin', 'claude_model',
-           'claude_fallback', 'claude_version', 'sess_entrypoint', 'prune_sessions', 'norm_claude_usage', 'ClaudeError',
-           'claude_status', 'claude_tool_use', 'norm_claude', 'ClaudeStall', 'ClaudeDeadline', 'ClaudeMcpRefused',
-           'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat', 'anth_blocks', 'tu_id', 'tag_calls',
-           'anth_msgs', 'claude_prompt']
+           'MCP_PREFIX', 'MCP_NAME_MAX', 'NATIVE_ENV', 'MANAGED_MCP', 'NO_AUDIO', 'EMPTY_RESULT', 'claude_bin',
+           'claude_model', 'claude_fallback', 'claude_version', 'sess_entrypoint', 'prune_sessions',
+           'norm_claude_usage', 'ClaudeError', 'claude_status', 'claude_tool_use', 'norm_claude', 'ClaudeStall',
+           'ClaudeDeadline', 'ClaudeMcpRefused', 'mk_claude_content', 'mk_claude_msg', 'mk_claude_msgs', 'ClaudeChat',
+           'managed_mcp', 'anth_blocks', 'tu_id', 'tag_calls', 'anth_msgs', 'claude_prompt']
 
 # %% ../nbs/06_claude.ipynb #cl_imports
 import asyncio, atexit, contextvars, json, os, re, shutil, subprocess, sys, time, uuid, warnings, weakref
@@ -340,9 +340,16 @@ class ClaudeChat(RishiToolLoop, Chat):
 
 
 # %% ../nbs/06_claude.ipynb #cl_sdk
+MANAGED_MCP = ('/Library/Application Support/ClaudeCode/managed-mcp.json', '/etc/claude-code/managed-mcp.json',
+               r'C:\ProgramData\ClaudeCode\managed-mcp.json')   # where an enterprise MCP config lives, on macOS, Linux and Windows
+
+def managed_mcp() -> bool:
+    "Whether this machine has an enterprise MCP config. Claude Code then refuses `--strict-mcp-config` outright."
+    return any(os.path.exists(f) for f in MANAGED_MCP)
+
 @patch
 def _opts(self:ClaudeChat, sp, resume=None, fork=False, mcp=True, tools=True):
-    "Agent SDK options for one turn. No MCP server for a managed policy to refuse, unless native mode and `mcp` ask for rishi's own. `tools=False` gives Claude Code no tool, whatever the chat's tool options or `set_opts` say: no built-in, no allowed tool and no MCP server, and `strict_mcp_config` is on so Claude Code reads none from its settings either."
+    "Agent SDK options for one turn. No MCP server for a managed policy to refuse, unless native mode and `mcp` ask for rishi's own. `tools=False` gives Claude Code no tool, whatever the chat's tool options or `set_opts` say: no built-in, no allowed tool and no MCP server, and `strict_mcp_config` is on so Claude Code reads none from its settings either, except where an enterprise MCP config (`managed_mcp`) would refuse the flag."
     sdk = claude_agent_sdk
     cwd = self._cwd
     cwd.mkdir(parents=True, exist_ok=True)
@@ -376,7 +383,7 @@ def _opts(self:ClaudeChat, sp, resume=None, fork=False, mcp=True, tools=True):
     if self.bare: kw.update(setting_sources=[], skills=[])    # no CLAUDE.md, plugins, hooks or skills
     if resume: kw.update(resume=resume, fork_session=fork)
     kw = {**kw, **self.opts_}
-    if not tools: kw.update(tools=[], allowed_tools=[], mcp_servers={}, strict_mcp_config=True)
+    if not tools: kw.update(tools=[], allowed_tools=[], mcp_servers={}, strict_mcp_config=not managed_mcp())
     return sdk.ClaudeAgentOptions(**kw)
 
 @patch

@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.63
+
+- A Claude one-shot sets `strict_mcp_config` only where no enterprise MCP config exists (new `managed_mcp()` and `MANAGED_MCP`). Claude Code refuses that flag on a machine with an enterprise config. In 0.1.62 every Claude one-shot failed there, so each `claude/*` one-shot answered nothing. The one-shot still names no tool and no MCP server.
+
 ## 0.1.62
 
 - `ClaudeChat.oneshot` takes `deadline=`, the seconds the call may run. At the deadline rishi stops the call and raises `ClaudeDeadline`, with the real `elapsed` time. No other backend is tried.
