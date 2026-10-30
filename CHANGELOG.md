@@ -2,6 +2,15 @@
 
 <!-- do not remove -->
 
+## 0.1.62
+
+- `ClaudeChat.oneshot` takes `deadline=`, the seconds the call may run. At the deadline rishi stops the call and raises `ClaudeDeadline`, with the real `elapsed` time. No other backend is tried.
+- New `oneshot_stream` yields the reply text as the provider sends it, on Claude and remote backends. Closing the iterator closes the provider stream.
+- `cancel()` ends a one-shot with `OneShotCancelled(elapsed, stopped)` on both backends. The call returns only after the Claude Code process has stopped. When it does not stop within `CLOSE_WAIT` (20 s), `stopped` is False, and the call can still spend.
+- A one-shot has no tools and sets `strict_mcp_config`, so Claude Code reads no MCP server from its settings.
+- Each backend shows what it supports with `oneshot_stream_ok`, `oneshot_deadline_ok` and `oneshot_max_tokens_ok`. `oneshot_use` holds the spend of the latest one-shot only.
+- A remote backend refuses `deadline=` with `ValueError` before it sends a request.
+
 ## 0.1.61
 
 - Requires uraiyadal 0.0.20. A reply that keeps writing after its last tool call no longer passes that text on. The text came before any result existed, and it was often a result the model made up. Before, rishi dropped later message blocks but kept such text inside the block that held the call.
