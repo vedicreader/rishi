@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.65
+
+
 ## 0.1.64
 
 - A one-shot prompt that is a list, such as the picture bytes and the text that ramabana's `Agent.compose` gives, now reaches the model on remote and Claude backends. Before, a remote one-shot dropped each part that was not a dict, so the model got an empty message, and a Claude one-shot failed with "Object of type bytes is not JSON serializable".
