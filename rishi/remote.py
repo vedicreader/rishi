@@ -177,9 +177,9 @@ def norm_completion(comp):
     return Resp(res)
 
 # %% ../nbs/04_remote.ipynb #rm_chat
-#: What `think=False` asks a hosted model for. A name, not a literal, so a deployment whose
-#: provider spells the lowest reasoning effort differently can say so.
-NO_THINK_EFFORT = 'minimal'
+#: What `think=False` asks a hosted model for. `None` sends no effort, so the model runs at its default.
+#: A deployment whose provider takes a lowest effort, such as 'minimal', can set it.
+NO_THINK_EFFORT = None
 dflt_remote = 'gpt-5.1'      #: model for a `RemoteChat` with none named
 DFLT_MAX_TOKENS = 16_000   #: output cap for a model fastllm has no maximum for; a known model gets its own
 #: Vendors whose transport answers a streamed request and refuses every other one.
@@ -439,7 +439,7 @@ class RemoteChat(RishiToolLoop, Chat):
         raise OneShotCancelled(time.monotonic() - began, stopped)
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
-        "Stateless completion text, with no history and no tools. `think=False` asks for `NO_THINK_EFFORT`. `cancel()` ends it with `OneShotCancelled`."
+        "Stateless completion text, with no history and no tools. `think=False` asks for `NO_THINK_EFFORT`, or no effort when it is `None`. `cancel()` ends it with `OneShotCancelled`."
         msgs, kw = self._oneshot_args(prompt, sp, max_tokens)
         self._cancel.clear()   # a `cancel()` that ended an earlier call must not end this one
         self.oneshot_use, began = usage_stats(None), time.monotonic()
@@ -447,7 +447,7 @@ class RemoteChat(RishiToolLoop, Chat):
             r = norm_completion(run_coro(self._until_cancelled(self._collect(msgs, **k), began)))
             self.oneshot_use = usage_stats(r.get('usage'))
             return resp_text(r)
-        if think is not False: return send(kw)
+        if think is not False or NO_THINK_EFFORT is None: return send(kw)
         try: return send({**kw, 'reasoning_effort': NO_THINK_EFFORT})
         except Exception as e:
             if not effort_refused(e): raise
@@ -471,7 +471,7 @@ class RemoteChat(RishiToolLoop, Chat):
 
     def _oneshot_chunks(self, msgs, kw, think):
         "Text chunks of one streamed request. `think=False` sends `NO_THINK_EFFORT` and, when the provider refuses it before any text, sends again without. `oneshot_use` is set from the final `Completion`."
-        tries, began = [{**kw, 'reasoning_effort': NO_THINK_EFFORT}, kw] if think is False else [kw], time.monotonic()
+        tries, began = [{**kw, 'reasoning_effort': NO_THINK_EFFORT}, kw] if think is False and NO_THINK_EFFORT else [kw], time.monotonic()
         for i, k in enumerate(tries):
             n, comp = 0, None
             try:
