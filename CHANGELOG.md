@@ -2,8 +2,13 @@
 
 <!-- do not remove -->
 
+## 0.1.66
+
+- A one-shot call with `think=False` sends no reasoning effort, so the model runs at its default. Before, it sent `'minimal'`. Some models, such as GPT-6.1 Sol, refuse `'minimal'` with a 400, and each such call then went out a second time. `NO_THINK_EFFORT` is now `None`. A deployment whose provider takes a lowest effort can set it, and a refusal still sends the call once more without it.
+
 ## 0.1.65
 
+- The same code as 0.1.64.
 
 ## 0.1.64
 
