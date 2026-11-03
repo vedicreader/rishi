@@ -3,8 +3,8 @@
 ## Cursor Cloud specific instructions
 
 `rishi` is an [nbdev](https://nbdev.fast.ai/) Python library. It is a thin `Chat` layer over five
-local and hosted backends: litert, llama.cpp, mlx, ollama and remote. Three more wrap cursor-agent,
-Claude Code and GitHub Copilot.
+local and hosted backends: litert, llama.cpp, mlx, ollama and remote. Two more wrap Claude Code and
+GitHub Copilot.
 It is a library, not a web service, so "running the app" means importing `rishi` and driving a model
 through `Chat`.
 
@@ -49,9 +49,6 @@ through `Chat`.
   a record and replay cache (`RecordCache`, backed by `diskcache`) rather than hitting real models.
 - `08_ollama.ipynb` runs its whole backend against an `httpx.MockTransport` daemon, so it passes
   with no Ollama installed and no daemon running. Its live cells are `#| eval: false`.
-- One notebook fails in a bare environment for external reasons, not a code bug. `05_cursor.ipynb`
-  needs the `cursor-agent` CLI on `$PATH`, so install the Cursor CLI and run `cursor-agent login`.
-  Even listing models shells out to it.
 - `index.ipynb` is the overview and README source, and its examples are `#| eval: false`. The backend
   notebooks (`00_core` through `07_copilot`) follow the same pattern: exported cells (`#| export`)
   are package code with `#:` comments, and demo cells are `eval: false`. After editing, run
@@ -68,7 +65,7 @@ through `Chat`.
   The weights download once from the HF Hub, with no token needed, and are cached. Inference runs on
   CPU.
 - The `remote` backend needs provider keys such as `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or
-  `GEMINI_API_KEY`. The `cursor` backend needs the `cursor-agent` CLI, and `copilot` needs a GitHub
+  `GEMINI_API_KEY`. The `claude` backend needs the `claude` CLI on `$PATH`, and `copilot` needs a GitHub
   account with a Copilot subscription. None of them is configured by default.
 
 ### Gotchas

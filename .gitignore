@@ -165,3 +165,6 @@ checklink/cookies.txt
 .kosha/
 docs/
 leela_sessions/
+
+# Quarto HTML render of index.ipynb (nbdev-readme)
+index_files/figure-html/
