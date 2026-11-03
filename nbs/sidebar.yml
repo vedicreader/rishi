@@ -10,3 +10,12 @@ website:
       - 06_claude.ipynb
       - 07_copilot.ipynb
       - 08_ollama.ipynb
+      - images.jpeg
+      - nbdev.yml
+      - sidebar.yml
+      - skill.md
+      - speech.wav
+      - styles.css
+      - section: chatcache
+        contents:
+          - chatcache/cache.db
