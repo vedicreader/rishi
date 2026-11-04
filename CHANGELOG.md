@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.67
+
+- rishi needs `uraiyadal>=0.0.21`, not exactly 0.0.20. urai 0.0.21 builds a tool schema when the tool's source file is gone. Before, a deleted plug-in stopped the chat with `OSError: could not get source code`. A later urai now installs without a new rishi release.
+
 ## 0.1.66
 
 - A one-shot call with `think=False` sends no reasoning effort, so the model runs at its default. Before, it sent `'minimal'`. Some models, such as GPT-6.1 Sol, refuse `'minimal'` with a 400, and each such call then went out a second time. `NO_THINK_EFFORT` is now `None`. A deployment whose provider takes a lowest effort can set it, and a refusal still sends the call once more without it.
