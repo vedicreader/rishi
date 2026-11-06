@@ -2,6 +2,11 @@
 
 <!-- do not remove -->
 
+## 0.1.68
+
+- rishi needs `fastspec>=0.2.1`. The remote and Copilot runtimes import it, but rishi did not declare it, so a project with rishi and without ramabana, shalya or jupyasyncclient failed with `No module named 'fastspec'`.
+- A test reads each runtime's imports and checks that the declared dependencies cover them. Only the `llama` and `mlx` runtimes need an extra.
+
 ## 0.1.67
 
 - rishi needs `uraiyadal>=0.0.21`, not exactly 0.0.20. urai 0.0.21 builds a tool schema when the tool's source file is gone. Before, a deleted plug-in stopped the chat with `OSError: could not get source code`. A later urai now installs without a new rishi release.
