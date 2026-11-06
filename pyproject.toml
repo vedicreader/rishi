@@ -27,7 +27,8 @@ dependencies = [
     "claude-agent-sdk>=0.2",
     "llmsurgery>=0.0.13",
     "httpx",
-    "litert-lm-api>=0.14.0"
+    "litert-lm-api>=0.14.0",
+    "fastspec>=0.2.1"
 ]
 
 [project.optional-dependencies]
