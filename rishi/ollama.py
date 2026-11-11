@@ -1,4 +1,4 @@
-"""Run models through a local [Ollama](https://ollama.com) daemon, with rishi installing Ollama, pulling models and starting `ollama serve` for you when needed.
+"""Run models through a local [Ollama](https://ollama.com) daemon. rishi installs Ollama, pulls models, and starts `ollama serve` when needed.
 
 Docs: https://vedicreader.github.io/rishi/ollama.html.md"""
 
@@ -31,14 +31,14 @@ OLLAMA_HOST = '127.0.0.1:11434'
 LOCAL_HOSTS = ('127.0.0.1', 'localhost', '::1', '0.0.0.0')
 
 def ollama_url(host=None):
-    "Normalize an Ollama host (`:11434`, `host:port`, or a full URL) to a base URL. `None` reads `$OLLAMA_HOST`."
+    "Normalize an Ollama host (`:11434`, `host:port`, or a full URL) to a base URL. Read `$OLLAMA_HOST` when `host` is `None`."
     h = str(host or os.getenv('OLLAMA_HOST') or OLLAMA_HOST).strip()
     if '://' not in h: h = 'http://' + h.lstrip('/')
     u = urlsplit(h)
     return f"{u.scheme}://{u.hostname or '127.0.0.1'}:{u.port or (443 if u.scheme == 'https' else 11434)}"
 
 def is_local(url):
-    "Return True when `url` points at this machine, whose daemon must be reached without any HTTP proxy."
+    "Return whether `url` points at this machine. Local daemons must bypass HTTP proxies."
     return (urlsplit(url).hostname or '') in LOCAL_HOSTS
 
 # %% ../nbs/08_ollama.ipynb #ol_ids
@@ -55,7 +55,7 @@ dflt_model = qwen3_17b   #: what `OllamaChat()` loads when given no model
 HF_HOSTS = ('hf.co/', 'huggingface.co/')
 
 def ollama_model(model=None, quant='Q4_K_M'):
-    "A rishi model id as Ollama addresses it: a hub GGUF repo becomes `hf.co/<repo>:<quant>`, an Ollama id passes through."
+    "Map a rishi model id to Ollama's form. A Hub GGUF repo becomes `hf.co/<repo>:<quant>`. An Ollama id passes through."
     m = str(model or dflt_model).strip()
     if is_path(m): raise ValueError(
         f"Ollama serves models from its own store, not a path: {m!r}. Use runtime='llama' for a "
@@ -65,10 +65,10 @@ def ollama_model(model=None, quant='Q4_K_M'):
 
 # %% ../nbs/08_ollama.ipynb #ol_client
 class OllamaError(RuntimeError):
-    "What the daemon said went wrong, or that nothing answered."
+    "An error from the daemon or from a request that received no response."
 
 def _err(r):
-    "The daemon's own `error` message from a failed response, else the status line."
+    "Return the daemon's `error` message from a failed response, or the HTTP status line."
     try: msg = (r.json() or {}).get('error')
     except Exception: msg = None
     return msg or f'HTTP {r.status_code}: {(r.text or "")[:200]}'
@@ -101,14 +101,14 @@ class OllamaClient:
         return self._check(self.client.post(path, json=payload, **kw)).json()
 
     def stream(self, path, payload, timeout=None):
-        "POST `payload`, yielding the daemon's newline-delimited JSON as it arrives."
+        "POST `payload` and yield the daemon's newline-delimited JSON as it arrives."
         with self.client.stream('POST', path, json=payload, timeout=ifnone(timeout, self.timeout)) as r:
             if r.status_code >= 400:
                 r.read(); raise OllamaError(_err(r))
             for line in r.iter_lines():
                 if not (line := line.strip()): continue
                 d = json.loads(line)
-                # a stream can turn into an error after its 200, so this is not the check above again
+                # The daemon can send an error after a 200 status.
                 if (e := d.get('error')): raise OllamaError(e)
                 yield d
 
@@ -256,7 +256,7 @@ SERVE_ENV = {'models': 'OLLAMA_MODELS', 'n_ctx': 'OLLAMA_CONTEXT_LENGTH', 'keep_
              'num_parallel': 'OLLAMA_NUM_PARALLEL', 'max_loaded': 'OLLAMA_MAX_LOADED_MODELS'}
 
 class OllamaServer:
-    "An `ollama serve` process rishi starts and owns, installing Ollama first if the machine has none."
+    "An `ollama serve` process that rishi starts and owns. Install Ollama first when the machine has none."
     def __init__(self, host=None, bin=None, dir=OLLAMA_DIR, models=None, n_ctx=None, keep_alive=None,
                  flash_attn=None, kv_cache_type=None, num_parallel=None, max_loaded=None, log=None):
         self.url, self.proc = ollama_url(host), None
@@ -288,7 +288,7 @@ class OllamaServer:
             if not is_local(self.url): raise OllamaError(
                 f'nothing is listening at {self.url}, and rishi only starts a daemon on this machine')
             if (b := self.bin) is not None:
-                # an explicit `bin` that is not there is a mistake to report, not one to route around
+                # Report a missing explicit `bin`. Do not select another binary.
                 if not Path(b).exists(): raise OllamaError(f'no ollama binary at {b}')
             elif not (b := ollama_bin(self.dir)):
                 if not install: raise OllamaError(
@@ -296,7 +296,7 @@ class OllamaServer:
                 b = install_ollama(self.dir, on_progress=on_progress)
             self.bin = b
             out = open(self.log, 'ab') if self.log else subprocess.DEVNULL
-            # its own session, so a Ctrl-C meant for the parent does not also kill the daemon
+            # Use a separate session so Ctrl-C for the parent does not kill the daemon.
             self.proc = subprocess.Popen([str(b), 'serve'], env=self.env(), stdin=subprocess.DEVNULL, stdout=out, stderr=out,
                                          start_new_session=True)
             atexit.register(self.stop)
@@ -424,7 +424,7 @@ def dflt_ctx():
     except ValueError: return 4096
 
 class OllamaChat(RishiToolLoop, Chat):
-    "A `Chat` that sends each turn to an Ollama daemon, starting the daemon and pulling the model when needed."
+    "A `Chat` that sends turns to an Ollama daemon. Start the daemon and pull the model when needed."
     _runtime = 'ollama'
     mk_content, mk_msg, mk_msgs = staticmethod(mk_content), staticmethod(mk_msg), staticmethod(mk_msgs)
 
@@ -462,7 +462,7 @@ class OllamaChat(RishiToolLoop, Chat):
         self._opts.update(options or {})
         self.think, self.keep_alive = o.think, keep_alive
         self.max_output_tokens = o.max_output_tokens or None
-        # a model with no thinking refuses `think`; this goes false on the first refusal
+        # A model can refuse `think`. The first refusal disables it.
         self._think_ok, self.comp_kw = o.think is not None, comp_kw or {}
         self._set_tools(o.tools)
         if pull and not self.client.have(self.model_id):
@@ -471,7 +471,7 @@ class OllamaChat(RishiToolLoop, Chat):
         self._setup(model, o)
 
     def close(self):
-        "Release this chat's HTTP client. The daemon is shared, so it stays up; `stop_ollama()` ends one rishi started."
+        "Release this chat's HTTP client. The shared daemon stays up. `stop_ollama()` ends a daemon that rishi started."
         if self._own_client and getattr(self, 'client', None) is not None: self.client.close()
         self.client = None
 
@@ -516,14 +516,14 @@ class OllamaChat(RishiToolLoop, Chat):
         return True
 
     def _ask(self, payload):
-        "One request, retried once without `think` if the model has no thinking to give."
+        "Send one request. Retry it once without `think` if the model refuses that field."
         try: return self.client.chat(payload)
         except OllamaError as e:
             if not self._drop_think(payload, e): raise
             return self.client.chat(payload)
 
     def _ask_stream(self, payload):
-        "Stream one request. A refusal only lands on the first chunk, so the retry has to sit there."
+        "Stream one request. A refusal arrives only on the first chunk, so retry there."
         it = iter(self.client.chat(payload, stream=True))
         try: first_chunk = next(it)
         except StopIteration: return

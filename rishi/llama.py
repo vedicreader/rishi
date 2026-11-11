@@ -1,4 +1,4 @@
-"""Run GGUF models inside your Python process with [llama-cpp-python](https://github.com/abetlen/llama-cpp-python), including image and audio input.
+"""Run GGUF models inside your Python process with [llama-cpp-python](https://github.com/abetlen/llama-cpp-python). The backend accepts image and audio input.
 
 Docs: https://vedicreader.github.io/rishi/llama.html.md"""
 
@@ -30,8 +30,8 @@ _parse_args, _mk_tag_tc, _acc_tc = parse_args, mk_tag_tc, acc_tc
 _UsageCallback, _ToolReminderCallback = UsageCallback, ToolReminderCallback
 
 # %% ../nbs/01_llama.ipynb #84426f78
-#: Common HuggingFace GGUF repo ids for `Chat(...)` / `LlamaChat(...)`.
-DFLT_N_CTX = 8192   #: window to build an engine with when nothing says otherwise
+#: Common Hugging Face GGUF repo ids for `Chat(...)` and `LlamaChat(...)`.
+DFLT_N_CTX = 8192   #: Default engine context window when no other value is set.
 qwen3_06b = 'Qwen/Qwen3-0.6B-GGUF'
 qwen3_17b = 'Qwen/Qwen3-1.7B-GGUF'
 qwen3_4b  = 'Qwen/Qwen3-4B-GGUF'
@@ -42,7 +42,7 @@ ornith_9b = 'unsloth/Ornith-1.0-9B-GGUF'
 ornith_31b = 'unsloth/Ornith-1.0-35B-GGUF'
 
 def _gguf(fs, quant='Q4_K_M'):
-    "First `.gguf` path in `fs` matching `quant` (case-insensitive), else the first one (skips `mmproj` files)."
+    "Return the first `.gguf` path in `fs` that matches `quant`, ignoring case. Skip `mmproj` files. Return the first remaining path when no path matches `quant`."
     ggufs = L(fs).filter(lambda p: p.lower().endswith('.gguf') and 'mmproj' not in p.lower())
     return first(ggufs, lambda p: quant.lower() in p.lower()) or first(ggufs)
 
@@ -51,7 +51,7 @@ def cached_model(model_id, quant='Q4_K_M'):
     return _gguf(hub_files(model_id), quant)
 
 def get_model(model_id, model_path=None, quant='Q4_K_M'):
-    "Return a local `.gguf` path: `model_path`, else HF cache, else download."
+    "Return a local `.gguf` path from `model_path`, the Hugging Face cache or a download, in that order."
     if model_path and Path(model_path).exists(): return str(model_path)
     if (hit := cached_model(model_id, quant)): return hit
     if not (fn := _gguf(list_repo_files(model_id), quant)): raise FileNotFoundError(f"No .gguf file found for {model_id}")
@@ -60,7 +60,7 @@ def get_model(model_id, model_path=None, quant='Q4_K_M'):
 _cached_model, _get_model = cached_model, get_model
 
 def _mmproj(fs):
-    "First `mmproj` projector `.gguf` path in `fs` (the projector that sits beside the model)."
+    "Return the first `mmproj` projector `.gguf` path in `fs`."
     return first(L(fs).filter(lambda p: p.lower().endswith('.gguf') and 'mmproj' in Path(p).name.lower()))
 
 def _cached_mmproj(model_id):
@@ -68,7 +68,7 @@ def _cached_mmproj(model_id):
     return _mmproj(hub_files(model_id))
 
 def get_mmproj(model_id, mmproj_path=None):
-    "Return a local path to a model's `mmproj` projector: `mmproj_path` if it exists, else the Hugging Face cache, else a download."
+    "Return a local path to a model's `mmproj` projector from `mmproj_path`, the Hugging Face cache or a download, in that order."
     if mmproj_path and Path(mmproj_path).exists(): return str(mmproj_path)
     if (hit := _cached_mmproj(model_id)): return hit
     if not (fn := _mmproj(list_repo_files(model_id))): raise FileNotFoundError(f"No mmproj .gguf found for {model_id}")
@@ -101,7 +101,7 @@ def read_audio(o, sr=16000):
     return np.ascontiguousarray(_resample(a, src, sr), dtype=np.float32)
 
 # %% ../nbs/01_llama.ipynb #8da9504d
-# capture the originals once, so re-importing this module can never chain a patch onto itself
+# Capture the original methods once. Re-importing must not chain this patch onto itself.
 if not hasattr(MTMDChatHandler, '_rishi_orig'):
     MTMDChatHandler._rishi_orig = {'init': MTMDChatHandler._init_mtmd_context,
                                    'bitmap': MTMDChatHandler._create_bitmap_from_bytes}
@@ -112,16 +112,16 @@ def _init_mtmd_context(self:MTMDChatHandler, llama_model):
     "As upstream, but accept an audio-only projector instead of hard-failing on the missing vision encoder."
     try: return _orig_init(self, llama_model)
     except ValueError:
-        # upstream builds the ctx, then raises before registering cleanup when vision is unsupported; the
-        # recoverable case is uniquely "ctx built + audio supported" - gate on that, not on the message text
+        # Upstream builds the context, then raises before registering cleanup when vision is unsupported.
+        # The recoverable case has a built context and audio support. Check those conditions, not the error text.
         if self.mtmd_ctx is None or not self._mtmd_cpp.mtmd_support_audio(self.mtmd_ctx): raise
-        def _free():   # upstream registers this only on the success path
+        def _free():   # Upstream registers this callback only on the success path.
             if self.mtmd_ctx is not None: self._mtmd_cpp.mtmd_free(self.mtmd_ctx); self.mtmd_ctx = None
         self._exit_stack.callback(_free)
 
 @patch
 def get_image_urls(self:MTMDChatHandler, messages):
-    "Return the data URIs of every image and audio part in `messages`, in document order, where upstream collects images only."
+    "Return every image and audio data URI in `messages`, in document order. Upstream returns images only."
     urls = []
     for m in messages:
         for p in (m.get('content') if isinstance(m.get('content'), list) else []):
@@ -135,7 +135,7 @@ def get_image_urls(self:MTMDChatHandler, messages):
 
 @patch
 def _get_template_messages(self:MTMDChatHandler, messages, media_marker):
-    "Replace media with `media_marker` and collapse text parts to a string."
+    "Replace media with `media_marker` and join text parts into a string."
     def _conv(m):
         c = m.get('content')
         if not isinstance(c, list): return dict(m)
@@ -147,7 +147,7 @@ def _get_template_messages(self:MTMDChatHandler, messages, media_marker):
 
 @patch
 def _create_bitmap_from_bytes(self:MTMDChatHandler, image_bytes):
-    "Audio bytes become an mtmd audio bitmap. Anything else takes the original image path untouched."
+    "Convert audio bytes to an `mtmd` audio bitmap. Pass other bytes to the original image handler."
     if not (detect_mime(image_bytes) or '').startswith('audio/'): return _orig_bitmap(self, image_bytes)
     sr = self._mtmd_cpp.mtmd_get_audio_sample_rate(self.mtmd_ctx)
     a = read_audio(image_bytes, sr if sr and sr > 0 else 16000)
@@ -157,7 +157,7 @@ def _create_bitmap_from_bytes(self:MTMDChatHandler, image_bytes):
 
 # %% ../nbs/01_llama.ipynb #62bf39bf
 class LlamaChat(RishiToolLoop, Chat):
-    "A `Chat` that runs a GGUF model inside this process through llama-cpp-python."
+    "A `Chat` that runs a GGUF model in this process through llama-cpp-python."
     _runtime = 'llama'
     mk_content, mk_msg, mk_msgs = staticmethod(_mk_content), staticmethod(_mk_msg), staticmethod(_mk_msgs)
 
@@ -167,13 +167,13 @@ class LlamaChat(RishiToolLoop, Chat):
         return _mk_msgs(msgs)
     @staticmethod
     def hist2fmt(msgs):
-        "Canonical rishi history dicts -> OpenAI-style messages for llama.cpp (past-turn media -> placeholder)."
+        "Convert canonical rishi history dicts to OpenAI-style messages for llama.cpp. Replace media from past turns with placeholders."
         return [_oai_msg(_strip_media(m)) for m in listify(msgs)]
 
     @classmethod
     def create_engine(cls, model_id=qwen3_06b, model_path=None, quant='Q4_K_M', n_ctx=DFLT_N_CTX,
                       n_gpu_layers=0, mmproj=None, verbose=False, **kw):
-        'Build the `llama_cpp.Llama` engine, with a multimodal chat handler for image and audio input when `mmproj` is set.'
+        'Build a `llama_cpp.Llama` engine. Add a multimodal chat handler for image and audio input when `mmproj` is set.'
         ch = None
         if mmproj:
             from llama_cpp.llama_chat_format import MTMDChatHandler
@@ -181,19 +181,19 @@ class LlamaChat(RishiToolLoop, Chat):
         return Llama(get_model(model_id, model_path, quant), n_ctx=n_ctx, n_gpu_layers=n_gpu_layers,
                      chat_handler=ch, verbose=verbose, **kw)
 
-    #: what llama.cpp calls each portable option
+    #: Names that llama.cpp uses for portable options.
     _opt_map = {'ctx': 'n_ctx', 'temp': 'temperature', 'max_output_tokens': 'max_tokens'}
     _opt_skip = ('effort', 'tool_mode', 'api_key', 'base_url')   # nothing local takes these
 
     def __init__(self, model=None, *, runtime=None, model_path=None, opts=None,
-                 engine=None,             # an engine to share instead of building one
-                 quant='Q4_K_M',          # which GGUF quantization to fetch
+                 engine=None,             # Share this engine instead of building one.
+                 quant='Q4_K_M',          # GGUF quantization to fetch.
                  n_gpu_layers=0,
-                 mmproj=None,             # the projector image and audio input need
-                 eng_kw=None,             # passed to `create_engine` verbatim
+                 mmproj=None,             # Projector for image and audio input.
+                 eng_kw=None,             # Pass to `create_engine` unchanged.
                  preserve_cache=False,
-                 comp_kw=None,            # passed to `create_chat_completion` verbatim
-                 **kw):                   # portable options; see `urai.ChatOpts`
+                 comp_kw=None,            # Pass to `create_chat_completion` unchanged.
+                 **kw):                   # Portable options. See `urai.ChatOpts`.
         o = ChatOpts.create(opts, **kw)
         model_id, model_path = rishi.core.split_model_path(model, model_path)
         self._own_engine = engine is None
@@ -240,8 +240,8 @@ class LlamaChat(RishiToolLoop, Chat):
         "Record the reuse this turn got, and whether the next turn can expect any."
         usage = dict(usage or {})
         usage['cached_tokens'] = min(cached, usage.get('prompt_tokens', 0))
-        # media on this turn becomes an `[image]`/`[audio]` placeholder on the next one, so the
-        # rendered prompt stops being an extension of what the cache holds
+        # Media becomes an `[image]` or `[audio]` placeholder on the next turn.
+        # The rendered prompt then stops extending the cached prompt.
         cont = (self.turn_msg or {}).get('content')
         self._cache_dirty = bool(isinstance(cont, list) and any(is_media(p) for p in cont))
         self.engine._rishi_cache_owner = None if self._cache_dirty else self
@@ -295,11 +295,11 @@ class LlamaChat(RishiToolLoop, Chat):
         return [{'role': 'system', 'content': sp}] if sp else []
 
     def _msgs(self):
-        "OpenAI-style messages. Media in earlier turns is stripped to a placeholder so only the live turn is re-encoded, because llama.cpp re-tokenizes the whole list each call."
+        "Return OpenAI-style messages. Replace media in earlier turns with placeholders. Re-encode only the live turn because llama.cpp re-tokenizes the full list on each call."
         return self._sys_msgs() + [_oai_msg(m if m is self.turn_msg else _strip_media(m)) for m in self.hist]
 
-    #: portable options llama.cpp's completion call has no argument for. `think` is a system-prompt
-    #: switch here and the window was fixed when the engine was built, so neither can move per turn.
+    #: Options that llama.cpp's completion call does not accept. `think` is a system-prompt
+    #: switch, and the context window is fixed when the engine is built. Neither can change per turn.
     _turn_drop = ('n_ctx', 'think', 'effort', 'tool_mode')
 
     def _samp_kw(self, turn):

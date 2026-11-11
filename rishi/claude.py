@@ -41,19 +41,19 @@ sonnet46 = 'claude-sonnet-4-6'
 haiku45  = 'claude-haiku-4-5'
 fable5   = 'claude-fable-5'
 
-#: Every id above, for anything that wants to offer the list rather than reach for one of them.
+#: All model ids above, for callers that need the complete list.
 CLAUDE_MODELS = {'opus5': opus5, 'opus48': opus48, 'sonnet5': sonnet5, 'sonnet46': sonnet46,
                  'haiku45': haiku45, 'fable5': fable5}
 
-#: The CLI's own tier aliases. Each names the latest model of its tier on your plan, so a chat that
-#: asks for one survives a model refresh with no release here. `CLAUDE_MODELS` is the other
-#: direction: a pinned id, for a conversation that must not move under you.
+#: The CLI's own tier aliases. Each names the latest model of its tier on your plan. A chat that
+#: uses one follows model refreshes without a release here. `CLAUDE_MODELS` maps in the other
+#: direction to a pinned id for a conversation that must not move.
 CLAUDE_ALIASES = ('opus', 'sonnet', 'haiku', 'fable')
 CLAUDE_ENTRYPOINT = 'sdk-py'    #: what a record rishi filed says it came from. See `prune_sessions`
 CLAUDE_DISALLOWED = ('Bash', 'Write', 'Edit', 'NotebookEdit')
-CLAUDE_SERVER_TOOLS = ('WebSearch', 'WebFetch')  #: Claude Code's own, run on its side and never in rishi's tool loop
+CLAUDE_SERVER_TOOLS = ('WebSearch', 'WebFetch')  #: Claude Code runs these on its side, outside rishi's tool loop
 CLAUDE_WORK_DIR = Path.home()/'.rishi-claude'    #: where a conversation is filed, outside any real project
-MAX_BUFFER = 10*2**20                            #: the SDK's stdout cap. Its own default is 1MB, and it raises rather than truncating
+MAX_BUFFER = 10*2**20                            #: the SDK's stdout cap. Its default is 1 MB. It raises instead of truncating
 
 def claude_bin(bin=CLAUDE_BIN):
     "Absolute path to the `claude` binary, or a `FileNotFoundError` that says how to get one."
@@ -121,7 +121,7 @@ TOOL_PARSE_ERR = "The model's tool call could not be parsed"   #: Claude Code's 
 _status_re = re.compile(r'\b(\d{3})\b')
 
 class ClaudeError(RuntimeError):
-    "A failed Claude Code turn: what it said, the status behind it, the raw result, what it cost, and whether `max_budget_usd` stopped it."
+    "Store a failed Claude Code turn's message, status, raw result, cost and `max_budget_usd` state."
     def __init__(self, msg, status=None, raw=None, usage=None, budget=False):
         self.status, self.raw, self.usage, self.budget = status, raw, usage or {}, budget
         super().__init__(msg)
@@ -143,7 +143,7 @@ def claude_tool_use(b, sdk):
             'input': getattr(b, 'input', None) or {}}
 
 def norm_claude(d, model=None, asked=False, tags=True):
-    "Convert a Claude Code result to a rishi `Resp`, reading `<tool_call>` tags from the text when `tags` and flagging an unreadable call for one resend unless `asked`."
+    "Convert a Claude Code result to a rishi `Resp`. Read `<tool_call>` tags when `tags` is true. Flag an unreadable call for one resend unless `asked` is true."
     if d.get('is_error') and d.get('terminal_reason') not in ABORTED:
         bad = TOOL_PARSE_ERR in (d.get('result') or '')
         if bad and not asked: return Resp({'role': 'assistant', 'content': d['result'], 'tool_parse_failed': True,
@@ -172,7 +172,7 @@ class ClaudeStall(TimeoutError):
     "Claude Code sent nothing for the chat's `timeout` seconds."
 
 class ClaudeDeadline(TimeoutError):
-    "A call outran its `deadline`. `elapsed` is the seconds it ran. `stopped` is True when the SDK stream closed within `CLOSE_WAIT`; when False the call may still finish and spend, and the caller must assume it does."
+    "A call exceeded its `deadline`. `elapsed` is the number of seconds it ran. `stopped` is True when the SDK stream closed within `CLOSE_WAIT`. When `stopped` is False, the call can still finish and spend. The caller must assume that it does."
     def __init__(self, elapsed, stopped):
         self.elapsed, self.stopped = elapsed, stopped
         super().__init__(f'Claude Code was still working after {elapsed:.1f}s, the deadline; ' +
@@ -349,7 +349,7 @@ def managed_mcp() -> bool:
 
 @patch
 def _opts(self:ClaudeChat, sp, resume=None, fork=False, mcp=True, tools=True):
-    "Agent SDK options for one turn. No MCP server for a managed policy to refuse, unless native mode and `mcp` ask for rishi's own. `tools=False` gives Claude Code no tool, whatever the chat's tool options or `set_opts` say: no built-in, no allowed tool and no MCP server, and `strict_mcp_config` is on so Claude Code reads none from its settings either, except where an enterprise MCP config (`managed_mcp`) would refuse the flag."
+    "Return Agent SDK options for one turn. rishi declares no MCP server of its own for a managed policy to refuse, except in native mode with `mcp`. The chat's own `mcp_servers` stay declared unless `tools=False`. `tools=False` gives Claude Code no built-in, allowed or MCP tool, regardless of the chat's tool options or `set_opts`. It enables `strict_mcp_config` when no enterprise MCP configuration (`managed_mcp`) exists. An enterprise MCP configuration refuses the flag."
     sdk = claude_agent_sdk
     cwd = self._cwd
     cwd.mkdir(parents=True, exist_ok=True)
@@ -395,7 +395,7 @@ def _result(self:ClaudeChat, res, text, server_tools=(), called=False):
             'server_tools': list(server_tools), 'api_error_status': g('api_error_status')}
 
 async def _shut(ait, nxt=None):
-    "Cancel the pending read `nxt` and close the stream `ait`, so the SDK ends its query and the subprocess with it, within `CLOSE_WAIT` seconds in all. Return True when the read ended and the stream closed cleanly; a close that fails or outlasts the wait gives False. See `shut_stream`."
+    "Cancel the pending read `nxt` and close the stream `ait` within `CLOSE_WAIT` seconds. Return True when the read ended and the stream closed cleanly. Return False when closing fails or exceeds the wait. The SDK query or subprocess can still be running when the return value is False. See `shut_stream`."
     return await shut_stream(ait, nxt, CLOSE_WAIT)
 
 async def _cut(ait, nxt, began, exc):
@@ -435,7 +435,7 @@ def _stall_msg(self:ClaudeChat, again=False):
             + f'; {self.timeout_hint or "ClaudeChat(timeout=SECONDS)"} raises that limit')
 
 def _holds_call(text):
-    "Whether `text` holds a tool call, readable or not, in any dialect `parse_tool_tags_ex` reads."
+    "Return whether `text` holds a readable or unreadable tool call in a dialect that `parse_tool_tags_ex` reads."
     _, tcs, failed = parse_tool_tags_ex(text)
     return bool(tcs or failed)
 
@@ -496,7 +496,7 @@ async def _drain(self:ClaudeChat, ait, after=None, err='the Agent SDK ended with
     yield 'result', self._result(res, text, ran, called or kept)
 
 async def _one_reply(client, prompt):
-    "One prompt's messages from the `ClaudeSDKClient` `client`, which this generator disconnects when it ends or is closed. `disconnect` is awaited, so the Claude Code process has exited when `aclose` returns. `claude_agent_sdk.query` leaves that to the event loop's generator finalizer: its `aclose` returns while the process still runs."
+    "Yield one prompt's messages from `client`. Disconnect the client when the generator ends or closes. Awaiting `disconnect` means the Claude Code process has exited when `aclose` returns. `claude_agent_sdk.query` leaves disconnect to the event loop's generator finalizer. Its `aclose` returns while the process still runs."
     try:
         await client.connect()
         await client.query(claude_prompt(prompt))
@@ -565,7 +565,7 @@ def anth_blocks(content):
     return out
 
 def tu_id(tid, ant):
-    "A tool call's id as Anthropic spells one, the same way every time it is filed."
+    "Return a tool call id in Anthropic's format for every transcript record."
     tid = tid or ''
     return tid if tid.startswith('toolu_') else 'toolu_' + ant.stable_uuid(f'rishi-tu:{tid}').replace('-', '')[:24]
 
@@ -576,7 +576,7 @@ def tag_calls(tcs):
     return '\n'.join(f"<tool_call>\n{json.dumps({'name': tc_name(tc), 'arguments': (tc.get('function') or {}).get('arguments') or {}})}\n</tool_call>" for tc in tcs)
 
 def anth_msgs(hist, ant, tags=False, prefix=''):
-    "rishi's history as Anthropic messages; tool calls as blocks named `prefix` + name, or as `<tool_call>` text when `tags`."
+    "Convert rishi's history to Anthropic messages. Store tool calls as blocks named `prefix` plus the name, or as `<tool_call>` text when `tags` is true."
     out, called = [], set()
     for m in hist:
         role = m.get('role')
@@ -603,7 +603,7 @@ def anth_msgs(hist, ant, tags=False, prefix=''):
     return out
 
 def claude_prompt(prompt):
-    "A turn's prompt for `query`: a string as it is, content blocks as the streaming-input shape."
+    "Return a turn's prompt for `query`. Keep strings unchanged. Return content blocks in the streaming-input shape."
     if isinstance(prompt, str): return prompt
     if any(not isinstance(p, dict) for p in prompt): prompt = anth_blocks(mk_claude_msg(prompt)['content'])   # raw bytes or text, as `Agent.compose` gives
     async def _one():
@@ -752,7 +752,7 @@ def _tool_names(self:ClaudeChat): return [s.get('function', s)['name'] for s in 
 
 @patch
 def _mcp_tools(self:ClaudeChat):
-    "One `SdkMcpTool` per toolspec, each calling back into this chat's tool loop."
+    "Return one `SdkMcpTool` per toolspec. Each tool calls this chat's tool loop."
     out = []
     for s in self.toolspecs:
         f = s.get('function', s); n = f['name']
@@ -776,7 +776,7 @@ def _mcp_refusal(l):
 
 @patch
 def _refused(self:ClaudeChat, e):
-    "A `ClaudeMcpRefused` when `e` or Claude Code's stderr refuses rishi's MCP server in native mode, else None."
+    "Return `ClaudeMcpRefused` when `e` or Claude Code's stderr refuses rishi's MCP server in native mode. Return `None` otherwise."
     if not self._native or isinstance(e, ClaudeMcpRefused): return None
     said = [l.strip() for l in [*self._errlog, str(e)] if _mcp_refusal(l)]
     if not said: return None
@@ -823,7 +823,7 @@ def _nat_halt(self:ClaudeChat, delay=0.1):
 
 @patch
 async def _mcp_call(self:ClaudeChat, name, args):
-    "One native call: serialized, run off the event loop in the caller's context, and answered as MCP content."
+    "Run one native call in series off the event loop and in the caller's context. Return MCP content."
     async with self._nat_lock:
         tid, said = await self._nat_claim(name, args)
         self._nat_busy += 1; self._nat_ran = True

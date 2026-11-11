@@ -1,4 +1,4 @@
-"""How rishi registers its backends with Urai, and the helpers that belong to rishi itself.
+"""`rishi` registers seven backends with [Urai](https://vedicreader.github.io/urai) and provides helpers for its own code.
 
 Docs: https://vedicreader.github.io/rishi/core.html.md"""
 
@@ -12,37 +12,36 @@ __all__ = ['CANCEL_POLL', 'CLOSE_WAIT', 'BACKENDS', 'mk_oai_content', 'mk_oai_ms
 # %% ../nbs/00_core.ipynb #d122bb29
 import ast, asyncio, inspect, time, warnings
 from fastcore.all import Path, first, find_file_parents
-from urai import (Caps, Runtime, RUNTIMES, register_runtime, infer_runtime, resolve_runtime, resolve,
-                  model_caps, cfg_caps, mmproj_caps, is_path, split_runtime, use_system_certs,
-                  mk_content, mk_msg, mk_msgs, http_approval,
-                  ToolLoopMixin, SlidingWindowCallback, ToolReminderCallback, UsageCallback, UsageStats)
+from urai import (Caps, Runtime, RUNTIMES, register_runtime, infer_runtime, resolve_runtime, resolve, model_caps, cfg_caps, mmproj_caps,
+  is_path, split_runtime, use_system_certs, mk_content, mk_msg, mk_msgs, http_approval, ToolLoopMixin, SlidingWindowCallback,
+  ToolReminderCallback, UsageCallback, UsageStats)
 
+# %% ../nbs/00_core.ipynb #d7a2fcd2
 class RishiToolLoop(ToolLoopMixin):
-    "The base class for rishi backends that drive Urai's tool loop, with the usage, tool-reminder and sliding-window callbacks on by default."
+    "Base class for rishi backends that drive Urai's tool loop. The usage, tool-reminder and sliding-window callbacks are on by default."
     _dflt_cbs = [UsageCallback, ToolReminderCallback, SlidingWindowCallback]
-    oneshot_stream_ok = False     #: True when `oneshot_stream` yields text as the provider sends it; False means the backend has no `oneshot_stream`
-    oneshot_deadline_ok = False   #: True when `deadline=` bounds a `oneshot` or `oneshot_stream` call; False means it is refused
-    oneshot_max_tokens_ok = False #: True when `max_tokens=` caps a `oneshot` or `oneshot_stream` reply; False means it is ignored
-    oneshot_use = UsageStats()    #: what the latest `oneshot` or `oneshot_stream` call spent; each call replaces it, so it never carries an earlier call's spend
+    oneshot_stream_ok = False
+    oneshot_deadline_ok = False
+    oneshot_max_tokens_ok = False
+    oneshot_use = UsageStats()
 
 def usage_stats(u):
-    "One call's `UsageStats` from a usage dict as `norm_claude_usage` or `norm_completion` gives it; empty when `u` is empty."
+    "One call's `UsageStats` from the usage dict of `norm_claude_usage` or `norm_completion`; empty when `u` is empty."
     if not u: return UsageStats()
     return UsageStats(u.get('prompt_tokens', 0), u.get('completion_tokens', 0), u.get('total_tokens', 0), 1, cached_tokens=u.get('cached_tokens', 0),
                       model=u.get('model'), reasoning_tokens=u.get('reasoning_tokens', 0), cache_creation_tokens=u.get('cache_creation_tokens', 0), cost=u.get('cost', 0.0))
 
 class OneShotCancelled(Exception):
-    "A `oneshot` or `oneshot_stream` call ended because `cancel()` was called, or because its provider stream could not be confirmed closed. `elapsed` is the seconds it ran, read after the close. `stopped` is False when the provider call did not end within the wait and may still finish and spend. Nothing is retried, and text yielded before it is a partial reply, never a successful one."
+    "Raised when `cancel()` ends a `oneshot` or `oneshot_stream` call, or when its provider stream does not confirm the close. `elapsed` is the run time in seconds, read after the close. `stopped` is False when the provider call did not end within the wait, and that call can still finish and spend. rishi never retries the call. Text yielded before the error is a partial reply."
     def __init__(self, elapsed, stopped):
         self.elapsed, self.stopped = elapsed, stopped
         super().__init__(f'the one-shot was cancelled after {elapsed:.1f}s; ' +
                          ('its call was stopped' if stopped else 'its call did not stop in time, so it may still finish and spend'))
 
-CANCEL_POLL = 0.1   #: seconds between looks at a chat's cancel flag while a one-shot waits for a read
-CLOSE_WAIT = 20     #: seconds a one-shot waits for a provider stream to close; Claude Code's SDK needs up to 20: 5 for its write lock, then 5 each for exit, terminate and kill
+CANCEL_POLL, CLOSE_WAIT = 0.1, 20
 
 async def read_or_cancel(task, cancel=None, timeout=None):
-    "Wait until `task` is done, `timeout` seconds pass or the `threading.Event` `cancel` is set, and return whether `task` is done. Never cancels `task`."
+    "Wait for `task`, a timeout or a set `threading.Event`, then return whether `task` is done without cancelling it."
     if cancel is None: await asyncio.wait({task}, timeout=timeout); return task.done()
     end = None if timeout is None else time.monotonic() + timeout
     while not task.done() and not cancel.is_set():
@@ -52,7 +51,7 @@ async def read_or_cancel(task, cancel=None, timeout=None):
     return task.done()
 
 async def shut_stream(ait, nxt=None, wait=CLOSE_WAIT):
-    "Cancel the pending read `nxt`, then close the async iterator `ait`, and return True when the read ended without an error of its own and the close finished cleanly, within `wait` seconds in all. Nothing here cancels a wait, since a cancelled close would cut short the SDK's own grace, terminate and kill. A read or close that fails or runs past `wait` gives False; the close task is left running."
+    "Cancel the pending read `nxt`, close the async iterator `ait`, and return True when both end cleanly within `wait` seconds in total. A read or close that fails or runs past `wait` gives False. It never cancels a wait, because a cancelled close cuts short the SDK's own grace period, terminate and kill. A close that runs past `wait` keeps running."
     end = time.monotonic() + wait
     ok = True
     if nxt is not None:
@@ -66,7 +65,7 @@ async def shut_stream(ait, nxt=None, wait=CLOSE_WAIT):
     return ok and close.done() and not close.cancelled() and close.exception() is None
 
 def split_model_path(model, model_path=None):
-    "Split a model name, minus any runtime prefix, into `(model_id, model_path)`: a Hub repo id or a local file path."
+    "Split a model name, without its runtime prefix, into `(model_id, model_path)`: a Hub repo id or a local file path."
     model = split_runtime(model)[1]
     model_id = None if model is None or is_path(model) else model
     model_path = model_path or (model if model and is_path(model) else None)
@@ -81,12 +80,12 @@ import safepyrun.core as _spc
 async def _rishi_run_python(code, g=None, ok_dests=None):
     _spc._rp_globals.set(g)
     inject = {'__builtins__': _spc._builtins, '__name__': '<python>'}
-    protect = list(inject) + list(_spc._noexport)   # host helpers must not be shadowed back into g
+    protect = list(inject) + list(_spc._noexport)
     saved = {k: g[k] for k in protect if k in g}; had = set(saved)
     g.update(inject)
     async def run(src, is_exec=True):
         comp = compile(src, _spc.srcfn(src), 'exec' if is_exec else 'eval', flags=ast.PyCF_ALLOW_TOP_LEVEL_AWAIT)
-        r = eval(comp, g)                          # one namespace: defs see top-level imports
+        r = eval(comp, g)
         return (await r) if inspect.isawaitable(r) else r
     try:
         tree = ast.parse(code)
@@ -107,11 +106,11 @@ setattr(_spc, '__run_python', _rishi_run_python)
 
 # %% ../nbs/00_core.ipynb #dc247d61
 def litert_caps(model=None, model_path=None):
-    "Report text, image and audio input for any LiteRT-LM model."
+    "Return text, image and audio input capabilities for a LiteRT-LM model."
     return Caps(('text', 'image', 'audio'), ('text',), (), 'runtime')
 
 def ollama_caps_(model=None, model_path=None):
-    "Ask the Ollama daemon what `model` accepts, or return None when the Ollama backend cannot be imported."
+    "Return the capabilities reported by the Ollama daemon, or `None` when the backend is unavailable."
     try: from rishi.ollama import ollama_caps
     except ImportError: return None
     return ollama_caps(model)
@@ -130,7 +129,7 @@ BACKENDS = [
     Runtime('remote', 'rishi.remote.RemoteChat', local=False,
             pats=('claude-', 'gpt-', 'gemini-', 'kimi-', 'deepseek-', 'grok-',
                   'sonnet', 'opus', 'haiku', 'fable')),
-    Runtime('claude',  'rishi.claude.ClaudeChat',  local=False),
+    Runtime('claude',  'rishi.claude.ClaudeChat',  optional=True, local=False),
     Runtime('copilot', 'rishi.copilot.CopilotChat', local=False),
 ]
 
@@ -153,7 +152,7 @@ def repo_root() -> Path:
     return find_file_parents('.git')
 
 def mv_skill_md(dry_run=True, dir=None):
-    "Copy the bundled `skill.md` into the repository's `.agents` and `.claude` skill directories, or only print the targets while `dry_run` is True."
+    "Copy the bundled `skill.md` into the repository's `.agents` and `.claude` skill directories, or print the target paths when `dry_run` is `True`."
     base = Path(__file__).parent if '__file__' in globals() else Path.cwd()
     if not (src := first((base/'skill.md', base.parent/'skill.md'), Path.exists)): return
     root = Path(dir or repo_root() or '.')

@@ -1,4 +1,4 @@
-"""GitHub Copilot models through the `Chat` API, using a Copilot subscription instead of a vendor key.
+"""Run GitHub Copilot models through the `Chat` API with a Copilot subscription.
 
 Docs: https://vedicreader.github.io/rishi/copilot.html.md"""
 
@@ -21,14 +21,14 @@ from urai import Chat, ChatOpts, ToolCall, display_stream, get_runtime, resolve_
 from .remote import RemoteChat
 
 # %% ../nbs/07_copilot.ipynb #cp_wire
-#: Where Copilot listens when the token exchange names no endpoint of its own.
+#: Copilot's endpoint when the token exchange returns no endpoint.
 COPILOT_API = 'https://api.githubcopilot.com'
-#: Trades a GitHub OAuth token for a short-lived Copilot one.
+#: URL that exchanges a GitHub OAuth token for a short-lived Copilot token.
 COPILOT_TOKEN_URL = 'https://api.github.com/copilot_internal/v2/token'
-#: The OAuth app the editors sign in as, and the only client id GitHub mints Copilot tokens for.
+#: OAuth app used by editor sign-in. GitHub issues Copilot tokens only for this client id.
 COPILOT_CLIENT_ID = 'Iv1.b507a08c87ecfe98'
 
-#: Which editor Copilot is told it is talking to. Rebind these to say otherwise.
+#: Editor identity sent to Copilot. Rebind these values to use another identity.
 EDITOR_VERSION = 'vscode/1.99.3'
 PLUGIN_VERSION = 'copilot-chat/0.26.7'
 USER_AGENT     = 'GitHubCopilotChat/0.26.7'
@@ -37,7 +37,7 @@ API_VERSION    = '2025-04-01'
 
 def copilot_hdrs(auth=None, *, integration_id=INTEGRATION_ID, vision=False, initiator=None,
                  intent='conversation-panel'):
-    "Build the headers Copilot requires on every request, with `auth` as the complete `Authorization` value when given."
+    "Build the headers Copilot requires. Use `auth` as the complete `Authorization` value when it is given."
     h = {'editor-version': EDITOR_VERSION, 'editor-plugin-version': PLUGIN_VERSION,
          'user-agent': USER_AGENT, 'copilot-integration-id': integration_id,
          'x-github-api-version': API_VERSION}
@@ -50,10 +50,10 @@ def copilot_hdrs(auth=None, *, integration_id=INTEGRATION_ID, vision=False, init
 # %% ../nbs/07_copilot.ipynb #cp_creds
 COPILOT_ENVS = ('GITHUB_COPILOT_OAUTH_TOKEN', 'GH_COPILOT_TOKEN')
 GITHUB_ENVS = ('GH_TOKEN', 'GITHUB_TOKEN')
-OAUTH_ENVS = COPILOT_ENVS + GITHUB_ENVS   #: every variable read, though not all at the same moment
+OAUTH_ENVS = COPILOT_ENVS + GITHUB_ENVS   #: Every variable that can provide an OAuth token.
 
 def oauth_paths():
-    "Files a Copilot sign-in may have left a GitHub OAuth token in, best first."
+    "Return files that can contain a GitHub OAuth token from a Copilot sign-in, in search order."
     cfg = Path(os.getenv('XDG_CONFIG_HOME') or Path.home()/'.config')
     ps  = [cfg/'rishi'/'copilot.json'] + [cfg/'github-copilot'/f for f in ('apps.json', 'hosts.json')]
     if (la := os.getenv('LOCALAPPDATA')):
@@ -61,7 +61,7 @@ def oauth_paths():
     return ps + [Path.home()/'.copilot'/'config.json']
 
 def find_oauth(o, depth=0):
-    "The `oauth_token` in a decoded config file, however deep the editor nested it."
+    "Return the `oauth_token` in a decoded config file at nesting depth 4 or less."
     if depth > 4 or not isinstance(o, dict): return None
     if isinstance(t := o.get('oauth_token'), str) and t: return t
     return first(x for x in (find_oauth(v, depth+1) for v in o.values()) if x)
@@ -76,7 +76,7 @@ def _env_oauth(ks):
     return first(t for k in ks if (t := os.getenv(k)))
 
 def copilot_oauth(token=None):
-    "A GitHub OAuth token: what you passed, else `COPILOT_ENVS`, else an editor sign-in, else `GITHUB_ENVS`."
+    "Return a GitHub OAuth token from the argument, `COPILOT_ENVS`, an editor sign-in, or `GITHUB_ENVS`, in that order."
     if token: return token
     if (t := _env_oauth(COPILOT_ENVS)): return t
     for p in oauth_paths():
@@ -89,17 +89,17 @@ def copilot_oauth(token=None):
 # %% ../nbs/07_copilot.ipynb #cp_token
 @dataclass(frozen=True)
 class CopilotToken:
-    "One minted Copilot token: the bearer, the endpoint it is good for, and when it dies."
+    "A Copilot token with its bearer value, endpoint, and expiry time."
     key: str
     base_url: str = COPILOT_API
-    expires_at: float = 0.      # unix seconds; 0 for a token rishi did not mint and cannot time
+    expires_at: float = 0.      # Unix seconds. Zero means rishi did not mint the token.
 
     def stale(self, skew=300):
-        "Is it inside `skew` seconds of expiry? An untimed token is never stale."
+        "Return whether the token expires within `skew` seconds. An untimed token is never stale."
         return bool(self.expires_at) and time.time() >= self.expires_at - skew
 
 def copilot_exchange(oauth=None, *, url=COPILOT_TOKEN_URL, timeout=30):
-    "Trade a GitHub OAuth token for a `CopilotToken`."
+    "Exchange a GitHub OAuth token for a `CopilotToken`."
     r = httpx.get(url, timeout=timeout,
                   headers={**copilot_hdrs(f'token {copilot_oauth(oauth)}'), 'Accept': 'application/json'})
     if r.status_code in (401, 403, 404): raise PermissionError(
@@ -110,18 +110,18 @@ def copilot_exchange(oauth=None, *, url=COPILOT_TOKEN_URL, timeout=30):
     r.raise_for_status()
     d = r.json()
     exp = float(d.get('expires_at') or 0)
-    if exp > 1e11: exp /= 1000      # some responses count in milliseconds
+    if exp > 1e11: exp /= 1000      # Some responses use milliseconds.
     return CopilotToken(d['token'], (d.get('endpoints') or {}).get('api') or COPILOT_API, exp)
 
 class CopilotAuth:
-    "Hold a Copilot token and mint a new one before it expires, so chats sharing one instance stay signed in."
+    "Hold a Copilot token and renew it before expiry. Chats that share one instance use the same exchange."
     def __init__(self, oauth=None, *, key=None, base_url=None, skew=300):
         store_attr()
         self.tok = CopilotToken(key, base_url or COPILOT_API) if key else None
 
     def token(self, force=False):
         "The live token, minted when there is none and re-minted when it is nearly out of time."
-        if self.key: return self.tok    # yours, and rishi has nothing to renew it with
+        if self.key: return self.tok    # rishi cannot renew a caller-provided token.
         if force or self.tok is None or self.tok.stale(self.skew):
             t = copilot_exchange(self.oauth)
             self.tok = replace(t, base_url=self.base_url) if self.base_url else t
@@ -132,7 +132,7 @@ class CopilotAuth:
         return f'CopilotAuth({"signed in" if t else "not yet"}, {t.base_url if t else COPILOT_API})'
 
 def copilot_catalog(auth=None, timeout=30):
-    "Every model this account can reach, as `{id: entry}` the way Copilot describes them."
+    "Return every model this account can reach as `{id: entry}`, using Copilot's model entries."
     t = (auth or CopilotAuth()).token()
     r = httpx.get(f"{t.base_url.rstrip('/')}/models", headers=copilot_hdrs(f'Bearer {t.key}'), timeout=timeout)
     r.raise_for_status()
@@ -149,7 +149,7 @@ def copilot_ctx(entry):
     return lim.get('max_prompt_tokens') or lim.get('max_context_window_tokens') or None
 
 # %% ../nbs/07_copilot.ipynb #cp_login
-DEVICE_CODE_URL  = 'https://github.com/login/device/code'   #: GitHub's device flow
+DEVICE_CODE_URL  = 'https://github.com/login/device/code'   #: GitHub device-flow endpoint.
 ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token'
 
 def save_oauth(token, path=None):
@@ -176,34 +176,33 @@ def copilot_login(client_id=COPILOT_CLIENT_ID, *, scope='read:user', save=True, 
         if (tok := r.get('access_token')):
             if save: printer(f'Saved to {save_oauth(tok)}')
             return tok
-        if r.get('error') == 'slow_down': wait += float(r.get('interval') or 5)   # GitHub asks for a longer poll
+        if r.get('error') == 'slow_down': wait += float(r.get('interval') or 5)   # GitHub requests a longer polling interval.
         elif r.get('error') != 'authorization_pending':
             raise RuntimeError(f"device flow failed: {r.get('error_description') or r.get('error')}")
     raise TimeoutError('the device code expired before it was entered')
 
 # %% ../nbs/07_copilot.ipynb #cp_chat
-#: What `CopilotChat()` asks for when you name no model. `copilot_models()` is the authority on what
-#: your account can reach, and that list moves faster than a constant in here could.
+#: Default model used when `CopilotChat()` receives no model. `copilot_models()` lists available models.
 copilot_default = 'gpt-4.1'
 
 class CopilotChat(RemoteChat):
     "A `RemoteChat` pointed at GitHub Copilot, adding Copilot's headers and its short-lived token to each request."
     _runtime = 'copilot'
-    local = False   #: the subscription is yours, the machine is GitHub's
+    local = False   #: Copilot runs on GitHub's machines.
 
     def __init__(self, model=None, *,
-                 oauth_token=None,   # a GitHub OAuth token, instead of the one on disk
-                 auth=None,          # a `CopilotAuth` to share, instead of building one
+                 oauth_token=None,   # GitHub OAuth token. Uses the token on disk when `None`.
+                 auth=None,          # `CopilotAuth` to share. Creates one when `None`.
                  integration_id=INTEGRATION_ID,
-                 hdrs=None,          # extra headers, merged over Copilot's own
-                 tool_choice=None,   # force a particular tool, or 'required'
+                 hdrs=None,          # Extra headers that override Copilot's headers.
+                 tool_choice=None,   # Tool choice, or 'required'.
                  retries=2,
-                 comp_kw=None,       # passed to `acomplete` verbatim
-                 **kw):              # portable options; see `urai.ChatOpts`
+                 comp_kw=None,       # Arguments passed to `acomplete` unchanged.
+                 **kw):              # Portable options from `urai.ChatOpts`.
         o = ChatOpts.create(kw.pop('opts', None), **kw)
         self.auth = auth or CopilotAuth(oauth_token, key=o.key, base_url=o.base_url or None)
         self.integration_id, self.hdrs = integration_id, dict(hdrs or {})
-        super().__init__(model or copilot_default, opts=o, api_name='openai_chat',   # fastllm has no Copilot vendor, and must not route a Gemini id to Gemini
+        super().__init__(model or copilot_default, opts=o, api_name='openai_chat',   # fastllm has no Copilot vendor. Keep Gemini ids on this route.
                          tool_choice=tool_choice, retries=retries, comp_kw=comp_kw)
 
     def _has_media(self):

@@ -1,4 +1,4 @@
-"""Run models on Apple Silicon with [mlx-lm](https://github.com/ml-explore/mlx-lm), with a prompt cache rishi manages itself, speculative decoding, a quantized KV cache, and vision and audio through mlx-vlm.
+"""Run language models on Apple Silicon with [mlx-lm](https://github.com/ml-explore/mlx-lm). `rishi` manages the prompt cache. It supports speculative decoding and a quantized KV cache. It supports vision and audio through `mlx-vlm`.
 
 Docs: https://vedicreader.github.io/rishi/mlx.html.md"""
 
@@ -70,16 +70,16 @@ def cached_models():
 
 # %% ../nbs/03_mlx.ipynb #9004a338faf74842
 class MlxEngine:
-    "A loaded MLX model and its tokenizer, plus an optional draft model for speculative decoding."
+    "A loaded MLX model, its tokenizer and an optional draft model for speculative decoding."
     def __init__(self, model, tokenizer, model_id=None, cfg=None, draft_model=None, draft_model_id=None):
         store_attr(); self.cfg = cfg or {}
     def __repr__(self): return f'MlxEngine({self.model_id})'
     def tokenize(self, text):
-        "Token ids for `text`."
+        "Return token IDs for `text`."
         return self.tokenizer.encode(text)
     @property
     def ctx_limit(self):
-        "The model's context window, per its config."
+        "Return the model context window from its config."
         return ctx_len(self.cfg)
     def close(self):
         "Drop references to the weights so MLX can free them."
@@ -87,7 +87,7 @@ class MlxEngine:
 
 # %% ../nbs/03_mlx.ipynb #c9878e3a40848985
 class MlxChat(RishiToolLoop, Chat):
-    "A `Chat` that runs an MLX model on Apple Silicon through mlx-lm, with a prompt cache it manages itself."
+    "Run an MLX model on Apple Silicon through `mlx-lm` with a prompt cache managed by `rishi`."
     _runtime = 'mlx'
     _media_ok = False    # text-only; `MlxVlmChat` flips this
     _media_note = ("this MLX model is text-only. Install `pip install 'rishi[mlx-vlm]'` and use a vision "
@@ -95,7 +95,7 @@ class MlxChat(RishiToolLoop, Chat):
     mk_content, mk_msg, mk_msgs = staticmethod(mk_content), staticmethod(mk_msg), staticmethod(mk_msgs)
 
     def __new__(cls, model=None, *, runtime=None, model_path=None, vlm=None, **kw):
-        "Send a vision or audio repo to `MlxVlmChat`. `vlm=True` or `vlm=False` overrides the config sniff."
+        "Send a vision or audio repository to `MlxVlmChat`. `vlm=True` or `vlm=False` overrides the config check."
         if cls is MlxChat:
             tgt = model_path or split_runtime(model)[1] or ''
             if vlm if vlm is not None else (bool(tgt) and is_vlm(tgt)): return object.__new__(MlxVlmChat)
@@ -103,16 +103,16 @@ class MlxChat(RishiToolLoop, Chat):
 
     @staticmethod
     def fmt2hist(msgs):
-        "Normalize MLX messages to rishi history dicts."
+        "Normalize MLX messages to `rishi` history dictionaries."
         return mk_msgs(msgs)
     @staticmethod
     def hist2fmt(msgs):
-        "Canonical rishi history dicts -> OpenAI-style messages for the chat template (past-turn media -> placeholder)."
+        "Convert canonical `rishi` history dictionaries to OpenAI-style messages for the chat template. Replace media from past turns with placeholders."
         return [to_oai_msg(strip_media(m)) for m in listify(msgs)]
 
     @classmethod
     def create_engine(cls, model_id=qwen3_4b, model_path=None, adapter_path=None, draft_model=None, **kw):
-        'Load an MLX model and its tokenizer, optionally with a LoRA adapter and a draft model for speculative decoding.'
+        'Load an MLX model and its tokenizer. A LoRA adapter and a draft model for speculative decoding are optional.'
         src = str(model_path or model_id)
         model, tok, cfg = mlx_load(src, adapter_path=adapter_path, return_config=True, **kw)
         draft_id = str(draft_model) if isinstance(draft_model, (str, os.PathLike)) else None
@@ -124,16 +124,16 @@ class MlxChat(RishiToolLoop, Chat):
     _opt_skip = ('effort', 'tool_mode', 'api_key', 'base_url')   # nothing local takes these
 
     def __init__(self, model=None, *, runtime=None, model_path=None, opts=None,
-                 vlm=None,               # force the vision class on or off, rather than sniffing
-                 engine=None,            # an engine to share instead of loading one
+                 vlm=None,               # force the vision class on or off instead of reading the config
+                 engine=None,            # an engine to share instead of loading a model
                  adapter_path=None,      # a LoRA adapter to apply
-                 draft_model=None,       # a smaller model, for speculative decoding
-                 eng_kw=None,            # passed to `create_engine` verbatim
+                 draft_model=None,       # a smaller model for speculative decoding
+                 eng_kw=None,            # pass to `create_engine` unchanged
                  min_p=None,
                  prompt_cache=True, max_kv_size=None, kv_bits=None, kv_group_size=64,
                  quantized_kv_start=0,
-                 tmpl_kw=None,           # passed to `apply_chat_template`
-                 gen_kw=None,            # passed to `stream_generate` verbatim
+                 tmpl_kw=None,           # pass to `apply_chat_template`
+                 gen_kw=None,            # pass to `stream_generate` unchanged
                  **kw):                  # portable options; see `urai.ChatOpts`
         o = ChatOpts.create(opts, **kw)
         model_id, model_path = rishi.core.split_model_path(model, model_path)
@@ -161,11 +161,11 @@ class MlxChat(RishiToolLoop, Chat):
 
     @property
     def token_count(self):
-        "Tokens in the model context after the last turn (prompt + completion)."
+        "Return the tokens in the model context after the last turn, including the prompt and completion."
         return self._ctx_tokens
     @property
     def cached_tokens(self):
-        "How many tokens the KV cache currently holds."
+        "Return the number of tokens in the KV cache."
         return len(self._cache_ids)
 
     def count_tokens(self, text):
@@ -173,17 +173,17 @@ class MlxChat(RishiToolLoop, Chat):
         return len(self.engine.tokenize(text))
 
     def _reset_cache(self):
-        "Start fresh main and draft KV caches. The next step re-prefills the whole conversation."
+        "Start new main and draft KV caches. The next step prefills the full conversation."
         self._cache = make_prompt_cache(self.engine.model, self.max_kv_size)
         if self.engine.draft_model is not None:
             self._cache += make_prompt_cache(self.engine.draft_model, self.max_kv_size)
         self._cache_ids = []
     def _recreate_conv(self):
-        "History was rewritten by context recovery, so the cache no longer matches it. Drop it."
+        "Drop the cache after context recovery rewrites the history."
         if self._cache is not None: self._reset_cache()
 
     def _trim(self, n):
-        "Trim `n` cached tokens, or reset an untrimmable cache."
+        "Trim `n` cached tokens. Reset the cache when it cannot be trimmed."
         if can_trim_prompt_cache(self._cache) and trim_prompt_cache(self._cache, n) == n:
             self._cache_ids = self._cache_ids[:len(self._cache_ids) - n]
             return True
@@ -191,18 +191,18 @@ class MlxChat(RishiToolLoop, Chat):
         return False
 
     def _msgs(self):
-        "OpenAI-style messages for the chat template: system prompt plus canonical history."
+        "Return OpenAI-style messages for the chat template with the system prompt and canonical history."
         return ([{'role': 'system', 'content': self.sp}] if self.sp else []) + self.hist2fmt(self.hist)
 
     def _prompt_ids(self):
-        "Token ids for the whole conversation, rendered with the model's own chat template."
+        "Return token IDs for the full conversation rendered with the model's chat template."
         kw = dict(add_generation_prompt=True)
         if self.toolspecs: kw['tools'] = self.toolspecs
         if self.think is not None: kw['enable_thinking'] = self.think
         return list(self.tokenizer.apply_chat_template(self._msgs(), **kw, **self.tmpl_kw))
 
     def _feed_ids(self):
-        "`(all_ids, ids_still_to_prefill, n_cached)`, reusing however much of the prompt the KV cache covers."
+        "Return `(all_ids, ids_still_to_prefill, n_cached)` and reuse the prompt covered by the KV cache."
         ids = self._prompt_ids()
         if self._cache is None: return ids, ids, 0
         n = common_prefix_len(ids, self._cache_ids)
@@ -216,12 +216,12 @@ class MlxChat(RishiToolLoop, Chat):
     _turn_drop = ('ctx_limit', 'think', 'effort', 'tool_mode', 'seed')
 
     def _turn_sampler(self, turn):
-        "This turn's sampler, when it overrode any sampling setting, else the chat's own."
+        "Return this turn's sampler when it overrides a sampling setting. Otherwise return the chat's sampler."
         samp = {k: v for k, v in turn.items() if k in self._turn_samp}
         return make_sampler(**samp) if samp else self.sampler
 
     def _gen_kw(self, **turn):
-        "Keyword arguments for `stream_generate`: sampler, prompt cache, KV quantization, draft model."
+        "Return keyword arguments for `stream_generate`, including the sampler, prompt cache, KV quantization and draft model."
         t = self.map_opts(turn)
         s = self._turn_sampler(t)
         for k in self._turn_samp + self._turn_drop: t.pop(k, None)
@@ -233,11 +233,11 @@ class MlxChat(RishiToolLoop, Chat):
         return {**kw, **self.gen_kw, **t}
 
     def _generate(self, feed, **turn):
-        "Yield mlx-lm `GenerationResponse` chunks for the token ids in `feed`."
+        "Yield `mlx-lm` `GenerationResponse` chunks for the token IDs in `feed`."
         return stream_generate(self.engine.model, self.tokenizer, feed, **self._gen_kw(**turn))
 
     def _stream_step(self, **kw):
-        "Stream one completion, yielding chunk dicts and leaving the merged `Resp` on `self._step_res`."
+        "Stream one completion and leave the merged `Resp` on `self._step_res`."
         ids, feed, cached = self._feed_ids()
         split, fin, gen, pt, gt = StreamSplit(), None, [], 0, 0
         try:
@@ -253,30 +253,30 @@ class MlxChat(RishiToolLoop, Chat):
         self._step_res = self._mk_resp(split, fin, cached, pt, gt)
 
     def _mk_resp(self, split, fin, cached, pt, gt):
-        "Assemble one step's `Resp` from the parsed stream plus mlx-lm's token counts."
+        "Build one `Resp` from the parsed stream and `mlx-lm` token counts."
         return stream_resp(split, truncated=(fin == 'length'),
                            usage={'prompt_tokens': cached + pt, 'completion_tokens': gt,
                                   'total_tokens': cached + pt + gt, 'cached_tokens': cached})
 
     def _model_step(self, **kw):
-        "One completion, normalized to a `Resp`. MLX generates by streaming, so this drains `_stream_step`."
+        "Return one completion as a `Resp` by draining `_stream_step`."
         for _ in self._stream_step(**kw): pass
         return self._step_res
 
     def _cache_metadata(self):
-        "Compatibility metadata for a persisted KV cache."
+        "Return compatibility metadata for a persisted KV cache."
         cfg = dict(model_id=self.engine.model_id, draft_model_id=self.engine.draft_model_id,
                    max_kv_size=self.max_kv_size, kv_bits=self.kv_bits,
                    kv_group_size=self.kv_group_size, quantized_kv_start=self.quantized_kv_start)
         return {'ids': json.dumps(self._cache_ids), 'rishi_mlx_cache': json.dumps(cfg, sort_keys=True)}
 
     def save_cache(self, fn):
-        "Persist the KV cache and the tokens it holds, so a compatible chat can reuse it."
+        "Persist the KV cache and its tokens for reuse by a compatible chat."
         if self._cache is None: raise ValueError('prompt_cache=False: there is no KV cache to save')
         save_prompt_cache(str(fn), self._cache, self._cache_metadata())
         return self
     def load_cache(self, fn):
-        "Restore a compatible KV cache written by `save_cache`, rejecting model and setting mismatches."
+        "Restore a compatible KV cache written by `save_cache`. Reject model and setting mismatches."
         cache, md = load_prompt_cache(str(fn), return_metadata=True)
         got = md.get('rishi_mlx_cache')
         if not got: raise ValueError('not a rishi MLX cache (missing compatibility metadata)')
@@ -287,7 +287,7 @@ class MlxChat(RishiToolLoop, Chat):
         return self
 
     def _raw(self, msgs, max_output_tokens=None, think=None):
-        "Stateless completion text for `msgs`, with no history and no prompt cache."
+        "Return completion text for `msgs` without history or a prompt cache."
         tkw = {} if think is None else dict(enable_thinking=think)
         ids = list(self.tokenizer.apply_chat_template(msgs, add_generation_prompt=True, **tkw))
         kw = dict(max_tokens=ifnone(max_output_tokens, self.max_output_tokens))
@@ -295,12 +295,12 @@ class MlxChat(RishiToolLoop, Chat):
         return ''.join(r.text for r in stream_generate(self.engine.model, self.tokenizer, ids, **kw))
 
     def _oneshot(self, prompt, sp='', think=None, max_tokens=None):
-        """Stateless one-shot completion text, with any thinking stripped."""
+        """Return one completion without state and remove thinking text."""
         msgs = ([{'role': 'system', 'content': sp}] if sp else []) + [{'role': 'user', 'content': prompt}]
         return split_think(self._raw(msgs, max_output_tokens=max_tokens, think=think))[0]
 
     def _structured_call(self, prompt, schema, sp):
-        "Parse a JSON reply for `schema`."
+        "Parse a JSON reply that matches `schema`."
         p = f"{prompt}\n\nReply with only a JSON object matching this schema:\n{json.dumps(mk_toolspec(schema)['function']['parameters'])}"
         txt = self._oneshot(p, sp, think=False)
         try: return json.loads(extract_fence(txt, 'json'))
@@ -309,7 +309,7 @@ class MlxChat(RishiToolLoop, Chat):
         except Exception as e: raise ValueError(f"model did not return JSON; reply: {txt[:200]!r}") from e
 
     def close(self):
-        "Release the model, if this Chat loaded it, and drop the cache. Idempotent."
+        "Release a model loaded by this chat and drop the cache. The operation is idempotent."
         if getattr(self, '_own_engine', False) and getattr(self, 'engine', None) is not None:
             self.engine.close()
             self.engine = None
@@ -317,7 +317,7 @@ class MlxChat(RishiToolLoop, Chat):
 
 # %% ../nbs/03_mlx.ipynb #80e075e87717ecf0
 def _media_bytes(p):
-    "Raw bytes out of an OpenAI-style image/audio content part."
+    "Return raw bytes from an OpenAI-style image or audio content part."
     if p.get('type') == 'image_url':
         url = p['image_url']['url'] if isinstance(p['image_url'], dict) else p['image_url']
         if not url.startswith('data:'):
@@ -326,12 +326,12 @@ def _media_bytes(p):
     return b64decode(p['input_audio']['data'])
 
 class MlxVlmChat(MlxChat):
-    "MLX chat for vision and audio models through `mlx-vlm`."
+    "Run vision and audio models through `mlx-vlm`."
     _media_ok = True
 
     @classmethod
     def create_engine(cls, model_id=qwen3vl_4b, model_path=None, adapter_path=None, draft_model=None, **kw):
-        'Load a vision or audio model with `mlx_vlm.load`, whose processor takes the place of the tokenizer.'
+        'Load a vision or audio model with `mlx_vlm.load`. Its processor replaces the tokenizer.'
         try: from mlx_vlm import load as vlm_load
         except ImportError as e:
             raise ImportError(f"vision/audio MLX models need mlx-vlm ({e}). "
@@ -342,22 +342,22 @@ class MlxVlmChat(MlxChat):
         return MlxEngine(model, proc, model_id=src, cfg=read_config(src))
 
     def _reset_cache(self):
-        "No token-level KV cache on this path: mlx-vlm keeps its own vision-feature cache instead."
+        "Do not use a token-level KV cache on this path. `mlx-vlm` keeps its own vision-feature cache."
         self._cache, self._cache_ids = None, []
 
     def _tmpdir(self):
-        "A per-chat temp directory to stage media files for mlx-vlm."
+        "Return a per-chat temporary directory for media files used by `mlx-vlm`."
         if getattr(self, '_td', None) is None: self._td = TemporaryDirectory()
         return Path(self._td.name)
 
     def _stage(self, data, ext):
-        "Write `data` to a temp file and return its path (mlx-vlm takes paths/PIL images, not bytes)."
+        "Write `data` to a temporary file and return its path. `mlx-vlm` takes paths or PIL images, not bytes."
         p = self._tmpdir()/f'{len(list(self._tmpdir().iterdir()))}{ext}'
         p.write_bytes(data)
         return str(p)
 
     def _turn_media(self):
-        "Image and audio paths from the live turn, staged for mlx-vlm."
+        "Return image and audio paths from the live turn, staged for `mlx-vlm`."
         imgs, auds = [], []
         for p in ((self.turn_msg or {}).get('content') or []):
             if not (isinstance(p, dict) and is_media(p)): continue
@@ -367,18 +367,18 @@ class MlxVlmChat(MlxChat):
         return imgs, auds
 
     def _prompt(self, imgs, auds):
-        "The formatted prompt string mlx-vlm expects, including media counts and tool schemas."
+        "Return the formatted prompt string that `mlx-vlm` expects, including media counts and tool schemas."
         from mlx_vlm.prompt_utils import apply_chat_template as vlm_tmpl
-        # mlx-vlm defaults to `enable_thinking=False`, which prefills an empty `<think></think>` block
-        # into the assistant turn. A model told it has already finished thinking can end the turn on the
-        # spot. Qwen3-Omni answers an audio prompt with nothing at all. Pass rishi's own `think` through
-        # instead, so `think=None` (the default) leaves the model's chat template default alone.
+        # `mlx-vlm` defaults to `enable_thinking=False`. This prefills an empty `<think></think>` block
+        # into the assistant turn. A model told that it finished thinking can end the turn at once.
+        # Qwen3-Omni answers an audio prompt with nothing. Pass `rishi`'s `think` setting instead.
+        # With `think=None`, the model's chat template uses its own default.
         kw = dict(num_images=len(imgs), num_audios=len(auds), enable_thinking=self.think)
         if self.toolspecs: kw['tools'] = self.toolspecs
         return vlm_tmpl(self.tokenizer, self.engine.cfg, self._msgs(), **{**kw, **self.tmpl_kw})
 
     def _stream_step(self, **turn):
-        "Stream one completion through mlx-vlm, leaving the merged `Resp` on `self._step_res`."
+        "Stream one completion through `mlx-vlm` and leave the merged `Resp` on `self._step_res`."
         from mlx_vlm import stream_generate as vlm_stream
         imgs, auds = self._turn_media()
         t = self.map_opts(turn)
@@ -387,8 +387,8 @@ class MlxVlmChat(MlxChat):
         kw = dict(max_tokens=ifnone(t.pop('max_output_tokens', None), self.max_output_tokens),
                   **self.gen_kw, **t)
         if imgs: kw['image'] = imgs
-        # mlx-vlm decodes each audio file and resamples it to the processor's own feature-extractor
-        # rate. Do not pass a source rate: doing so gives silence.
+        # `mlx-vlm` decodes each audio file and resamples it to the processor's feature-extractor rate.
+        # Do not pass a source rate. It produces silence.
         if auds: kw['audio'] = auds
         split, fin, pt, gt = StreamSplit(), None, 0, 0
         if s is not None: kw['sampler'] = s
@@ -400,12 +400,12 @@ class MlxVlmChat(MlxChat):
         self._step_res = self._mk_resp(split, fin, 0, pt, gt)
 
     def close(self):
-        "Release the model and clean up any staged media files."
+        "Release the model and remove staged media files."
         if getattr(self, '_td', None) is not None: self._td.cleanup(); self._td = None
         super().close()
 
 # %% ../nbs/03_mlx.ipynb #2d1feab0
 class MlxBroker(ChatBroker):
-    'Serve one loaded MLX model to several processes over a Unix socket, each client with its own `MlxChat` prompt cache.'
+    'Serve one loaded MLX model to several processes over a Unix socket. Give each client its own `MlxChat` prompt cache.'
     def __init__(self, address, engine=None, model_id=qwen3_4b, **engine_kw):
         super().__init__(address, MlxChat, engine, model_id, **engine_kw)

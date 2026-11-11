@@ -2,6 +2,9 @@
 
 <!-- do not remove -->
 
+## 0.1.70
+slim down package . move local and claude sdks to extras
+
 ## 0.1.68
 
 - rishi needs `fastspec>=0.2.1`. The remote and Copilot runtimes import it, but rishi did not declare it, so a project with rishi and without ramabana, shalya or jupyasyncclient failed with `No module named 'fastspec'`.

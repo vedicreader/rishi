@@ -1,4 +1,4 @@
-"""Run Google's `.litertlm` model builds, such as Gemma 4, with [LiteRT-LM](https://github.com/google-ai-edge/litert-lm), on the GPU or the CPU.
+"""Run Google's `.litertlm` model builds, including Gemma 4, with [LiteRT-LM](https://github.com/google-ai-edge/litert-lm) on the GPU or CPU.
 
 Docs: https://vedicreader.github.io/rishi/litert.html.md"""
 
@@ -159,7 +159,7 @@ class _UsageCallback(ChatCallback):
 _engine_locks_guard = threading.Lock()
 def engine_lock(engine):
     "Return the single lock that chats sharing one LiteRT-LM engine take turns on."
-    with _engine_locks_guard:   # kept on the engine itself: litert's `Engine` is not hashable
+    with _engine_locks_guard:   # Store the lock on the engine because litert's `Engine` is not hashable
         if (lk := getattr(engine, '_rishi_lock', None)) is None: lk = engine._rishi_lock = threading.Lock()
         return lk
 
@@ -175,10 +175,10 @@ class EngineHold:
         if self.held: return
         e, lk, me = self.chat.engine, engine_lock(self.chat.engine), threading.get_ident()
         if not lk.acquire(blocking=False):
-            owner = getattr(e, '_rishi_owner', None)    # (thread, chat) holding it; only ever read on its own thread
+            owner = getattr(e, '_rishi_owner', None)    # `(thread, chat)` holding the lock; read only on its own thread
             if owner and owner[0] == me:
                 if owner[1] is not self.chat: raise EngineBusy(f'{owner[1]!r} is mid-turn on this engine on this thread')
-                self.held = self.nested = True; return  # the same chat, deeper in the same turn: already ours
+                self.held = self.nested = True; return  # The same chat already holds the lock in this turn
             lk.acquire()
         e._rishi_owner, self.held = (me, self.chat), True
     def let_go(self):
@@ -196,21 +196,21 @@ class ChatToolHandler(ToolEventHandler):
     def approve_tool_call(self, tool_call):
         c = self.chat
         c.turn_tc, self.approved = tool_call, None
-        # calls of one response come one after another with no send between, so the token count has not moved
+        # Calls in one response are consecutive and have no send between them, so the token count is unchanged
         rd, new = getattr(c, '_litert_round', None), False
         if hasattr(c, '_litert_round_start') and (rd is None or rd['tc'] is None or rd['tc'] != c._litert_round_tc()):
             rd, new = c._litert_round_start(), True
         for _ in run_cbs(c, 'before_tool_calls'): pass
         over = c._budget_exceeded or (c.max_steps is not None and c._steps >= c.max_steps)
         ok = False if over else (c.approve(tool_call) if c.approve else True)
-        if ok: c._steps += 1; c._hold.let_go()   # the engine idles while the tool runs: let another chat in
+        if ok: c._steps += 1; c._hold.let_go()   # The engine is idle while the tool runs, so another chat can enter
         else: c._budget_exceeded = c._budget_exceeded or over
-        # approval may rewrite the call in place. litert runs the name and arguments it read before asking,
-        # so `_ApprovedTool` runs this record instead, and the history and a retry name the call that ran
+        # Approval can rewrite the call. LiteRT runs the name and arguments read before approval.
+        # `_ApprovedTool` runs the approved record, and history and retries name the call that ran
         fn = tool_call.get('function', {}); self._tcid = _call_id()
         self._litert_name = fn.get('name', '')
         if ok: self.approved = (self._litert_name, fn.get('arguments', {}))
-        # what the model said in this step before calling, kept beside the call rather than folded into the final reply
+        # Keep the model text from this step beside the call, not in the final reply
         c.hist.append({'role': 'assistant', 'content': rd['text'] if new else '',
             'tool_calls': [{'id': self._tcid, 'type': 'function',
                             'function': {'name': fn.get('name', ''), 'arguments': fn.get('arguments', {})}}]})
@@ -218,8 +218,8 @@ class ChatToolHandler(ToolEventHandler):
                                   'content': budget_msg_ if over else 'Denied by human operator'})
         return ok
     def process_tool_response(self, tool_response):
-        self.approved = None     # used, or never reached when litert did not know the model's name
-        self.chat._hold.take()   # the tool is done; the engine is ours again for the reply
+        self.approved = None     # Used, or not reached when LiteRT did not know the model's name
+        self.chat._hold.take()   # The tool is done, so the engine is held for the reply
         mx = getattr(self.chat, 'tool_max_len', None)
         if mx and isinstance(tool_response, str) and len(tool_response) > mx:
             tool_response = tool_response[:mx] + ' …[truncated]'
@@ -238,7 +238,7 @@ class _ApprovedTool(Tool):
         rec, self.handler.approved = self.handler.approved, None
         if rec is None: return self.tool.execute(param)
         name, args = rec
-        if (t := self.tools.get(name)) is None: return f'Error: interfaces.Tool {name} not found'   # litert's words for an unknown tool
+        if (t := self.tools.get(name)) is None: return f'Error: interfaces.Tool {name} not found'   # Match LiteRT's text for an unknown tool
         return t.execute(args)
 
 def _approved_tools(tools, handler):

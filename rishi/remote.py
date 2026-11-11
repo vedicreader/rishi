@@ -1,4 +1,4 @@
-"""Hosted models such as GPT, Claude and Gemini through [fastllm](https://github.com/AnswerDotAI/fastllm), with the same `Chat` API as the local backends.
+"""Access hosted GPT, Claude and Gemini models through [fastllm](https://github.com/AnswerDotAI/fastllm) with the local backends' `Chat` API.
 
 Docs: https://vedicreader.github.io/rishi/remote.html.md"""
 

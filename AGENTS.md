@@ -17,10 +17,12 @@ through `Chat`.
   update script runs `uv sync`, which creates `.venv` and installs the `dev` group, which pulls
   `rishi[all]`.
 - Sync and run on Python 3.12 or newer (`uv sync -p 3.13`).
-- `python-fastllm`, `aidialog`, `claude-agent-sdk`, `llmsurgery` and `httpx` are base dependencies.
-  They support the remote, Claude and Copilot backends. The empty `remote`, `claude` and `copilot`
-  extras are compatibility aliases. Credentials and the external `claude` binary remain operational
-  requirements.
+- The base install serves the remote, Copilot and Ollama backends. Its dependencies are
+  `uraiyadal`, `fastcore`, `safepyrun`, `python-fastllm`, `aidialog`, `httpx` and `fastspec`.
+  The `litert`, `llama`, `mlx`, `mlx-vlm`, `ollama` and `claude` extras add each backend's packages.
+  `claude` adds `claude-agent-sdk` and `llmsurgery`. `litert`, `llama` and `mlx` add `huggingface-hub`.
+  `all` installs every extra. The `00_core` dependency cells check this split. Credentials and the
+  external `claude` binary remain operational requirements.
 - On Linux the `mlx` and `mlx-vlm` extras are skipped by platform markers, and `llama-cpp-python`
   installs the CPU wheel from the configured `llama-cpu` index. `rishi.mlx` will not import there,
   which is expected.

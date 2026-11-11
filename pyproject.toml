@@ -18,25 +18,21 @@ classifiers = [
 dependencies = [
     "uraiyadal>=0.0.21",
     "fastcore>=2.0.0",
-    "huggingface-hub>=1.23.0",
     "safepyrun>=0.2.3",
-    "truststore>=0.10",
-    "liteparse<2.13",
     "python-fastllm>=0.0.45",
     "aidialog>=0.0.10",
-    "claude-agent-sdk>=0.2",
-    "llmsurgery>=0.0.13",
     "httpx",
-    "litert-lm-api>=0.14.0",
     "fastspec>=0.2.1"
 ]
 
 [project.optional-dependencies]
-mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'"]
+litert = ["litert-lm-api>=0.14.0", "huggingface-hub>=1.23.0"]
+mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'", "huggingface-hub>=1.23.0"]
 mlx-vlm = ["mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'"]
-llama = ["llama-cpp-python==0.3.30", "soundfile>=0.14.0", "numpy"]
+llama = ["llama-cpp-python==0.3.30", "soundfile>=0.14.0", "numpy", "huggingface-hub>=1.23.0"]
 ollama = ["zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'"]
-all = ["rishi[mlx,mlx-vlm,llama,ollama]"]
+claude = ["claude-agent-sdk>=0.2", "llmsurgery>=0.0.13"]
+all = ["rishi[litert,mlx,mlx-vlm,llama,ollama,claude]"]
 dev = [
     "rishi[all]",
     "dhrishti>=0.0.5",
