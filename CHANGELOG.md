@@ -2,6 +2,10 @@
 
 <!-- do not remove -->
 
+## 0.1.71
+
+- rishi needs `aidialog>=0.0.42`, `python-fastllm>=0.0.70` and, in the `claude` extra, `llmsurgery>=0.0.19`. aidialog 0.0.42 moved `usage_info` and `aidialog.hist` into `aihist`. Older fastllm and llmsurgery still import them from aidialog. A lock with aidialog 0.0.42 and an older fastllm or llmsurgery failed every model call with `ImportError: cannot import name 'usage_info' from 'aidialog.msg_parts'` or `No module named 'aidialog.hist'`.
+
 ## 0.1.70
 slim down package . move local and claude sdks to extras
 

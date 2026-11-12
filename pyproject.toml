@@ -19,8 +19,8 @@ dependencies = [
     "uraiyadal>=0.0.21",
     "fastcore>=2.0.0",
     "safepyrun>=0.2.3",
-    "python-fastllm>=0.0.45",
-    "aidialog>=0.0.10",
+    "python-fastllm>=0.0.70",   # 0.0.70 stops importing usage_info from aidialog.msg_parts, which aidialog 0.0.42 removed
+    "aidialog>=0.0.42",
     "httpx",
     "fastspec>=0.2.1"
 ]
@@ -31,7 +31,7 @@ mlx = ["mlx-lm>=0.31.3; sys_platform == 'darwin' and platform_machine == 'arm64'
 mlx-vlm = ["mlx-vlm>=0.6.8; sys_platform == 'darwin' and platform_machine == 'arm64'"]
 llama = ["llama-cpp-python==0.3.30", "soundfile>=0.14.0", "numpy", "huggingface-hub>=1.23.0"]
 ollama = ["zstandard>=0.22; sys_platform == 'linux' and python_version < '3.14'"]
-claude = ["claude-agent-sdk>=0.2", "llmsurgery>=0.0.13"]
+claude = ["claude-agent-sdk>=0.2", "llmsurgery>=0.0.19"]   # 0.0.19 stops importing aidialog.hist, which aidialog 0.0.42 removed
 all = ["rishi[litert,mlx,mlx-vlm,llama,ollama,claude]"]
 dev = [
     "rishi[all]",
